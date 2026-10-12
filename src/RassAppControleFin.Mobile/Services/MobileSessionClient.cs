@@ -7,21 +7,15 @@ namespace RassAppControleFin.Mobile.Services;
 
 public sealed class MobileSessionClient(IHttpClientFactory clients, MobileSyncScope syncScope) : IDisposable
 {
+    public const string ProductionApiBaseUrl = "https://rassappcontrolefin-1.onrender.com";
+
     private readonly HttpClient _http = clients.CreateClient("mobile-api");
     private readonly SemaphoreSlim _gate = new(1, 1);
     private AuthSessionDto? _session;
     public Guid? TenantId { get; set; }
     public bool IsAuthenticated => _session is not null;
-    public string BaseUrl
-    {
-        get => Preferences.Default.Get("ApiBaseUrl", "https://api.rassapp.invalid");
-        set
-        {
-            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != "https"
-                || !string.IsNullOrEmpty(uri.UserInfo)) throw new ArgumentException("HTTPS required.");
-            Preferences.Default.Set("ApiBaseUrl", uri.GetLeftPart(UriPartial.Authority));
-        }
-    }
+    // The API origin is an application setting, never a user-controlled login field.
+    public string BaseUrl => ProductionApiBaseUrl;
     public async Task<bool> RestoreAsync()
     {
         try
