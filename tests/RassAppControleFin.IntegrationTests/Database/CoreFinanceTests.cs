@@ -1,0 +1,145 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using RassAppControleFin.Application.Features.Finance;
+using RassAppControleFin.Domain.Entities.Finance;
+using RassAppControleFin.Infrastructure.Configuration;
+using RassAppControleFin.Infrastructure.Persistence;
+using RassAppControleFin.Infrastructure.Persistence.Seed;
+using RassAppControleFin.MultiTenancy;
+using RassAppControleFin.Security;
+using RassAppControleFin.SharedKernel.Results;
+using Xunit;
+
+namespace RassAppControleFin.IntegrationTests.Database;
+
+[Collection(PostgresCollection.Name)]
+public sealed class CoreFinanceTests(PostgresFixture fixture)
+{
+    [Fact]
+    public async Task Transfer_is_atomic_idempotent_and_balanced()
+    {
+        await using var db = fixture.CreateContext();
+        var user = new FinanceUser(DevelopmentSeed.Alice);
+        var handler = new FinanceMutationHandlers(
+            new FinanceUnitFactory(db, TransactionFactory(db, user), new TestTenant(DevelopmentSeed.TenantA), user),
+            user, new TestTenant(DevelopmentSeed.TenantA));
+        var source = await handler.Handle(new OpenAccountCommand(Guid.NewGuid(), "Conta A", "BRL", 1000m), default);
+        var destination = await handler.Handle(new OpenAccountCommand(Guid.NewGuid(), "Conta B", "BRL", 500m), default);
+        Assert.True(source.IsSuccess, source.Error?.Code);
+        Assert.True(destination.IsSuccess, destination.Error?.Code);
+
+        var command = new TransferCommand(Guid.NewGuid(), source.Value.ResourceId, destination.Value.ResourceId,
+            300m, "BRL", DateTimeOffset.UtcNow, "Teste critico", source.Value.Version, destination.Value.Version);
+        var transfer = await handler.Handle(command, default);
+        Assert.True(transfer.IsSuccess, transfer.Error?.Code);
+        Assert.Equal(700m, transfer.Value.SourceBalance);
+        Assert.Equal(800m, transfer.Value.DestinationBalance);
+
+        var replay = await handler.Handle(command, default);
+        Assert.True(replay.IsSuccess, replay.Error?.Code);
+        Assert.Equal(transfer.Value, replay.Value);
+
+        var mismatch = await handler.Handle(command with { Amount = 299m }, default);
+        Assert.False(mismatch.IsSuccess);
+        Assert.Equal("OPERATION_REUSED", mismatch.Error!.Code);
+
+        var verification = await TransactionFactory(db, user).BeginAsync(default);
+        Assert.True(verification.IsSuccess);
+        await using var scope = verification.Value;
+        var ids = new[] { source.Value.ResourceId, destination.Value.ResourceId };
+        var accounts = await db.Accounts.Where(x => ids.Contains(x.Id)).OrderBy(x => x.Name).ToListAsync();
+        Assert.Collection(accounts,
+            x => Assert.Equal(700m, x.Balance),
+            x => Assert.Equal(800m, x.Balance));
+        var ledgerCount = await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::integer AS "Value" FROM app."LedgerEntries"
+            WHERE "TransferId" = {transfer.Value.ResourceId}
+            """).SingleAsync();
+        var ledgerTotal = await db.Database.SqlQuery<decimal>($"""
+            SELECT coalesce(sum("Delta"), 0) AS "Value" FROM app."LedgerEntries"
+            WHERE "TransferId" = {transfer.Value.ResourceId}
+            """).SingleAsync();
+        Assert.Equal(2, ledgerCount);
+        Assert.Equal(0m, ledgerTotal);
+    }
+
+    [Fact]
+    public async Task Financial_rls_hides_another_user_rows()
+    {
+        await using var db = fixture.CreateContext();
+        var alice = new FinanceUser(DevelopmentSeed.Alice);
+        var handler = new FinanceMutationHandlers(
+            new FinanceUnitFactory(db, TransactionFactory(db, alice), new TestTenant(DevelopmentSeed.TenantA), alice),
+            alice, new TestTenant(DevelopmentSeed.TenantA));
+        var created = await handler.Handle(new OpenAccountCommand(Guid.NewGuid(), "Alice isolada", "BRL", 1m), default);
+        Assert.True(created.IsSuccess, created.Error?.Code);
+
+        var bob = new FinanceUser(DevelopmentSeed.Bob);
+        var denied = await TransactionFactory(db, bob).BeginAsync(default);
+        Assert.True(denied.IsSuccess);
+        await using var scope = denied.Value;
+        Assert.Empty(await db.Accounts.Where(x => x.Id == created.Value.ResourceId).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Budget_and_goal_are_scoped_and_queryable()
+    {
+        await using var db = fixture.CreateContext();
+        var alice = new FinanceUser(DevelopmentSeed.Alice);
+        var factory = new FinanceUnitFactory(db, TransactionFactory(db, alice), new TestTenant(DevelopmentSeed.TenantA), alice);
+        var handler = new FinanceMutationHandlers(factory, alice, new TestTenant(DevelopmentSeed.TenantA));
+        var periodStart = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero);
+        var budget = await handler.Handle(new CreateBudgetCommand(Guid.NewGuid(), null, 400m, "BRL",
+            periodStart, periodStart.AddMonths(1)), default);
+        var goal = await handler.Handle(new CreateGoalCommand(Guid.NewGuid(), "Reserva Sprint", 1000m, "BRL",
+            periodStart.AddMonths(6)), default);
+        Assert.True(budget.IsSuccess, budget.Error?.Code);
+        Assert.True(goal.IsSuccess, goal.Error?.Code);
+
+        var progress = await handler.Handle(new AddGoalProgressCommand(Guid.NewGuid(), goal.Value.ResourceId,
+            goal.Value.Version, 250m, "BRL"), default);
+        Assert.True(progress.IsSuccess, progress.Error?.Code);
+
+        var read = new FinanceReadStore(db, factory);
+        var budgets = await read.BudgetsAsync(new ListBudgetsQuery(), default);
+        var goals = await read.GoalsAsync(new ListGoalsQuery(), default);
+        Assert.Contains(budgets.Value.Items, x => x.Id == budget.Value.ResourceId && x.Amount == 400m);
+        Assert.Contains(goals.Value.Items, x => x.Id == goal.Value.ResourceId && x.CurrentAmount == 250m);
+
+        var bob = new FinanceUser(DevelopmentSeed.Bob);
+        var denied = await TransactionFactory(db, bob).BeginAsync(default);
+        Assert.True(denied.IsSuccess);
+        await using var scope = denied.Value;
+        Assert.Empty(await db.Budgets.Where(x => x.Id == budget.Value.ResourceId).ToListAsync());
+        Assert.Empty(await db.Goals.Where(x => x.Id == goal.Value.ResourceId).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Migration_contains_planning_and_dashboard()
+    {
+        await using var db = fixture.CreateAdminContext();
+        var applied = await db.Database.GetAppliedMigrationsAsync();
+        Assert.Contains(applied, x => x.EndsWith("PlanningAndDashboard", StringComparison.Ordinal));
+    }
+
+    private static TenantTransactionFactory TransactionFactory(AppDbContext db, ICurrentUser user)
+        => new(db, new TestTenant(DevelopmentSeed.TenantA), user, Options.Create(new DatabaseOptions()));
+
+    private sealed record TestTenant(Guid? TenantId) : ITenantContext
+    {
+        public bool IsResolved => TenantId is not null;
+    }
+    private sealed class FinanceUser(string subject) : IUserContext
+    {
+        public bool IsAuthenticated => true;
+        public string Subject => subject;
+        public IReadOnlySet<string> Permissions { get; } = new HashSet<string>
+        {
+            RassAppControleFin.Security.Permissions.AccountsRead, RassAppControleFin.Security.Permissions.AccountsWrite,
+            RassAppControleFin.Security.Permissions.TransfersWrite, RassAppControleFin.Security.Permissions.TransactionsRead,
+            RassAppControleFin.Security.Permissions.TransactionsWrite, RassAppControleFin.Security.Permissions.CategoriesRead,
+            RassAppControleFin.Security.Permissions.CategoriesWrite, RassAppControleFin.Security.Permissions.CreditCardsRead,
+            RassAppControleFin.Security.Permissions.CreditCardsWrite
+        };
+    }
+}

@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+.vs/
+.idea/
+.env
+.env.*
+!.env.example
+.neon
+*.user
+*.suo
+*.pfx
+*.p12
+*.keystore

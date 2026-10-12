@@ -1,0 +1,15 @@
+@page "/login"
+@attribute [ExcludeFromInteractiveRouting]
+<PageTitle>Entrar | RASS Admin</PageTitle>
+<header><strong>RASS Admin</strong></header>
+<main class="login">
+    <h1>Entrar</h1>
+    @if (Error is not null) { <p role="alert">Nao foi possivel entrar. Verifique seus dados e tente novamente.</p> }
+    <form method="post" action="/auth/session" data-enhance="false">
+        <AntiforgeryToken />
+        <label>E-mail<input name="email" type="email" autocomplete="username" required maxlength="254" /></label>
+        <label>Senha<input name="password" type="password" autocomplete="current-password" required maxlength="128" /></label>
+        <button type="submit">Entrar</button>
+    </form>
+</main>
+@code { [SupplyParameterFromQuery] public string? Error { get; set; } }

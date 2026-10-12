@@ -1,0 +1,28 @@
+@page "/"
+@attribute [Authorize]
+@inject ApiGateway Api
+<PageTitle>RASS Controle Financeiro</PageTitle>
+<header><strong>RASS Controle Financeiro</strong><form action="/auth/logout" method="post" data-enhance="false"><AntiforgeryToken /><button type="submit">Sair</button></form></header>
+<main>
+    <h1>Contas</h1>
+    @if (_tenants is null) { <p role="status">Carregando...</p> }
+    else
+    {
+        <label>Tenant<select @bind="_tenant"><option value="">Selecione</option>
+            @foreach (var tenant in _tenants) { <option value="@tenant.Id">@tenant.Name</option> }
+        </select></label>
+    }
+    @if (_error) { <p role="alert">Nao foi possivel carregar a sessao.</p><a href="/login" data-enhance-nav="false">Entrar</a> }
+</main>
+@code {
+    private List<TenantDto>? _tenants;
+    private Guid? _tenant;
+    private bool _error;
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Api.GetAsync<List<TenantDto>>("/api/v1/tenants");
+        _tenants = result?.Data;
+        _error = _tenants is null;
+        _tenant = _tenants?.FirstOrDefault()?.Id;
+    }
+}

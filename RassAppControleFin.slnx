@@ -1,0 +1,24 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RassAppControleFin.Domain/RassAppControleFin.Domain.csproj" />
+    <Project Path="src/RassAppControleFin.SharedKernel/RassAppControleFin.SharedKernel.csproj" />
+    <Project Path="src/RassAppControleFin.Contracts/RassAppControleFin.Contracts.csproj" />
+    <Project Path="src/RassAppControleFin.Security/RassAppControleFin.Security.csproj" />
+    <Project Path="src/RassAppControleFin.MultiTenancy/RassAppControleFin.MultiTenancy.csproj" />
+    <Project Path="src/RassAppControleFin.EventBus/RassAppControleFin.EventBus.csproj" />
+    <Project Path="src/RassAppControleFin.AI/RassAppControleFin.AI.csproj" />
+    <Project Path="src/RassAppControleFin.Synchronization/RassAppControleFin.Synchronization.csproj" />
+    <Project Path="src/RassAppControleFin.Application/RassAppControleFin.Application.csproj" />
+    <Project Path="src/RassAppControleFin.Infrastructure/RassAppControleFin.Infrastructure.csproj" />
+    <Project Path="src/RassAppControleFin.Api/RassAppControleFin.Api.csproj" />
+    <Project Path="src/RassAppControleFin.Admin.Web/RassAppControleFin.Admin.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RassAppControleFin.UnitTests/RassAppControleFin.UnitTests.csproj" />
+    <Project Path="tests/RassAppControleFin.IntegrationTests/RassAppControleFin.IntegrationTests.csproj" />
+    <Project Path="tests/RassAppControleFin.ArchitectureTests/RassAppControleFin.ArchitectureTests.csproj" />
+  </Folder>
+  <Folder Name="/Tools/">
+    <Project Path="tools/RassAppControleFin.Database/RassAppControleFin.Database.csproj" />
+  </Folder>
+</Solution>

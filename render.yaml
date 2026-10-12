@@ -1,0 +1,69 @@
+services:
+  - type: web
+    name: rass-controlefin-api
+    runtime: docker
+    dockerfilePath: ./infra/docker/Api.Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/ready
+    autoDeployTrigger: off
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: AllowedHosts
+        sync: false
+      - key: Database__ConnectionString
+        sync: false
+      - key: Database__RuntimeRole
+        value: rass_app_runtime
+      - key: Neon__AuthBaseUrl
+        sync: false
+      - key: Neon__JwksUrl
+        sync: false
+      - key: Neon__ExpectedIssuer
+        sync: false
+      - key: Neon__ExpectedAudience
+        sync: false
+      - key: Neon__Origin
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: Gemini__Enabled
+        value: "false"
+      - key: Gemini__Model
+        sync: false
+      - key: Gemini__TimeoutSeconds
+        value: "30"
+      - key: Gemini__MaxOutputTokens
+        value: "2048"
+      - key: Gemini__Temperature
+        value: "0.3"
+      - key: Resend__ApiKey
+        sync: false
+      - key: Resend__FromAddress
+        sync: false
+      - key: Resend__WebhookSecret
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+  - type: web
+    name: rass-controlefin-admin
+    plan: starter
+    numInstances: 1
+    disk:
+      name: admin-sessions
+      mountPath: /var/data
+      sizeGB: 1
+    runtime: docker
+    dockerfilePath: ./infra/docker/Admin.Web.Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/ready
+    autoDeployTrigger: off
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Api__BaseUrl
+        sync: false
+      - key: SessionStore__Path
+        value: /var/data/sessions
+      - key: AllowedHosts
+        sync: false

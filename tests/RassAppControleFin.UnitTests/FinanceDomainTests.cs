@@ -1,0 +1,52 @@
+using RassAppControleFin.Domain.Entities.Finance;
+using RassAppControleFin.Domain.ValueObjects;
+using Xunit;
+
+namespace RassAppControleFin.UnitTests;
+
+public sealed class FinanceDomainTests
+{
+    [Fact]
+    public void Account_rejects_overdraft_and_preserves_balance()
+    {
+        var account = Account.Open(Guid.NewGuid(), Guid.NewGuid(), "user", "Conta", Money.Create(100m, "BRL", true), DateTimeOffset.UtcNow);
+        Assert.False(account.TryApply(-100.01m));
+        Assert.Equal(100m, account.Balance);
+        Assert.Equal(1, account.Version);
+    }
+
+    [Fact]
+    public void Credit_card_has_no_cardholder_data_and_enforces_limit()
+    {
+        var card = CreditCard.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Cartao", Money.Create(100m, "BRL"), 10, 20, DateTimeOffset.UtcNow);
+        Assert.True(card.TryCharge(Money.Create(100m, "BRL")));
+        Assert.False(card.TryCharge(Money.Create(0.01m, "BRL")));
+        Assert.True(card.TryPay(Money.Create(100m, "BRL")));
+        Assert.True(card.Archive());
+    }
+
+    [Fact]
+    public void Budget_requires_a_valid_utc_period()
+    {
+        var now = DateTimeOffset.UtcNow;
+        Assert.Throws<ArgumentException>(() => Budget.Create(Guid.NewGuid(), Guid.NewGuid(), "user", null,
+            Money.Create(100m, "BRL"), now, now, now));
+    }
+
+    [Fact]
+    public void Goal_completes_without_exceeding_its_target()
+    {
+        var goal = Goal.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Reserva",
+            Money.Create(100m, "BRL"), null, DateTimeOffset.UtcNow);
+        Assert.True(goal.AddProgress(Money.Create(100m, "BRL")));
+        Assert.Equal("Completed", goal.Status);
+        Assert.False(goal.AddProgress(Money.Create(0.01m, "BRL")));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(1.001)]
+    public void Money_rejects_invalid_amounts(decimal amount)
+        => Assert.False(Money.IsValid(amount, "BRL"));
+}

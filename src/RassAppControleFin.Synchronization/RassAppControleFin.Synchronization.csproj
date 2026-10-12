@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../RassAppControleFin.SharedKernel/RassAppControleFin.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

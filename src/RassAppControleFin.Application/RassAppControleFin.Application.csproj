@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../RassAppControleFin.Domain/RassAppControleFin.Domain.csproj" />
+    <ProjectReference Include="../RassAppControleFin.SharedKernel/RassAppControleFin.SharedKernel.csproj" />
+    <ProjectReference Include="../RassAppControleFin.Security/RassAppControleFin.Security.csproj" />
+    <ProjectReference Include="../RassAppControleFin.MultiTenancy/RassAppControleFin.MultiTenancy.csproj" />
+    <ProjectReference Include="../RassAppControleFin.Synchronization/RassAppControleFin.Synchronization.csproj" />
+    <ProjectReference Include="../RassAppControleFin.AI/RassAppControleFin.AI.csproj" />
+    <ProjectReference Include="../RassAppControleFin.EventBus/RassAppControleFin.EventBus.csproj" />
+  </ItemGroup>
+</Project>
