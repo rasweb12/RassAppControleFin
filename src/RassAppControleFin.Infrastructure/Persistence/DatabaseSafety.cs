@@ -41,4 +41,46 @@ internal static class DatabaseSafety
             ) AS "Value"
             """).SingleAsync(cancellationToken);
     }
+
+    internal static async Task<string> DiagnoseNotReadyAsync(AppDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var schemaExists = await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'app') AS "Value"
+            """).SingleAsync(cancellationToken);
+
+        if (!schemaExists)
+            return "database.schema_missing";
+
+        var migrationTableExists = await db.Database.SqlQuery<bool>($"""
+            SELECT to_regclass('app."__EFMigrationsHistory"') IS NOT NULL AS "Value"
+            """).SingleAsync(cancellationToken);
+
+        if (!migrationTableExists)
+            return "database.migration_pending";
+
+        var requiredTablesPresent = await db.Database.SqlQuery<bool>($"""
+            SELECT count(*) = 16 AS "Value"
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'app'
+              AND c.relname IN (
+                  'TenantMemberships', 'UserSessions', 'AuditEntries', 'Accounts', 'Categories',
+                  'CreditCards', 'Transactions', 'Transfers', 'LedgerEntries', 'CardMovements',
+                  'SyncOperations', 'FinancialOutbox', 'Budgets', 'Goals', 'Tenants', 'UserProfiles')
+              AND c.relkind IN ('r', 'p')
+            """).SingleAsync(cancellationToken);
+
+        if (!requiredTablesPresent)
+            return "database.migration_pending";
+
+        var expectedMigrationApplied = await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (
+                SELECT 1 FROM app."__EFMigrationsHistory"
+                WHERE "MigrationId" LIKE {'%' + ExpectedMigration}
+            ) AS "Value"
+            """).SingleAsync(cancellationToken);
+
+        return expectedMigrationApplied ? "database.rls_invalid" : "database.migration_pending";
+    }
 }
