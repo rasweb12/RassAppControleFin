@@ -36,7 +36,7 @@ Detalhes operacionais: [Database](../../docs/database.md).
 ## Proximas Sprints
 
 Sprint 2: Managed Better Auth JWT EdDSA/Ed25519, adapter .NET validado, claims,
-JWKS rotation, membership, sessions e fluxo MAUI. Nao presumir OIDC discovery
+JWKS rotation, membership, sessions e fluxo Flutter. Nao presumir OIDC discovery
 nem refresh_token OAuth. Contextos ainda fechados e API protegida retorna 401.
 
 Storage privado e realtime entram no caso de uso correspondente, por portas

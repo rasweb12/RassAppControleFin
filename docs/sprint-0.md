@@ -2,6 +2,9 @@
 
 Data: 2026-10-09. Versionamento: 1.0.0-alpha.1.
 
+> Registro historico: as evidencias MAUI abaixo pertencem a arquitetura anterior.
+> O cliente MAUI e sua solution foram removidos em favor do Flutter/Dart.
+
 ## Implementado
 
 - Arquitetura e analise da referencia antes do codigo.
@@ -48,9 +51,9 @@ Hosts locais iniciados: API :5080, Web :5081, Admin :5082.
 Swagger: http://localhost:5080/swagger em Development.
 Start-Local.ps1 verifica portas antes de iniciar processos ocultos.
 
-Comando MAUI utilizado neste ambiente:
+Comando historico do cliente MAUI, removido do repositorio:
 ```powershell
-dotnet build RassAppControleFin.Mobile.slnx -c Release -p:AndroidPackageFormats=apk '-p:AndroidSdkDirectory=C:\Users\RASS\AppData\Local\Android\Sdk' '-p:JavaSdkDirectory=C:\Program Files\Java\jdk-17'
+# A solution MAUI nao existe mais. Use o projeto Flutter em mobile/rassapp_controlefin.
 ```
 
 O SDK Android configurado pelo Visual Studio nao tinha API 36; o SDK do perfil

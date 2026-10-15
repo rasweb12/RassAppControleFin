@@ -14,7 +14,7 @@ public sealed class DependencyTests
         ["Application"] = ["Domain", "SharedKernel", "Security", "MultiTenancy", "Synchronization", "AI", "EventBus"],
         ["Infrastructure"] = ["Application"],
         ["Api"] = ["Application", "Infrastructure", "Contracts"],
-        ["Web"] = ["Contracts"], ["Admin.Web"] = ["Contracts"], ["Mobile"] = ["Contracts", "Synchronization"]
+        ["Web"] = ["Contracts"], ["Admin.Web"] = ["Contracts"]
     };
 
     [Fact]
@@ -54,7 +54,6 @@ public sealed class DependencyTests
     {
         foreach (var path in Directory.EnumerateFiles(Path.Combine(FindRoot(), "src"), "*.csproj", SearchOption.AllDirectories))
         {
-            if (path.Contains("RassAppControleFin.Mobile", StringComparison.Ordinal)) continue;
             var packages = XDocument.Load(path).Descendants("PackageReference")
                 .Select(node => node.Attribute("Include")!.Value);
             Assert.DoesNotContain(packages, package => package.Contains("SqlServer", StringComparison.OrdinalIgnoreCase)

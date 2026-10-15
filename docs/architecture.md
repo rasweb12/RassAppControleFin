@@ -13,7 +13,7 @@ registram contexto historico; Sprint 2 validada em sprint-2-review.md.
 Pasta canonica: D:\Curso\APP\RassAppControleFin, repositorio independente que
 estava vazio. O caminho antigo ja nao existia no inicio da analise.
 RassAppFinanceiro, branch feature/v0.9.0-devsec, e referencia somente de leitura.
-Stack ativa: Neon, Resend, Render e Gemini; Admin.Web e Mobile; versao
+Stack ativa: Neon, Resend, Render e Gemini; Admin.Web e cliente Flutter; versao
 1.0.0-alpha.1. Nenhuma dependencia do repositorio antigo.
 
 Evidencias da referencia: Domain referencia EF Core; interfaces de tenant
@@ -28,14 +28,14 @@ reimplementar limites, consistencia e isolamento.
 ```text
 RassAppControleFin/
   RassAppControleFin.slnx
-  RassAppControleFin.Mobile.slnx
+  mobile/
+    rassapp_controlefin
   src/
     RassAppControleFin.Domain
     RassAppControleFin.Application
     RassAppControleFin.Infrastructure
     RassAppControleFin.Api
     RassAppControleFin.Admin.Web
-    RassAppControleFin.Mobile
     RassAppControleFin.Contracts
     RassAppControleFin.SharedKernel
     RassAppControleFin.Security
@@ -55,8 +55,8 @@ RassAppControleFin/
 ```
 
 Contracts e adicionado para compartilhar DTOs sem transportar Domain/Application
-para os clientes. Mobile possui solution separada: Linux/Render nao deve exigir
-workloads MAUI; iOS exige macOS/Xcode. Nao ha projetos sem responsabilidade:
+para os hosts .NET. O cliente Flutter consome exclusivamente os contratos HTTP
+publicos da API; iOS exige macOS/Xcode. Nao ha projetos sem responsabilidade:
 Security e MultiTenancy definem portas; Synchronization e AI definem contratos;
 EventBus define a porta de publicacao, sem escolher broker nesta sprint.
 
@@ -83,7 +83,7 @@ Versoes fixas e centralizadas em Directory.Packages.props. Sem floating versions
 | Telemetria | OpenTelemetry Hosting, AspNetCore, Http, OTLP | 0 base, 9 completo |
 | HTTP externo | Microsoft.Extensions.Http.Resilience (Polly) | 0 base |
 | Infrastructure | EF Core 10, Npgsql EF 10, Design private assets | 1 |
-| Mobile | MAUI 10, CommunityToolkit.Mvvm; Refit, SQLite no fluxo real | 0 base, 4 |
+| Mobile | Flutter/Dart; HTTP, Secure Storage e SQLite no fluxo real | migracao em andamento |
 | Testes | xUnit, Test.Sdk, MVC.Testing | 0 |
 
 MediatR 14 tem termos de licenca comerciais: verificar elegibilidade/licenca da
@@ -221,7 +221,8 @@ Sprint 4: offline/restart/conflict/inbox/outbox/cursor. IA: contexto isolado.
 Mocks nao sao evidencia de PostgreSQL/RLS/Auth funcionando.
 
 CI: restore/build warnings-as-errors/test (unit/integration/architecture),
-dependency scan/publish. Jobs MAUI separados Android/iOS. SAST/secret scanning
+dependency scan/publish. O cliente Flutter executa analyze/test no seu proprio
+ambiente Android/iOS. SAST/secret scanning
 e branch protection precisam ser required checks antes do merge. Sprint fecha
 com build, tests, revisao de seguranca/arquitetura e evidencias documentadas.
 Entrega atual: Sprint 1. Auth/membership entram na Sprint 2; financas na Sprint 3.

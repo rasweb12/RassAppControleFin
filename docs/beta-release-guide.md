@@ -41,8 +41,8 @@
 
 ## 5. Android beta
 
-APK Debug instalado nesta maquina:
+APK Debug Flutter:
 
-src/RassAppControleFin.Mobile/bin/Debug/net10.0-android/com.rassapp.controlefin-Signed.apk
+mobile/rassapp_controlefin/build/app/outputs/flutter-apk/app-debug.apk
 
-Para distribuir beta, gere um APK/AAB Release assinado por chave de distribuicao protegida fora do repositorio. Google Play Billing e assinatura de producao permanecem uma etapa posterior.
+Para distribuir beta, gere um APK/AAB Flutter Release assinado por chave de distribuicao protegida fora do repositorio. Google Play Billing e assinatura de producao permanecem uma etapa posterior.

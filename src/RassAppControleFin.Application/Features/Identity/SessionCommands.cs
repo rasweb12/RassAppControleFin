@@ -25,7 +25,7 @@ public sealed class SignUpValidator : AbstractValidator<SignUpCommand>
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
         RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(254);
-        RuleFor(x => x.Password).Length(12, 128);
+        RuleFor(x => x.Password).Length(8, 128);
     }
 }
 public sealed class RenewSessionValidator : AbstractValidator<RenewSessionCommand>

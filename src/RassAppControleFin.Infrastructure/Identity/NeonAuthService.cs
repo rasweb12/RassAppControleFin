@@ -14,6 +14,7 @@ public sealed class NeonAuthService(IHttpClientFactory clients, IOptions<NeonOpt
     private readonly NeonOptions _options = options.Value;
     private static Error Denied => new("AUTH_REJECTED", "Autenticacao recusada.", ErrorType.Unauthorized);
     private static Error Unavailable => new("AUTH_UNAVAILABLE", "Autenticacao indisponivel.", ErrorType.Infrastructure);
+    private static Error AccountAlreadyExists => new("ACCOUNT_ALREADY_EXISTS", "Ja existe um cadastro para este e-mail.", ErrorType.Conflict);
 
     public Task<Result<ProviderSession>> SignInAsync(string email, string password, CancellationToken ct)
         => AuthenticateAsync("sign-in/email", new { email, password, rememberMe = true }, ct);
@@ -27,6 +28,9 @@ public sealed class NeonAuthService(IHttpClientFactory clients, IOptions<NeonOpt
             using var request = Request(HttpMethod.Post, path);
             request.Content = JsonContent.Create(payload);
             using var response = await clients.CreateClient("neon-auth").SendAsync(request, ct);
+            if (path == "sign-up/email" && response.StatusCode == HttpStatusCode.UnprocessableEntity
+                && await HasProviderErrorAsync(response, "USER_ALREADY_EXISTS", ct))
+                return Result<ProviderSession>.Failure(AccountAlreadyExists);
             if (!response.IsSuccessStatusCode) return Result<ProviderSession>.Failure(
                 (int)response.StatusCode >= 500 ? Unavailable : Denied);
             var cookies = new CookieContainer();
@@ -102,4 +106,21 @@ public sealed class NeonAuthService(IHttpClientFactory clients, IOptions<NeonOpt
 
     private static bool ValidCookie(string value) => value.Length is > 10 and <= 4096
         && value.All(c => c is >= '!' and <= '~' && c is not ';' and not ',' and not '"');
+
+    private static async Task<bool> HasProviderErrorAsync(HttpResponseMessage response, string expectedCode,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var document = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("code", out var code)
+                && string.Equals(code.GetString(), expectedCode, StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 }

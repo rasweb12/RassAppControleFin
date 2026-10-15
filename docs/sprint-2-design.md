@@ -4,7 +4,7 @@ Reutilizar branch development-sprint-1, nunca production. Neon Managed Better
 Auth ja provisionado. REST oficial via adapter .NET, sem alterar neon_auth.
 Fluxo real confirmou EdDSA/Ed25519, issuer/audience = origem HTTPS do Auth,
 cookie __Secure-neon-auth.session_token. Nao presumir endpoints OIDC nem OAuth
-refresh_token. SDK browser nao e introduzido: Blazor/MAUI usam a API/BFF .NET.
+refresh_token. SDK browser nao e introduzido: Blazor e Flutter usam a API/BFF .NET.
 
 JWT validado por Microsoft.IdentityModel + ScottBrady.IdentityModel EdDSA,
 JWKS HTTPS com cache/refresh e rotacao. Validar issuer/audience/signature/exp/
@@ -16,7 +16,7 @@ App nao armazena password, cookie Neon ou JWT em plaintext no banco.
 
 Portas de auth/identity em Application; adapters em Infrastructure; contextos/
 policies HTTP em API. Web/Admin: cookie opaco HttpOnly/SameSite, antiforgery,
-ticket server-side protegido com DataProtection em storage persistente. Mobile:
+ticket server-side protegido com DataProtection em storage persistente. Flutter:
 SecureStorage, refresh/restauracao/logout e abstracao de navegacao. Nenhum banco
 direto nos clientes. Retry somente GET, nunca signup/signin/signout.
 

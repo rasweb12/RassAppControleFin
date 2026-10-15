@@ -4,7 +4,7 @@ Este documento prevalece sobre decisoes anteriores conflitantes. Confirmacao hum
 
 ## Regras permanentes
 
-- Frontend do usuario: somente .NET MAUI 10, Android/iOS. Nao publicar Web do usuario.
+- Frontend do usuario: somente Flutter/Dart, Android/iOS. Nao publicar Web do usuario.
 - Admin: Blazor Server; API: ASP.NET Core .NET 10; infraestrutura: Neon, Resend e Render.
 - SQLite apenas no Mobile, Sprint 4; PostgreSQL e system of record.
 - Pagamentos Android: Google Play Billing. Stripe, Azure, SQL Server e LocalDB proibidos.
