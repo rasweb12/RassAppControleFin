@@ -235,8 +235,9 @@ class _LoginPageState extends State<LoginPage> {
                           setDialogState(() => error = exception.message);
                         }
                       } finally {
-                        if (dialogContext.mounted)
+                        if (dialogContext.mounted) {
                           setDialogState(() => waiting = false);
+                        }
                       }
                     },
               child: Text(waiting ? 'Enviando...' : 'Enviar link'),

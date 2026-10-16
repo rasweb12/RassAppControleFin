@@ -1,9 +1,13 @@
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/network/api_client.dart';
 import '../auth/auth_controller.dart';
 import '../finance/finance_repository.dart';
 import 'finance_forms.dart';
+import '../synchronization/finance_sync_service.dart';
 
 class FinanceHomeShell extends StatefulWidget {
   const FinanceHomeShell({required this.authController, super.key});
@@ -25,12 +29,27 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   List<AccountSummary> _accounts = const [];
   List<CategorySummary> _categories = const [];
   List<TransactionSummary> _transactions = const [];
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
   void initState() {
     super.initState();
     _repository = FinanceRepository(widget.authController);
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      state,
+    ) {
+      if (!state.contains(ConnectivityResult.none) && _tenant != null) {
+        _synchronizeAndLoad();
+      }
+    });
     _load();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    _repository.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -175,12 +194,20 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   Future<void> _createTransaction(String flow) async {
     final tenant = _tenant;
     if (tenant == null) return;
-    if (_accounts.isEmpty) {
+    final accounts = _accounts
+        .where((item) => !item.archived && !item.id.startsWith('local-'))
+        .toList(growable: false);
+    if (accounts.isEmpty) {
       _notice('Cadastre uma conta antes de registrar um lançamento.');
       return;
     }
     final categories = _categories
-        .where((item) => !item.archived && item.flow == flow)
+        .where(
+          (item) =>
+              !item.archived &&
+              !item.id.startsWith('local-') &&
+              item.flow == flow,
+        )
         .toList(growable: false);
     if (categories.isEmpty) {
       _notice(
@@ -191,9 +218,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     final input = await showTransactionForm(
       context,
       flow: flow,
-      accounts: _accounts
-          .where((item) => !item.archived)
-          .toList(growable: false),
+      accounts: accounts,
       categories: categories,
     );
     if (input == null || !mounted) return;
@@ -211,7 +236,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   Future<void> _createTransfer() async {
     final tenant = _tenant;
     final accounts = _accounts
-        .where((item) => !item.archived)
+        .where((item) => !item.archived && !item.id.startsWith('local-'))
         .toList(growable: false);
     if (tenant == null) return;
     if (accounts.length < 2) {
@@ -231,17 +256,43 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     );
   }
 
-  Future<void> _mutate(Future<void> Function() operation) async {
+  Future<void> _mutate(Future<FinanceWriteState> Function() operation) async {
     try {
-      await operation();
+      final result = await operation();
       if (!mounted) return;
-      _notice('Lançamento salvo.');
+      _notice(
+        result == FinanceWriteState.pending
+            ? 'Salvo no dispositivo. Será sincronizado quando houver conexão.'
+            : 'Lançamento salvo.',
+      );
       await _load();
     } on ApiException catch (error) {
       if (!mounted) return;
       _notice(_messageFor(error));
       await _load();
     }
+  }
+
+  Future<void> _synchronizeAndLoad() async {
+    final tenant = _tenant;
+    try {
+      if (tenant != null) {
+        final result = await _repository.synchronize(tenant.id);
+        if (mounted && result != FinanceSyncResult.synchronized) {
+          _notice(switch (result) {
+            FinanceSyncResult.offline =>
+              'Sem conexão. Seus lançamentos pendentes permanecem protegidos neste dispositivo.',
+            FinanceSyncResult.blocked =>
+              'Há uma operação que precisa de revisão antes de sincronizar.',
+            FinanceSyncResult.failed => 'A sincronização já está em andamento.',
+            FinanceSyncResult.synchronized => '',
+          });
+        }
+      }
+    } on ApiException catch (error) {
+      if (mounted) _notice(_messageFor(error));
+    }
+    await _load();
   }
 
   String _messageFor(ApiException error) => switch (error.failure) {
@@ -285,6 +336,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               canSwitch: _tenants.length > 1,
               onSwitch: _chooseTenant,
               onSignOut: widget.authController.signOut,
+              onSynchronize: _synchronizeAndLoad,
             ),
           };
     return Scaffold(
@@ -293,7 +345,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         actions: [
           if (!_loading && _tenant != null)
             IconButton(
-              onPressed: _load,
+              onPressed: _synchronizeAndLoad,
               tooltip: 'Atualizar dados',
               icon: const Icon(Icons.refresh),
             ),
@@ -393,7 +445,7 @@ class _Dashboard extends StatelessWidget {
           _Metric(
             title: 'Taxa de economia',
             value:
-                '${metric.savingsRate.toStringAsFixed(1).replaceAll('.', ',')}%',
+                '${(metric.savingsRate * 100).toStringAsFixed(1).replaceAll('.', ',')}%',
           ),
         ],
       ),
@@ -500,11 +552,13 @@ class _Menu extends StatelessWidget {
     required this.canSwitch,
     required this.onSwitch,
     required this.onSignOut,
+    required this.onSynchronize,
   });
   final TenantSummary tenant;
   final bool canSwitch;
   final VoidCallback onSwitch;
   final Future<void> Function() onSignOut;
+  final Future<void> Function() onSynchronize;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -518,10 +572,12 @@ class _Menu extends StatelessWidget {
         onTap: canSwitch ? onSwitch : null,
       ),
       const Divider(),
-      const ListTile(
-        leading: Icon(Icons.sync_outlined),
-        title: Text('Sincronização'),
-        subtitle: Text('Atualize a tela para buscar seus dados mais recentes.'),
+      ListTile(
+        leading: const Icon(Icons.sync_outlined),
+        title: const Text('Sincronização'),
+        subtitle: const Text('Enviar lançamentos pendentes e atualizar dados.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onSynchronize,
       ),
       const ListTile(
         leading: Icon(Icons.security_outlined),
