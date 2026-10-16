@@ -94,6 +94,38 @@ public sealed class NeonAuthService(IHttpClientFactory clients, IOptions<NeonOpt
         { return Result.Failure(Unavailable); }
     }
 
+    public async Task<Result> RequestPasswordResetAsync(string email, CancellationToken ct)
+    {
+        try
+        {
+            using var request = Request(HttpMethod.Post, "request-password-reset");
+            request.Content = JsonContent.Create(new { email, redirectTo = PasswordResetUrl().ToString() });
+            using var response = await clients.CreateClient("neon-auth").SendAsync(request, ct);
+            // Keep the public response neutral: a provider rejection must not reveal whether an account exists.
+            return (int)response.StatusCode >= 500 ? Result.Failure(Unavailable) : Result.Success();
+        }
+        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException
+            or Polly.Timeout.TimeoutRejectedException or Polly.CircuitBreaker.BrokenCircuitException)
+        { return Result.Failure(Unavailable); }
+    }
+
+    public async Task<Result> ResetPasswordAsync(string token, string newPassword, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(token) || token.Length > 4096)
+            return Result.Failure(Denied);
+        try
+        {
+            using var request = Request(HttpMethod.Post, "reset-password");
+            request.Content = JsonContent.Create(new { token, newPassword });
+            using var response = await clients.CreateClient("neon-auth").SendAsync(request, ct);
+            if (response.IsSuccessStatusCode) return Result.Success();
+            return (int)response.StatusCode >= 500 ? Result.Failure(Unavailable) : Result.Failure(Denied);
+        }
+        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException
+            or Polly.Timeout.TimeoutRejectedException or Polly.CircuitBreaker.BrokenCircuitException)
+        { return Result.Failure(Unavailable); }
+    }
+
     private HttpRequestMessage Request(HttpMethod method, string path, string? cookie = null)
     {
         if (!Uri.TryCreate(_options.AuthBaseUrl.TrimEnd('/') + "/" + path, UriKind.Absolute, out var uri)
@@ -102,6 +134,14 @@ public sealed class NeonAuthService(IHttpClientFactory clients, IOptions<NeonOpt
         request.Headers.Add("Origin", _options.Origin);
         if (cookie is not null) request.Headers.Add("Cookie", _options.SessionCookieName + "=" + cookie);
         return request;
+    }
+
+    private Uri PasswordResetUrl()
+    {
+        if (!Uri.TryCreate(_options.Origin.TrimEnd('/') + "/api/v1/auth/reset-password", UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttps && !uri.IsLoopback))
+            throw new InvalidOperationException("The password reset URL is not configured safely.");
+        return uri;
     }
 
     private static bool ValidCookie(string value) => value.Length is > 10 and <= 4096

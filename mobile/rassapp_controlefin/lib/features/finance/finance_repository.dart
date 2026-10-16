@@ -1,7 +1,7 @@
 import 'dart:math';
 
 import '../../core/network/api_client.dart';
-import '../auth/auth_session.dart';
+import '../auth/auth_controller.dart';
 
 class TenantSummary {
   const TenantSummary({
@@ -128,18 +128,11 @@ class TransactionSummary {
 }
 
 class FinanceRepository {
-  FinanceRepository(this._api, this._session);
-  final ApiClient _api;
-  final AuthSession _session;
-
-  Map<String, String> _headers([String? tenantId]) => {
-    'Authorization': 'Bearer ${_session.accessToken}',
-    'X-App-Session': _session.sessionId,
-    'X-Tenant-ID': ?tenantId,
-  };
+  FinanceRepository(this._auth);
+  final AuthController _auth;
 
   Future<List<TenantSummary>> tenants() async {
-    final data = await _api.get('/api/v1/tenants', headers: _headers());
+    final data = await _auth.getAuthenticated('/api/v1/tenants');
     if (data is! List) {
       throw const ApiException(
         ApiFailure.unexpected,
@@ -155,9 +148,9 @@ class FinanceRepository {
   Future<List<DashboardMetric>> dashboard(String tenantId, DateTime now) async {
     final from = DateTime(now.year, now.month);
     final to = DateTime(now.year, now.month + 1);
-    final data = await _api.get(
+    final data = await _auth.getAuthenticated(
       '/api/v1/dashboard',
-      headers: _headers(tenantId),
+      tenantId: tenantId,
       queryParameters: {
         'from': from.toUtc().toIso8601String(),
         'to': to.toUtc().toIso8601String(),
@@ -171,9 +164,9 @@ class FinanceRepository {
   }
 
   Future<List<AccountSummary>> accounts(String tenantId) async {
-    final data = await _api.get(
+    final data = await _auth.getAuthenticated(
       '/api/v1/accounts',
-      headers: _headers(tenantId),
+      tenantId: tenantId,
       queryParameters: const {'page': '1', 'pageSize': '50'},
     );
     final page = data as Map<String, dynamic>;
@@ -184,9 +177,9 @@ class FinanceRepository {
   }
 
   Future<List<TransactionSummary>> transactions(String tenantId) async {
-    final data = await _api.get(
+    final data = await _auth.getAuthenticated(
       '/api/v1/transactions',
-      headers: _headers(tenantId),
+      tenantId: tenantId,
       queryParameters: const {'page': '1', 'pageSize': '50'},
     );
     final page = (data as Map<String, dynamic>)['page'] as Map<String, dynamic>;
@@ -197,9 +190,9 @@ class FinanceRepository {
   }
 
   Future<List<CategorySummary>> categories(String tenantId) async {
-    final data = await _api.get(
+    final data = await _auth.getAuthenticated(
       '/api/v1/categories',
-      headers: _headers(tenantId),
+      tenantId: tenantId,
       queryParameters: const {'page': '1', 'pageSize': '100'},
     );
     final page = data as Map<String, dynamic>;
@@ -214,22 +207,22 @@ class FinanceRepository {
     required String name,
     required String currency,
     required num openingBalance,
-  }) => _api.post('/api/v1/accounts', {
+  }) => _auth.postAuthenticated('/api/v1/accounts', {
     'operationId': _newOperationId(),
     'name': name,
     'currency': currency,
     'openingBalance': openingBalance,
-  }, headers: _headers(tenantId));
+  }, tenantId: tenantId);
 
   Future<void> createCategory({
     required String tenantId,
     required String name,
     required String flow,
-  }) => _api.post('/api/v1/categories', {
+  }) => _auth.postAuthenticated('/api/v1/categories', {
     'operationId': _newOperationId(),
     'name': name,
     'flow': flow,
-  }, headers: _headers(tenantId));
+  }, tenantId: tenantId);
 
   Future<void> createTransaction({
     required String tenantId,
@@ -237,7 +230,7 @@ class FinanceRepository {
     required CategorySummary category,
     required num amount,
     required String description,
-  }) => _api.post('/api/v1/transactions', {
+  }) => _auth.postAuthenticated('/api/v1/transactions', {
     'operationId': _newOperationId(),
     'accountId': account.id,
     'categoryId': category.id,
@@ -248,7 +241,7 @@ class FinanceRepository {
     'occurredAt': DateTime.now().toUtc().toIso8601String(),
     'description': description,
     'accountVersion': account.version,
-  }, headers: _headers(tenantId));
+  }, tenantId: tenantId);
 
   Future<void> createTransfer({
     required String tenantId,
@@ -256,7 +249,7 @@ class FinanceRepository {
     required AccountSummary destination,
     required num amount,
     required String description,
-  }) => _api.post('/api/v1/transfers', {
+  }) => _auth.postAuthenticated('/api/v1/transfers', {
     'operationId': _newOperationId(),
     'sourceAccountId': source.id,
     'destinationAccountId': destination.id,
@@ -266,7 +259,7 @@ class FinanceRepository {
     'description': description,
     'sourceVersion': source.version,
     'destinationVersion': destination.version,
-  }, headers: _headers(tenantId));
+  }, tenantId: tenantId);
 }
 
 String _newOperationId() {

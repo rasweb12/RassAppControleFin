@@ -1,4 +1,5 @@
 class AuthSession {
+  static const renewalLeadTime = Duration(minutes: 1);
   const AuthSession({
     required this.sessionId,
     required this.accessToken,
@@ -13,6 +14,11 @@ class AuthSession {
   final String subject;
   final DateTime accessExpiresAt;
   final DateTime sessionExpiresAt;
+
+  bool get isSessionExpired =>
+      !sessionExpiresAt.isAfter(DateTime.now().toUtc());
+  bool get isAccessExpiring =>
+      !accessExpiresAt.isAfter(DateTime.now().toUtc().add(renewalLeadTime));
 
   factory AuthSession.fromJson(Map<String, dynamic> json) => AuthSession(
     sessionId: json['sessionId'] as String,

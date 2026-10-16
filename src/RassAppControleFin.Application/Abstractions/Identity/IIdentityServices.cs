@@ -13,6 +13,8 @@ public interface INeonAuthService
     Task<Result<ProviderSession>> SignUpAsync(string name, string email, string password, CancellationToken cancellationToken);
     Task<Result<ProviderSession>> RenewAsync(string sessionToken, CancellationToken cancellationToken);
     Task<Result> SignOutAsync(string sessionToken, CancellationToken cancellationToken);
+    Task<Result> RequestPasswordResetAsync(string email, CancellationToken cancellationToken);
+    Task<Result> ResetPasswordAsync(string token, string newPassword, CancellationToken cancellationToken);
 }
 
 public interface IIdentityStore

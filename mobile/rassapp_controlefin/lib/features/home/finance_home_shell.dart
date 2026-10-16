@@ -29,10 +29,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   @override
   void initState() {
     super.initState();
-    _repository = FinanceRepository(
-      widget.authController.api,
-      widget.authController.session,
-    );
+    _repository = FinanceRepository(widget.authController);
     _load();
   }
 

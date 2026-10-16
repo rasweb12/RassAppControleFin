@@ -21,6 +21,11 @@ public static class IdentityEndpoints
             => Session(await sender.Send(new RenewSessionCommand(input.SessionId, input.SessionToken), ct)).ToHttp(ctx));
         auth.MapPost("/sign-out", async (RenewSessionRequest input, ISender sender, HttpContext ctx, CancellationToken ct)
             => (await sender.Send(new EndSessionCommand(input.SessionId, input.SessionToken), ct)).ToHttp(ctx));
+        auth.MapPost("/request-password-reset", async (PasswordResetRequest input, ISender sender, HttpContext ctx, CancellationToken ct)
+            => (await sender.Send(new RequestPasswordResetCommand(input.Email), ct)).ToHttp(ctx));
+        auth.MapPost("/reset-password", async (ResetPasswordRequest input, ISender sender, HttpContext ctx, CancellationToken ct)
+            => (await sender.Send(new ResetPasswordCommand(input.Token, input.NewPassword), ct)).ToHttp(ctx));
+        auth.MapGet("/reset-password", () => Results.Content(PasswordResetPage.Html, "text/html; charset=utf-8"));
         app.MapGet("/api/v1/tenants", async (ISender sender, HttpContext ctx, CancellationToken ct) =>
         {
             var result = await sender.Send(new ListTenantsQuery(), ct);

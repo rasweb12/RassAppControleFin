@@ -11,6 +11,8 @@ public sealed record SignInCommand(string Email, string Password) : IRequest<Res
 public sealed record SignUpCommand(string Name, string Email, string Password) : IRequest<Result<ApplicationSession>>;
 public sealed record RenewSessionCommand(Guid SessionId, string SessionToken) : IRequest<Result<ApplicationSession>>;
 public sealed record EndSessionCommand(Guid SessionId, string SessionToken) : IRequest<Result>;
+public sealed record RequestPasswordResetCommand(string Email) : IRequest<Result>;
+public sealed record ResetPasswordCommand(string Token, string NewPassword) : IRequest<Result>;
 public sealed record ListTenantsQuery : IRequest<Result<IReadOnlyList<TenantInfo>>>;
 public sealed record AddMemberCommand(string Subject, string Role) : IRequest<Result>;
 
@@ -38,6 +40,19 @@ public sealed class EndSessionValidator : AbstractValidator<EndSessionCommand>
     public EndSessionValidator()
     { RuleFor(x => x.SessionId).NotEmpty(); RuleFor(x => x.SessionToken).NotEmpty().MaximumLength(4096); }
 }
+public sealed class RequestPasswordResetValidator : AbstractValidator<RequestPasswordResetCommand>
+{
+    public RequestPasswordResetValidator()
+    { RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(254); }
+}
+public sealed class ResetPasswordValidator : AbstractValidator<ResetPasswordCommand>
+{
+    public ResetPasswordValidator()
+    {
+        RuleFor(x => x.Token).NotEmpty().MaximumLength(4096);
+        RuleFor(x => x.NewPassword).Length(8, 128);
+    }
+}
 public sealed class AddMemberValidator : AbstractValidator<AddMemberCommand>
 {
     public AddMemberValidator()
@@ -52,6 +67,8 @@ public sealed class SessionHandlers(INeonAuthService auth, IIdentityStore store,
       IRequestHandler<SignUpCommand, Result<ApplicationSession>>,
       IRequestHandler<RenewSessionCommand, Result<ApplicationSession>>,
       IRequestHandler<EndSessionCommand, Result>,
+      IRequestHandler<RequestPasswordResetCommand, Result>,
+      IRequestHandler<ResetPasswordCommand, Result>,
       IRequestHandler<ListTenantsQuery, Result<IReadOnlyList<TenantInfo>>>,
       IRequestHandler<AddMemberCommand, Result>
 {
@@ -82,6 +99,10 @@ public sealed class SessionHandlers(INeonAuthService auth, IIdentityStore store,
         await auth.SignOutAsync(session.Value.SessionToken, ct);
         return Result.Success();
     }
+    public Task<Result> Handle(RequestPasswordResetCommand command, CancellationToken ct)
+        => auth.RequestPasswordResetAsync(command.Email, ct);
+    public Task<Result> Handle(ResetPasswordCommand command, CancellationToken ct)
+        => auth.ResetPasswordAsync(command.Token, command.NewPassword, ct);
     public async Task<Result<IReadOnlyList<TenantInfo>>> Handle(ListTenantsQuery command, CancellationToken ct)
         => user.IsAuthenticated && user.Subject is not null
             ? Result<IReadOnlyList<TenantInfo>>.Success(await store.ListTenantsAsync(user.Subject, ct))
@@ -90,4 +111,5 @@ public sealed class SessionHandlers(INeonAuthService auth, IIdentityStore store,
         => user.Subject is not null && tenant.TenantId is { } id
             ? store.AddMemberAsync(user.Subject, id, command.Subject, command.Role, ct)
             : Task.FromResult(Result.Failure(new("TENANT_REQUIRED", "Tenant autorizado necessario.", ErrorType.Forbidden)));
+
 }

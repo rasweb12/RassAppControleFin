@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using RassAppControleFin.Application.Behaviors;
+using RassAppControleFin.Application.Features.Identity;
 using RassAppControleFin.SharedKernel.Results;
 using Xunit;
 
@@ -66,5 +67,17 @@ public sealed class ValidationTests
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => behavior.Handle(
             new("valid"), _ => Task.FromResult(Result<int>.Success(7)), cancellation.Token));
+    }
+
+    [Fact]
+    public void Password_reset_requires_a_token_and_an_eight_character_password()
+    {
+        var validator = new ResetPasswordValidator();
+
+        var result = validator.Validate(new ResetPasswordCommand("", "short"));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == "Token");
+        Assert.Contains(result.Errors, error => error.PropertyName == "NewPassword");
     }
 }

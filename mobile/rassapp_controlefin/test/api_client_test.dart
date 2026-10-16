@@ -96,7 +96,7 @@ void main() {
     },
   );
 
-  test('maps network failures to a sanitized unavailable message', () async {
+  test('maps network failures to an offline message', () async {
     final client = ApiClient(
       client: MockClient((request) => throw const SocketException('offline')),
     );
@@ -105,12 +105,63 @@ void main() {
       () => client.post('/api/v1/auth/sign-in', const {}),
       throwsA(
         isA<ApiException>()
-            .having((error) => error.failure, 'failure', ApiFailure.unavailable)
+            .having((error) => error.failure, 'failure', ApiFailure.offline)
             .having(
               (error) => error.message,
               'message',
-              'Autenticação indisponível. Tente novamente mais tarde.',
+              'Sem conexão com a internet.',
             ),
+      ),
+    );
+  });
+
+  test(
+    'maps business and authorization failures without leaking transport details',
+    () async {
+      final client = ApiClient(
+        client: MockClient(
+          (request) async => http.Response(
+            '{"success":false,"data":null,"error":{"message":"Operação não permitida."}}',
+            HttpStatus.unprocessableEntity,
+            headers: const {'x-correlation-id': 'correlation-1'},
+          ),
+        ),
+      );
+
+      expect(
+        () => client.post('/api/v1/transactions', const {}),
+        throwsA(
+          isA<ApiException>()
+              .having(
+                (error) => error.failure,
+                'failure',
+                ApiFailure.ruleViolation,
+              )
+              .having(
+                (error) => error.correlationId,
+                'correlationId',
+                'correlation-1',
+              ),
+        ),
+      );
+    },
+  );
+
+  test('treats malformed responses as contract failures', () async {
+    final client = ApiClient(
+      client: MockClient(
+        (request) async => http.Response('{invalid', HttpStatus.ok),
+      ),
+    );
+
+    expect(
+      () => client.get('/api/v1/system'),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.failure,
+          'failure',
+          ApiFailure.unexpected,
+        ),
       ),
     );
   });

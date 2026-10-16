@@ -166,19 +166,85 @@ class _LoginPageState extends State<LoginPage> {
     ),
   );
 
-  void _showRecovery(BuildContext context) => showDialog<void>(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text('Recuperação de senha'),
-      content: const Text(
-        'A recuperação de senha será liberada quando o Neon Auth estiver exposto pela API com um contrato seguro.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Entendi'),
+  Future<void> _showRecovery(BuildContext context) async {
+    final email = TextEditingController(text: _email.text.trim());
+    var waiting = false;
+    String? error;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Recuperar senha'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enviaremos um link caso este e-mail possua cadastro.',
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: email,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                decoration: const InputDecoration(labelText: 'E-mail'),
+              ),
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    error!,
+                    style: const TextStyle(color: Color(0xFFD92D20)),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: waiting ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: waiting
+                  ? null
+                  : () async {
+                      final value = email.text.trim();
+                      if (!RegExp(r'^\S+@\S+\.\S+$').hasMatch(value)) {
+                        setDialogState(
+                          () => error = 'Informe um e-mail válido.',
+                        );
+                        return;
+                      }
+                      setDialogState(() {
+                        waiting = true;
+                        error = null;
+                      });
+                      try {
+                        await widget.authController.requestPasswordReset(value);
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                        if (mounted) {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Caso exista uma conta para este e-mail, enviaremos um link de recuperação.',
+                              ),
+                            ),
+                          );
+                        }
+                      } on ApiException catch (exception) {
+                        if (dialogContext.mounted) {
+                          setDialogState(() => error = exception.message);
+                        }
+                      } finally {
+                        if (dialogContext.mounted)
+                          setDialogState(() => waiting = false);
+                      }
+                    },
+              child: Text(waiting ? 'Enviando...' : 'Enviar link'),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      ),
+    );
+    email.dispose();
+  }
 }
