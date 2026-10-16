@@ -23,6 +23,7 @@ using RassAppControleFin.Security;
 using RassAppControleFin.MultiTenancy;
 using RassAppControleFin.Api.Finance;
 using RassAppControleFin.Api.AI;
+using RassAppControleFin.Api.Synchronization;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 65536);
@@ -140,6 +141,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 app.MapIdentity();
 app.MapFinance();
+app.MapSync();
 app.MapAi();
 
 app.MapHealthChecks("/health", new HealthCheckOptions()).AllowAnonymous();

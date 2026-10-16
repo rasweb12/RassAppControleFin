@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/storage/offline_finance_store.dart';
 import '../auth/auth_controller.dart';
 import '../finance/finance_repository.dart';
 import 'finance_forms.dart';
@@ -29,6 +30,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   List<AccountSummary> _accounts = const [];
   List<CategorySummary> _categories = const [];
   List<TransactionSummary> _transactions = const [];
+  List<SyncConflict> _conflicts = const [];
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
@@ -69,6 +71,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
           _accounts = const [];
           _categories = const [];
           _transactions = const [];
+          _conflicts = const [];
           _loading = false;
         });
         return;
@@ -82,6 +85,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         _repository.accounts(tenant.id),
         _repository.categories(tenant.id),
         _repository.transactions(tenant.id),
+        _repository.syncConflicts(tenant.id),
       ]);
       if (!mounted) return;
       setState(() {
@@ -91,6 +95,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         _accounts = values[1] as List<AccountSummary>;
         _categories = values[2] as List<CategorySummary>;
         _transactions = values[3] as List<TransactionSummary>;
+        _conflicts = values[4] as List<SyncConflict>;
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -295,6 +300,82 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     await _load();
   }
 
+  Future<void> _reviewConflicts() async {
+    final tenant = _tenant;
+    if (tenant == null || _conflicts.isEmpty) {
+      _notice('Não há operações pendentes de revisão.');
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          itemCount: _conflicts.length + 1,
+          separatorBuilder: (_, _) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return const ListTile(
+                leading: Icon(Icons.warning_amber_outlined),
+                title: Text('Operações que precisam de revisão'),
+                subtitle: Text(
+                  'Atualize seus dados antes de descartar uma operação local.',
+                ),
+              );
+            }
+            final conflict = _conflicts[index - 1];
+            return ListTile(
+              leading: const Icon(Icons.sync_problem_outlined),
+              title: Text(_conflictTitle(conflict)),
+              subtitle: Text(conflict.safeError),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () async {
+                final discard = await showDialog<bool>(
+                  context: sheetContext,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Descartar operação local?'),
+                    content: const Text(
+                      'Esta ação remove somente a operação pendente deste dispositivo. '
+                      'Ela não altera nenhum lançamento já salvo no servidor.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        child: const Text('Cancelar'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        child: const Text('Descartar'),
+                      ),
+                    ],
+                  ),
+                );
+                if (discard != true) return;
+                await _repository.discardSyncConflict(
+                  tenant.id,
+                  conflict.operationId,
+                );
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+              },
+            );
+          },
+        ),
+      ),
+    );
+    if (mounted) await _load();
+  }
+
+  String _conflictTitle(SyncConflict conflict) => switch (conflict.entityType) {
+    'transaction' => 'Lançamento pendente',
+    'transfer' => 'Transferência pendente',
+    'account' => 'Conta pendente',
+    'category' => 'Categoria pendente',
+    _ => 'Operação pendente',
+  };
+
   String _messageFor(ApiException error) => switch (error.failure) {
     ApiFailure.conflict =>
       'Os dados foram alterados. Atualize e tente novamente.',
@@ -337,6 +418,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               onSwitch: _chooseTenant,
               onSignOut: widget.authController.signOut,
               onSynchronize: _synchronizeAndLoad,
+              conflictCount: _conflicts.length,
+              onReviewConflicts: _reviewConflicts,
             ),
           };
     return Scaffold(
@@ -553,12 +636,16 @@ class _Menu extends StatelessWidget {
     required this.onSwitch,
     required this.onSignOut,
     required this.onSynchronize,
+    required this.conflictCount,
+    required this.onReviewConflicts,
   });
   final TenantSummary tenant;
   final bool canSwitch;
   final VoidCallback onSwitch;
   final Future<void> Function() onSignOut;
   final Future<void> Function() onSynchronize;
+  final int conflictCount;
+  final Future<void> Function() onReviewConflicts;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -579,6 +666,19 @@ class _Menu extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right),
         onTap: onSynchronize,
       ),
+      if (conflictCount > 0)
+        ListTile(
+          leading: const Icon(
+            Icons.warning_amber_outlined,
+            color: Color(0xFFD92D20),
+          ),
+          title: const Text('Revisar sincronização'),
+          subtitle: Text(
+            '$conflictCount ${conflictCount == 1 ? 'operação precisa' : 'operações precisam'} de revisão.',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onReviewConflicts,
+        ),
       const ListTile(
         leading: Icon(Icons.security_outlined),
         title: Text('Segurança da conta'),

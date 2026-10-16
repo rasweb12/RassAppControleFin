@@ -10,6 +10,7 @@ import 'package:rassapp_controlefin/core/security/session_store.dart';
 import 'package:rassapp_controlefin/features/auth/auth_controller.dart';
 import 'package:rassapp_controlefin/features/auth/auth_session.dart';
 import 'package:rassapp_controlefin/features/finance/finance_repository.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
   test(
@@ -70,6 +71,92 @@ void main() {
     expect(await store.pending('tenant-a'), isEmpty);
     await database.close();
   });
+
+  test(
+    'keeps conflicts isolated until the user explicitly discards them',
+    () async {
+      final database = OfflineDatabase(NativeDatabase.memory());
+      final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
+      await store.enqueue(
+        tenantId: 'tenant-a',
+        endpoint: '/api/v1/transfers',
+        payload: const {'operationId': 'conflicting-operation'},
+        entityType: 'transfer',
+        entityId: 'local-conflicting-operation',
+        operationType: 'create',
+      );
+      await store.defer(
+        'conflicting-operation',
+        safeError: 'Conflito que exige revisão.',
+        retryable: false,
+      );
+
+      final conflicts = await store.conflicts('tenant-a');
+      expect(conflicts, hasLength(1));
+      expect(conflicts.single.entityType, 'transfer');
+      expect(await store.pendingCount('tenant-a'), 0);
+
+      await store.discardConflict('tenant-a', 'conflicting-operation');
+      expect(await store.conflicts('tenant-a'), isEmpty);
+      await database.close();
+    },
+  );
+
+  test('isolates sync cursors and deduplicates inbox operations', () async {
+    final database = OfflineDatabase(NativeDatabase.memory());
+    final alice = OfflineFinanceStore.forTesting(database, subject: 'alice');
+    final bob = OfflineFinanceStore.forTesting(database, subject: 'bob');
+
+    await alice.setCursor('tenant-a', 'cursor-a');
+    await alice.rememberInbox('tenant-a', ['operation-1', 'operation-1']);
+    await bob.rememberInbox('tenant-a', ['operation-1']);
+
+    expect(await alice.cursor('tenant-a'), 'cursor-a');
+    expect(await bob.cursor('tenant-a'), isNull);
+
+    final inbox = await database.select(database.syncInbox).get();
+    expect(inbox, hasLength(2));
+    expect(inbox.map((item) => item.operationId), everyElement('operation-1'));
+    expect(inbox.map((item) => item.subject), containsAll(['alice', 'bob']));
+    await database.close();
+  });
+
+  test(
+    'upgrades the inbox primary key without losing legacy records',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'rass-offline-db-',
+      );
+      final databaseFile = File(
+        '${directory.path}${Platform.pathSeparator}app.db',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final legacy = sqlite.sqlite3.open(databaseFile.path);
+      legacy.execute('''
+      CREATE TABLE sync_inbox (
+        operation_id TEXT NOT NULL PRIMARY KEY,
+        subject TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        received_at INTEGER NOT NULL
+      )
+    ''');
+      legacy.execute('''
+      INSERT INTO sync_inbox (operation_id, subject, tenant_id, received_at)
+      VALUES ('legacy-operation', 'alice', 'tenant-a', 0)
+    ''');
+      legacy.execute('PRAGMA user_version = 1');
+      legacy.close();
+
+      final database = OfflineDatabase(NativeDatabase(databaseFile));
+      addTearDown(database.close);
+      final inbox = await database.select(database.syncInbox).get();
+
+      expect(inbox, hasLength(1));
+      expect(inbox.single.operationId, 'legacy-operation');
+      expect(inbox.single.subject, 'alice');
+    },
+  );
 
   test(
     'queues an offline income and updates the local dashboard snapshot',

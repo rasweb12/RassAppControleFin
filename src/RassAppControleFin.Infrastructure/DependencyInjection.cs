@@ -58,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<FinanceUnitFactory>();
         services.AddScoped<IFinanceUnitFactory>(p => p.GetRequiredService<FinanceUnitFactory>());
         services.AddScoped<IFinanceReadStore, FinanceReadStore>();
+        services.AddScoped<IFinanceSyncReadStore, FinanceSyncReadStore>();
         services.AddHttpClient("neon-auth").RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false })
             .AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());

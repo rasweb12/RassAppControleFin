@@ -26,6 +26,22 @@ class PendingFinanceOperation {
   final String operationType;
 }
 
+class SyncConflict {
+  const SyncConflict({
+    required this.operationId,
+    required this.entityType,
+    required this.entityId,
+    required this.operationType,
+    required this.safeError,
+  });
+
+  final String operationId;
+  final String entityType;
+  final String entityId;
+  final String operationType;
+  final String safeError;
+}
+
 class OfflineFinanceStore {
   OfflineFinanceStore._(this._database, this.subject, this._deviceId);
 
@@ -227,6 +243,77 @@ class OfflineFinanceStore {
       );
     return (await query.getSingle()).read(count) ?? 0;
   }
+
+  Future<List<SyncConflict>> conflicts(String tenantId) async {
+    final rows =
+        await (_database.select(_database.pendingSyncOperations)
+              ..where(
+                (row) =>
+                    row.subject.equals(subject) &
+                    row.tenantId.equals(tenantId) &
+                    row.status.equals('conflict'),
+              )
+              ..orderBy([(row) => OrderingTerm.asc(row.clientTimestamp)]))
+            .get();
+    return rows
+        .map(
+          (row) => SyncConflict(
+            operationId: row.operationId,
+            entityType: row.entityType,
+            entityId: row.entityId,
+            operationType: row.operationType,
+            safeError: row.lastError ?? 'A operação precisa de revisão.',
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> discardConflict(String tenantId, String operationId) =>
+      (_database.delete(_database.pendingSyncOperations)..where(
+            (row) =>
+                row.subject.equals(subject) &
+                row.tenantId.equals(tenantId) &
+                row.operationId.equals(operationId) &
+                row.status.equals('conflict'),
+          ))
+          .go();
+
+  Future<String?> cursor(String tenantId) async {
+    final state =
+        await (_database.select(_database.syncStates)..where(
+              (row) =>
+                  row.subject.equals(subject) & row.tenantId.equals(tenantId),
+            ))
+            .getSingleOrNull();
+    return state?.cursor;
+  }
+
+  Future<void> setCursor(String tenantId, String cursor) => _database
+      .into(_database.syncStates)
+      .insertOnConflictUpdate(
+        SyncStatesCompanion.insert(
+          subject: subject,
+          tenantId: tenantId,
+          cursor: Value(cursor),
+          updatedAt: DateTime.now().toUtc(),
+        ),
+      );
+
+  Future<void> rememberInbox(String tenantId, Iterable<String> operationIds) =>
+      _database.batch((batch) {
+        batch.insertAll(
+          _database.syncInbox,
+          operationIds.map(
+            (operationId) => SyncInboxCompanion.insert(
+              operationId: operationId,
+              subject: subject,
+              tenantId: tenantId,
+              receivedAt: DateTime.now().toUtc(),
+            ),
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+      });
 
   Future<void> close() => _database.close();
 }

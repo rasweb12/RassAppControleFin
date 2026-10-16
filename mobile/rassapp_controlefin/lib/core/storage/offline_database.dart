@@ -58,7 +58,7 @@ class SyncInbox extends Table {
   DateTimeColumn get receivedAt => dateTime()();
 
   @override
-  Set<Column<Object>> get primaryKey => {operationId};
+  Set<Column<Object>> get primaryKey => {subject, tenantId, operationId};
 }
 
 class SyncStates extends Table {
@@ -117,13 +117,22 @@ class OfflineDatabase extends _$OfflineDatabase {
   }
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) => migrator.createAll(),
     onUpgrade: (migrator, from, to) async {
-      throw UnsupportedError('Migração local ausente para $from -> $to.');
+      if (from < 2) {
+        await customStatement('ALTER TABLE sync_inbox RENAME TO sync_inbox_v1');
+        await migrator.createTable(syncInbox);
+        await customStatement('''
+          INSERT INTO sync_inbox (operation_id, subject, tenant_id, received_at)
+          SELECT operation_id, subject, tenant_id, received_at
+          FROM sync_inbox_v1
+        ''');
+        await customStatement('DROP TABLE sync_inbox_v1');
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

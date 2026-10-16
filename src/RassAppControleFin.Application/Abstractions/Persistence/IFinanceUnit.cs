@@ -33,3 +33,12 @@ public interface IFinanceReadStore
     Task<Result<Page<GoalView>>> GoalsAsync(ListGoalsQuery query, CancellationToken ct);
     Task<Result<DashboardView>> DashboardAsync(DashboardQuery query, CancellationToken ct);
 }
+
+public sealed record SyncChange(Guid OperationId, Guid ResourceId, string EventType,
+    DateTimeOffset OccurredAt, Guid CursorId);
+public sealed record SyncChangePage(IReadOnlyList<SyncChange> Changes, bool HasMore);
+public interface IFinanceSyncReadStore
+{
+    Task<Result<SyncChangePage>> PullAsync(DateTimeOffset? after, Guid? afterId,
+        int limit, CancellationToken ct);
+}

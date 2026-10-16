@@ -137,6 +137,10 @@ class FinanceRepository {
   final AuthController _auth;
   final Future<OfflineFinanceStore> _store;
 
+  late final Future<FinanceSyncService> _syncService = _store.then(
+    (store) => FinanceSyncService(_auth, store),
+  );
+
   Future<List<TenantSummary>> tenants() async {
     try {
       final data = await _auth.getAuthenticated('/api/v1/tenants');
@@ -373,10 +377,16 @@ class FinanceRepository {
   }
 
   Future<FinanceSyncResult> synchronize(String tenantId) async =>
-      FinanceSyncService(_auth, await _store).synchronize(tenantId);
+      (await _syncService).synchronize(tenantId);
 
   Future<int> pendingSyncCount(String tenantId) async =>
       (await _store).pendingCount(tenantId);
+
+  Future<List<SyncConflict>> syncConflicts(String tenantId) async =>
+      (await _store).conflicts(tenantId);
+
+  Future<void> discardSyncConflict(String tenantId, String operationId) async =>
+      (await _store).discardConflict(tenantId, operationId);
 
   Future<void> dispose() async => (await _store).close();
 

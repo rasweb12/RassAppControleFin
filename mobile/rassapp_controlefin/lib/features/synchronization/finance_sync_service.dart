@@ -50,6 +50,7 @@ class FinanceSyncService {
           );
         }
       }
+      await _pullChanges(tenantId);
       return blocked
           ? FinanceSyncResult.blocked
           : FinanceSyncResult.synchronized;
@@ -75,4 +76,24 @@ class FinanceSyncService {
     ApiFailure.rateLimited => 'Limite temporário de sincronização.',
     _ => 'Sincronização pendente.',
   };
+
+  Future<void> _pullChanges(String tenantId) async {
+    var cursor = await _store.cursor(tenantId);
+    do {
+      final data = await _auth.getAuthenticated(
+        '/api/v1/sync/pull',
+        tenantId: tenantId,
+        queryParameters: {'limit': '100', 'cursor': ?cursor},
+      );
+      final page = data as Map<String, dynamic>;
+      final changes = (page['changes'] as List).cast<Map<String, dynamic>>();
+      await _store.rememberInbox(
+        tenantId,
+        changes.map((change) => change['operationId'] as String),
+      );
+      final next = page['nextCursor'] as String?;
+      if (next != null) await _store.setCursor(tenantId, next);
+      cursor = next;
+    } while (cursor != null);
+  }
 }

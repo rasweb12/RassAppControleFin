@@ -1521,7 +1521,7 @@ class $SyncInboxTable extends SyncInbox
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {operationId};
+  Set<GeneratedColumn> get $primaryKey => {subject, tenantId, operationId};
   @override
   SyncInboxData map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';

@@ -64,6 +64,43 @@ public sealed class CoreFinanceTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task Sync_pull_is_paged_and_isolated_by_the_runtime_user()
+    {
+        await using var db = fixture.CreateContext();
+        var alice = new FinanceUser(DevelopmentSeed.Alice);
+        var aliceFactory = new FinanceUnitFactory(db, TransactionFactory(db, alice),
+            new TestTenant(DevelopmentSeed.TenantA), alice);
+        var handler = new FinanceMutationHandlers(aliceFactory, alice,
+            new TestTenant(DevelopmentSeed.TenantA));
+
+        var firstAccount = await handler.Handle(new OpenAccountCommand(Guid.NewGuid(), "Sync A", "BRL", 10m), default);
+        var secondAccount = await handler.Handle(new OpenAccountCommand(Guid.NewGuid(), "Sync B", "BRL", 20m), default);
+        Assert.True(firstAccount.IsSuccess, firstAccount.Error?.Code);
+        Assert.True(secondAccount.IsSuccess, secondAccount.Error?.Code);
+
+        var aliceStore = new FinanceSyncReadStore(db, aliceFactory);
+        var firstPage = await aliceStore.PullAsync(null, null, 1, default);
+        Assert.True(firstPage.IsSuccess, firstPage.Error?.Code);
+        Assert.Single(firstPage.Value.Changes);
+        Assert.True(firstPage.Value.HasMore);
+
+        var marker = firstPage.Value.Changes.Single();
+        var secondPage = await aliceStore.PullAsync(marker.OccurredAt, marker.CursorId, 10, default);
+        Assert.True(secondPage.IsSuccess, secondPage.Error?.Code);
+        Assert.Contains(secondPage.Value.Changes, change => change.ResourceId == secondAccount.Value.ResourceId);
+
+        var bob = new FinanceUser(DevelopmentSeed.Bob);
+        var bobFactory = new FinanceUnitFactory(db, TransactionFactory(db, bob),
+            new TestTenant(DevelopmentSeed.TenantA), bob);
+        var bobStore = new FinanceSyncReadStore(db, bobFactory);
+        var bobPage = await bobStore.PullAsync(null, null, 10, default);
+        Assert.True(bobPage.IsSuccess, bobPage.Error?.Code);
+        Assert.DoesNotContain(bobPage.Value.Changes, change =>
+            change.ResourceId == firstAccount.Value.ResourceId ||
+            change.ResourceId == secondAccount.Value.ResourceId);
+    }
+
+    [Fact]
     public async Task Financial_rls_hides_another_user_rows()
     {
         await using var db = fixture.CreateContext();
