@@ -31,6 +31,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   List<CategorySummary> _categories = const [];
   List<TransactionSummary> _transactions = const [];
   List<SyncConflict> _conflicts = const [];
+  String? _financialInsight;
+  bool _insightLoading = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
@@ -196,6 +198,21 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     );
   }
 
+  Future<void> _openCategories() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _CategoriesPage(
+          categories: _categories,
+          onCreate: _createCategory,
+          onRefresh: () async {
+            await _load();
+            return _categories;
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _createTransaction(String flow) async {
     final tenant = _tenant;
     if (tenant == null) return;
@@ -298,6 +315,27 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
       if (mounted) _notice(_messageFor(error));
     }
     await _load();
+  }
+
+  Future<void> _generateInsight() async {
+    final tenant = _tenant;
+    if (tenant == null || _insightLoading) return;
+    setState(() => _insightLoading = true);
+    final now = DateTime.now();
+    final period = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    try {
+      final insight = await _repository.askFinancialAssistant(
+        tenantId: tenant.id,
+        question:
+            'Como está minha vida financeira neste mês? Explique os principais números e uma ação prática.',
+        period: period,
+      );
+      if (mounted) setState(() => _financialInsight = insight);
+    } on ApiException catch (error) {
+      if (mounted) _notice(_messageFor(error));
+    } finally {
+      if (mounted) setState(() => _insightLoading = false);
+    }
   }
 
   Future<void> _reviewConflicts() async {
@@ -409,7 +447,13 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
                 'Sua conta ainda não possui acesso a um espaço financeiro.',
           )
         : switch (_tab) {
-            0 => _Dashboard(metrics: _metrics, onRefresh: _load),
+            0 => _Dashboard(
+              metrics: _metrics,
+              onRefresh: _load,
+              insight: _financialInsight,
+              insightLoading: _insightLoading,
+              onGenerateInsight: _generateInsight,
+            ),
             1 => _Transactions(items: _transactions, onRefresh: _load),
             2 => _Accounts(items: _accounts, onRefresh: _load),
             _ => _Menu(
@@ -420,6 +464,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               onSynchronize: _synchronizeAndLoad,
               conflictCount: _conflicts.length,
               onReviewConflicts: _reviewConflicts,
+              onCategories: _openCategories,
             ),
           };
     return Scaffold(
@@ -474,22 +519,22 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
 }
 
 class _Dashboard extends StatelessWidget {
-  const _Dashboard({required this.metrics, required this.onRefresh});
+  const _Dashboard({
+    required this.metrics,
+    required this.onRefresh,
+    required this.insight,
+    required this.insightLoading,
+    required this.onGenerateInsight,
+  });
   final List<DashboardMetric> metrics;
   final Future<void> Function() onRefresh;
+  final String? insight;
+  final bool insightLoading;
+  final Future<void> Function() onGenerateInsight;
 
   @override
   Widget build(BuildContext context) {
-    if (metrics.isEmpty) {
-      return _MessageState(
-        icon: Icons.insights_outlined,
-        title: 'Sem movimentações neste período',
-        message: 'Registre receitas ou despesas para visualizar seu resumo.',
-        action: 'Atualizar',
-        onAction: onRefresh,
-      );
-    }
-    final metric = metrics.first;
+    final metric = metrics.isEmpty ? null : metrics.first;
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
@@ -502,33 +547,70 @@ class _Dashboard extends StatelessWidget {
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 14),
-          _Metric(
-            title: 'Patrimônio líquido',
-            value: _money(metric.netWorth, metric.currency),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _Metric(
-                  title: 'Receitas',
-                  value: _money(metric.income, metric.currency),
-                ),
+          if (metric == null)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Registre receitas ou despesas para visualizar seu resumo.',
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _Metric(
-                  title: 'Despesas',
-                  value: _money(metric.expense, metric.currency),
+            )
+          else ...[
+            _Metric(
+              title: 'Patrimônio líquido',
+              value: _money(metric.netWorth, metric.currency),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _Metric(
+                    title: 'Receitas',
+                    value: _money(metric.income, metric.currency),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _Metric(
+                    title: 'Despesas',
+                    value: _money(metric.expense, metric.currency),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _Metric(
+              title: 'Taxa de economia',
+              value:
+                  '${(metric.savingsRate * 100).toStringAsFixed(1).replaceAll('.', ',')}%',
+            ),
+          ],
+          const SizedBox(height: 20),
+          Text(
+            'Insight financeiro',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 12),
-          _Metric(
-            title: 'Taxa de economia',
-            value:
-                '${(metric.savingsRate * 100).toStringAsFixed(1).replaceAll('.', ',')}%',
+          const SizedBox(height: 8),
+          if (insight != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(insight!),
+              ),
+            ),
+          FilledButton.icon(
+            onPressed: insightLoading ? null : onGenerateInsight,
+            icon: insightLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome_outlined),
+            label: Text(
+              insightLoading ? 'Gerando insight...' : 'Gerar insight do mês',
+            ),
           ),
         ],
       ),
@@ -638,6 +720,7 @@ class _Menu extends StatelessWidget {
     required this.onSynchronize,
     required this.conflictCount,
     required this.onReviewConflicts,
+    required this.onCategories,
   });
   final TenantSummary tenant;
   final bool canSwitch;
@@ -646,6 +729,7 @@ class _Menu extends StatelessWidget {
   final Future<void> Function() onSynchronize;
   final int conflictCount;
   final Future<void> Function() onReviewConflicts;
+  final Future<void> Function() onCategories;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -659,6 +743,13 @@ class _Menu extends StatelessWidget {
         onTap: canSwitch ? onSwitch : null,
       ),
       const Divider(),
+      ListTile(
+        leading: const Icon(Icons.category_outlined),
+        title: const Text('Categorias'),
+        subtitle: const Text('Organize receitas e despesas.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onCategories,
+      ),
       ListTile(
         leading: const Icon(Icons.sync_outlined),
         title: const Text('Sincronização'),
@@ -692,6 +783,91 @@ class _Menu extends StatelessWidget {
       ),
     ],
   );
+}
+
+class _CategoriesPage extends StatefulWidget {
+  const _CategoriesPage({
+    required this.categories,
+    required this.onCreate,
+    required this.onRefresh,
+  });
+  final List<CategorySummary> categories;
+  final Future<void> Function() onCreate;
+  final Future<List<CategorySummary>> Function() onRefresh;
+
+  @override
+  State<_CategoriesPage> createState() => _CategoriesPageState();
+}
+
+class _CategoriesPageState extends State<_CategoriesPage> {
+  late List<CategorySummary> _categories = widget.categories;
+  bool _loading = false;
+
+  Future<void> _refresh() async {
+    setState(() => _loading = true);
+    final refreshed = await widget.onRefresh();
+    if (mounted) {
+      setState(() {
+        _categories = refreshed;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _create() async {
+    await widget.onCreate();
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final active = _categories.where((item) => !item.archived).toList();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Categorias')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _loading ? null : _create,
+        tooltip: 'Nova categoria',
+        child: const Icon(Icons.add),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : active.isEmpty
+          ? _MessageState(
+              icon: Icons.category_outlined,
+              title: 'Nenhuma categoria cadastrada',
+              message: 'Crie categorias para classificar receitas e despesas.',
+              action: 'Atualizar',
+              onAction: _refresh,
+            )
+          : RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: active.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final category = active[index];
+                  final income = category.flow.toLowerCase() == 'income';
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: income
+                          ? const Color(0xFFDDF7E8)
+                          : const Color(0xFFFDE8E7),
+                      child: Icon(
+                        income ? Icons.arrow_downward : Icons.arrow_upward,
+                        color: income
+                            ? const Color(0xFF087A36)
+                            : const Color(0xFFD92D20),
+                      ),
+                    ),
+                    title: Text(category.name),
+                    subtitle: Text(income ? 'Receita' : 'Despesa'),
+                  );
+                },
+              ),
+            ),
+    );
+  }
 }
 
 class _Metric extends StatelessWidget {

@@ -200,16 +200,7 @@ class FinanceRepository {
 
   Future<List<TransactionSummary>> transactions(String tenantId) async {
     try {
-      final data = await _auth.getAuthenticated(
-        '/api/v1/transactions',
-        tenantId: tenantId,
-        queryParameters: const {'page': '1', 'pageSize': '50'},
-      );
-      final resources =
-          ((data as Map<String, dynamic>)['page']
-                  as Map<String, dynamic>)['items']
-              as List;
-      final maps = resources.cast<Map<String, dynamic>>();
+      final maps = await _loadAllTransactionPages(tenantId);
       await (await _store).cacheAll(tenantId, 'transaction', maps);
       return maps.map(TransactionSummary.fromJson).toList(growable: false);
     } on ApiException catch (error) {
@@ -219,6 +210,24 @@ class FinanceRepository {
         'transaction',
       )).map(TransactionSummary.fromJson).toList(growable: false);
     }
+  }
+
+  Future<String> askFinancialAssistant({
+    required String tenantId,
+    required String question,
+    required String period,
+  }) async {
+    final data = await _auth.postAuthenticated('/api/v1/ai/ask', {
+      'question': question,
+      'period': period,
+    }, tenantId: tenantId);
+    if (data is! Map<String, dynamic> || data['text'] is! String) {
+      throw const ApiException(
+        ApiFailure.unexpected,
+        'O assistente retornou uma resposta inválida.',
+      );
+    }
+    return data['text'] as String;
   }
 
   Future<List<CategorySummary>> categories(String tenantId) async {
@@ -414,6 +423,44 @@ class FinanceRepository {
         entityType,
       )).map(parser).toList(growable: false);
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadAllTransactionPages(
+    String tenantId,
+  ) async {
+    const pageSize = 100;
+    final resources = <Map<String, dynamic>>[];
+    for (var pageNumber = 1; pageNumber <= 1000; pageNumber++) {
+      final data = await _auth.getAuthenticated(
+        '/api/v1/transactions',
+        tenantId: tenantId,
+        queryParameters: {'page': '$pageNumber', 'pageSize': '$pageSize'},
+      );
+      if (data is! Map<String, dynamic> || data['page'] is! Map) {
+        throw const ApiException(
+          ApiFailure.unexpected,
+          'Não foi possível carregar as transações.',
+        );
+      }
+      final page = Map<String, dynamic>.from(data['page'] as Map);
+      final items = page['items'];
+      final total = page['total'];
+      if (items is! List || total is! num || total < 0) {
+        throw const ApiException(
+          ApiFailure.unexpected,
+          'Não foi possível carregar as transações.',
+        );
+      }
+      resources.addAll(
+        items.map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      if (resources.length >= total) return resources;
+      if (items.isEmpty) break;
+    }
+    throw const ApiException(
+      ApiFailure.unexpected,
+      'A paginação de transações é inválida.',
+    );
   }
 
   Future<FinanceWriteState> _postOrQueue({
