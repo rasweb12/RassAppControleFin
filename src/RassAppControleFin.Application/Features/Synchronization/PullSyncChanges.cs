@@ -10,7 +10,8 @@ namespace RassAppControleFin.Application.Features.Synchronization;
 
 public sealed record SyncChangeDto(Guid OperationId, Guid ResourceId, string EventType,
     DateTimeOffset OccurredAt);
-public sealed record SyncPullView(IReadOnlyList<SyncChangeDto> Changes, string? NextCursor);
+public sealed record SyncPullView(IReadOnlyList<SyncChangeDto> Changes, string? NextCursor,
+    string? AppliedCursor);
 public sealed record PullSyncChangesQuery(string? Cursor, int Limit = 100)
     : IRequest<Result<SyncPullView>>;
 
@@ -33,8 +34,9 @@ public sealed class PullSyncChangesHandler(IFinanceSyncReadStore store, IUserCon
         var changes = pulled.Value.Changes.Select(change => new SyncChangeDto(change.OperationId,
             change.ResourceId, change.EventType, change.OccurredAt)).ToArray();
         var last = pulled.Value.Changes.LastOrDefault();
+        var appliedCursor = last is null ? query.Cursor : SyncCursor.Create(last.OccurredAt, last.CursorId);
         return Result<SyncPullView>.Success(new(changes,
-            pulled.Value.HasMore && last is not null ? SyncCursor.Create(last.OccurredAt, last.CursorId) : null));
+            pulled.Value.HasMore ? appliedCursor : null, appliedCursor));
     }
 }
 

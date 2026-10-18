@@ -42,6 +42,18 @@ class SyncConflict {
   final String safeError;
 }
 
+class RemoteSyncChange {
+  const RemoteSyncChange({
+    required this.operationId,
+    required this.resourceId,
+    required this.eventType,
+  });
+
+  final String operationId;
+  final String resourceId;
+  final String eventType;
+}
+
 class OfflineFinanceStore {
   OfflineFinanceStore._(this._database, this.subject, this._deviceId);
 
@@ -314,6 +326,79 @@ class OfflineFinanceStore {
           mode: InsertMode.insertOrIgnore,
         );
       });
+
+  Future<void> applyRemotePage({
+    required String tenantId,
+    required Iterable<RemoteSyncChange> changes,
+    required Map<String, List<Map<String, dynamic>>> snapshots,
+    required String? appliedCursor,
+  }) => _database.transaction(() async {
+    await _database.batch((batch) {
+      batch.insertAll(
+        _database.syncInbox,
+        changes.map(
+          (change) => SyncInboxCompanion.insert(
+            operationId: change.operationId,
+            subject: subject,
+            tenantId: tenantId,
+            receivedAt: DateTime.now().toUtc(),
+          ),
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+    });
+
+    for (final entry in snapshots.entries) {
+      final existing =
+          await (_database.select(_database.cachedResources)..where(
+                (row) =>
+                    row.subject.equals(subject) &
+                    row.tenantId.equals(tenantId) &
+                    row.entityType.equals(entry.key),
+              ))
+              .get();
+      final localResources = existing
+          .where((row) => row.entityId.startsWith('local-'))
+          .map((row) => jsonDecode(row.payloadJson) as Map<String, dynamic>);
+      await (_database.delete(_database.cachedResources)..where(
+            (row) =>
+                row.subject.equals(subject) &
+                row.tenantId.equals(tenantId) &
+                row.entityType.equals(entry.key),
+          ))
+          .go();
+      await _database.batch((batch) {
+        batch.insertAll(
+          _database.cachedResources,
+          [...localResources, ...entry.value].map(
+            (resource) => CachedResourcesCompanion.insert(
+              subject: subject,
+              tenantId: tenantId,
+              entityType: entry.key,
+              entityId: resource['id'] as String,
+              payloadJson: jsonEncode(resource),
+              version: Value((resource['version'] as num?)?.toInt() ?? 0),
+              updatedAt: DateTime.now().toUtc(),
+            ),
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
+      });
+    }
+
+    if (appliedCursor != null) {
+      await _database
+          .into(_database.syncStates)
+          .insertOnConflictUpdate(
+            SyncStatesCompanion.insert(
+              subject: subject,
+              tenantId: tenantId,
+              cursor: Value(appliedCursor),
+              updatedAt: DateTime.now().toUtc(),
+            ),
+          );
+    }
+  });
 
   Future<void> close() => _database.close();
 }

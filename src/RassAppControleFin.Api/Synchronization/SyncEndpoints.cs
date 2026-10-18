@@ -18,7 +18,7 @@ public static class SyncEndpoints
             var response = result.IsSuccess
                 ? Result<SyncPullDto>.Success(new(result.Value.Changes.Select(change => new RassAppControleFin.Contracts.SyncChangeDto(
                     change.OperationId, change.ResourceId, change.EventType, change.OccurredAt)).ToArray(),
-                    result.Value.NextCursor))
+                    result.Value.NextCursor, result.Value.AppliedCursor))
                 : Result<SyncPullDto>.Failure(result.Error!);
             return response.ToHttp(context);
         }).RequireAuthorization(Permissions.TransactionsRead).RequireRateLimiting("public-api");

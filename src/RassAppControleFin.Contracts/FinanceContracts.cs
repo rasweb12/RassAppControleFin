@@ -42,6 +42,7 @@ public sealed record DashboardMetricDto(string Currency, decimal NetWorth, decim
     decimal SavingsRate, decimal BudgetUsed, int ActiveGoals);
 public sealed record DashboardDto(DateTimeOffset From, DateTimeOffset To, IReadOnlyList<DashboardMetricDto> Metrics);
 public sealed record SyncChangeDto(Guid OperationId, Guid ResourceId, string EventType, DateTimeOffset OccurredAt);
-public sealed record SyncPullDto(IReadOnlyList<SyncChangeDto> Changes, string? NextCursor);
+public sealed record SyncPullDto(IReadOnlyList<SyncChangeDto> Changes, string? NextCursor,
+    string? AppliedCursor);
 public sealed record AskFinancialAssistantRequest(string Question, string Period);
 public sealed record FinancialAssistantResponse(string Text, int TokensUsed, bool Generated);

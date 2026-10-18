@@ -122,6 +122,57 @@ void main() {
   });
 
   test(
+    'applies a remote page, records its inbox marker, and advances cursor atomically',
+    () async {
+      final database = OfflineDatabase(NativeDatabase.memory());
+      final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
+      await store.cacheOne('tenant-a', 'account', {
+        'id': 'local-pending-account',
+        'name': 'Conta pendente',
+        'version': 0,
+      });
+      await store.cacheOne('tenant-a', 'account', {
+        'id': 'account-server',
+        'name': 'Valor desatualizado',
+        'version': 1,
+      });
+
+      await store.applyRemotePage(
+        tenantId: 'tenant-a',
+        changes: const [
+          RemoteSyncChange(
+            operationId: 'remote-operation-1',
+            resourceId: 'account-server',
+            eventType: 'OpenAccountCommand',
+          ),
+        ],
+        snapshots: {
+          'account': [
+            {'id': 'account-server', 'name': 'Conta atualizada', 'version': 2},
+          ],
+        },
+        appliedCursor: 'cursor-remote-1',
+      );
+
+      final accounts = await store.cached('tenant-a', 'account');
+      expect(accounts, hasLength(2));
+      expect(
+        accounts.singleWhere((item) => item['id'] == 'account-server')['name'],
+        'Conta atualizada',
+      );
+      expect(
+        accounts.singleWhere((item) => item['id'] == 'local-pending-account'),
+        isNotNull,
+      );
+      expect(await store.cursor('tenant-a'), 'cursor-remote-1');
+      final inbox = await database.select(database.syncInbox).get();
+      expect(inbox, hasLength(1));
+      expect(inbox.single.operationId, 'remote-operation-1');
+      await database.close();
+    },
+  );
+
+  test(
     'upgrades the inbox primary key without losing legacy records',
     () async {
       final directory = await Directory.systemTemp.createTemp(
