@@ -5,6 +5,7 @@ using RassAppControleFin.SharedKernel.Results;
 namespace RassAppControleFin.Application.Abstractions.Persistence;
 
 public sealed record ReceiptLookup(bool Exists, string? Json);
+public sealed record BudgetAlert(Guid BudgetId, decimal Amount, decimal Spent, int Threshold);
 public interface IFinanceUnitFactory { Task<Result<IFinanceUnit>> BeginAsync(CancellationToken ct); }
 public interface IFinanceUnit : IAsyncDisposable
 {
@@ -17,6 +18,9 @@ public interface IFinanceUnit : IAsyncDisposable
     Task<Goal?> GoalAsync(Guid id, CancellationToken ct);
     Task<ExpenseReductionGoal?> ExpenseReductionGoalAsync(Guid id, CancellationToken ct);
     Task<FinancialNotification?> NotificationAsync(Guid id, CancellationToken ct);
+    Task<IReadOnlyList<BudgetAlert>> BudgetAlertsAsync(Guid categoryId, string currency, DateTimeOffset occurredAt,
+        decimal pendingExpense, CancellationToken ct);
+    Task<bool> NotificationExistsAsync(string type, CancellationToken ct);
     void Add(FinancialAggregate resource);
     void Ledger(Guid accountId, decimal delta, string kind, Guid resourceId, Guid? transferId = null);
     void CardMovement(Guid cardId, Guid? accountId, Guid? categoryId, decimal amount, string currency,

@@ -71,6 +71,28 @@ internal sealed class FinanceUnit(AppDbContext db, ITenantTransaction transactio
         => db.ExpenseReductionGoals.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<FinancialNotification?> NotificationAsync(Guid id, CancellationToken ct)
         => db.FinancialNotifications.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    public async Task<IReadOnlyList<BudgetAlert>> BudgetAlertsAsync(Guid categoryId, string currency,
+        DateTimeOffset occurredAt, decimal pendingExpense, CancellationToken ct)
+    {
+        var budgets = await db.Budgets.AsNoTracking().Where(x => !x.IsArchived && x.Currency == currency
+            && x.PeriodStart <= occurredAt && occurredAt < x.PeriodEnd
+            && (!x.CategoryId.HasValue || x.CategoryId == categoryId)).ToListAsync(ct);
+        var alerts = new List<BudgetAlert>();
+        foreach (var budget in budgets)
+        {
+            var spent = await db.Transactions.Where(x => x.Status == TransactionStatus.Posted
+                && x.Flow == FinancialFlow.Expense && x.Currency == currency
+                && x.OccurredAt >= budget.PeriodStart && x.OccurredAt < budget.PeriodEnd
+                && (!budget.CategoryId.HasValue || x.CategoryId == budget.CategoryId))
+                .SumAsync(x => (decimal?)x.Amount, ct) ?? 0m;
+            var projected = spent + pendingExpense;
+            var threshold = projected >= budget.Amount ? 100 : projected >= budget.Amount * 0.8m ? 80 : 0;
+            if (threshold > 0) alerts.Add(new BudgetAlert(budget.Id, budget.Amount, projected, threshold));
+        }
+        return alerts;
+    }
+    public Task<bool> NotificationExistsAsync(string type, CancellationToken ct)
+        => db.FinancialNotifications.AnyAsync(x => x.Type == type, ct);
     public void Add(FinancialAggregate resource) => db.Add(resource);
     public void Ledger(Guid accountId, decimal delta, string kind, Guid resourceId, Guid? transferId = null)
         => db.Add(new LedgerEntry { Id = Guid.NewGuid(), TenantId = tenantId, UserId = userId, AccountId = accountId,

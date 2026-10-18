@@ -157,6 +157,33 @@ public sealed class CoreFinanceTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task Posted_expense_creates_one_budget_alert_per_threshold()
+    {
+        await using var db = fixture.CreateContext();
+        var alice = new FinanceUser(DevelopmentSeed.Alice);
+        var factory = new FinanceUnitFactory(db, TransactionFactory(db, alice), new TestTenant(DevelopmentSeed.TenantA), alice);
+        var handler = new FinanceMutationHandlers(factory, alice, new TestTenant(DevelopmentSeed.TenantA));
+        var now = DateTimeOffset.UtcNow;
+        var account = await handler.Handle(new OpenAccountCommand(Guid.NewGuid(), "Alerta Orcamento", "BRL", 1000m), default);
+        var category = await handler.Handle(new CreateCategoryCommand(Guid.NewGuid(), "Alimentacao alerta", "Expense"), default);
+        var budget = await handler.Handle(new CreateBudgetCommand(Guid.NewGuid(), null, 400m, "BRL",
+            new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero), new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero).AddMonths(1)), default);
+        Assert.True(account.IsSuccess && category.IsSuccess && budget.IsSuccess);
+
+        var first = await handler.Handle(new CreateTransactionCommand(Guid.NewGuid(), account.Value.ResourceId,
+            category.Value.ResourceId, 320m, "BRL", "Expense", "Posted", now, "Alerta 80", account.Value.Version), default);
+        Assert.True(first.IsSuccess, first.Error?.Code);
+        var prefix = $"budget.{budget.Value.ResourceId:N}.";
+        Assert.Single(await db.FinancialNotifications.Where(x => x.Type == prefix + "80").ToListAsync());
+
+        var second = await handler.Handle(new CreateTransactionCommand(Guid.NewGuid(), account.Value.ResourceId,
+            category.Value.ResourceId, 100m, "BRL", "Expense", "Posted", now, "Alerta 100", first.Value.SourceVersion!.Value), default);
+        Assert.True(second.IsSuccess, second.Error?.Code);
+        Assert.Single(await db.FinancialNotifications.Where(x => x.Type == prefix + "80").ToListAsync());
+        Assert.Single(await db.FinancialNotifications.Where(x => x.Type == prefix + "100").ToListAsync());
+    }
+
+    [Fact]
     public async Task Migration_contains_planning_and_dashboard()
     {
         await using var db = fixture.CreateAdminContext();

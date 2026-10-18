@@ -136,8 +136,25 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
             unit.Ledger(account.Id, transaction.PostedDelta, "Transaction", transaction.Id);
         }
         unit.Add(transaction);
+        if (flow == FinancialFlow.Expense && transaction.Status == TransactionStatus.Posted)
+            await CreateBudgetNotificationsAsync(unit, transaction, ct);
         return Result<MutationReceipt>.Success(new(transaction.Id, c.OperationId, transaction.Version, account.Version, SourceBalance: account.Balance));
     }, ct, Permissions.AccountsWrite);
+
+    private async Task CreateBudgetNotificationsAsync(IFinanceUnit unit, FinancialTransaction transaction,
+        CancellationToken ct)
+    {
+        var alerts = await unit.BudgetAlertsAsync(transaction.CategoryId, transaction.Currency, transaction.OccurredAt,
+            transaction.Amount, ct);
+        foreach (var alert in alerts)
+        {
+            var type = $"budget.{alert.BudgetId:N}.{alert.Threshold}";
+            if (await unit.NotificationExistsAsync(type, ct)) continue;
+            unit.Add(FinancialNotification.Create(Guid.NewGuid(), TenantId, Subject, type, "Orcamento em alerta",
+                $"Seus gastos atingiram {alert.Threshold}% do orcamento de {alert.Amount:0.00} {transaction.Currency}.",
+                DateTimeOffset.UtcNow));
+        }
+    }
 
     public Task<Result<MutationReceipt>> Handle(EditTransactionCommand c, CancellationToken ct) => Execute(c, async unit =>
     {
