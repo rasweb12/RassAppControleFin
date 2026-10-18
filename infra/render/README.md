@@ -8,7 +8,7 @@ AllowedHosts deve ser o hostname publico de cada servico, sem esquema.
 Program.cs respeita PORT e usa binding 0.0.0.0. O runtime usa usuario nao root.
 
 API /health/ready verifica PostgreSQL, migrations, RLS e runtime role.
-Admin health verifica seu proprio host; nao comprova Neon/Auth/Resend/Gemini.
+Admin health verifica seu proprio host; nao comprova Neon/Auth/Brevo/Gemini.
 Migrations sao jobs separados, nunca startup da API.
 
 Antes de dados reais: completar Auth/RLS, secrets, persistencia de DataProtection

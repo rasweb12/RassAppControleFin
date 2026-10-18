@@ -1,4 +1,4 @@
-# Guia beta: Neon, Resend e Render
+# Guia beta: Neon, Brevo e Render
 
 ## 1. Preflight local
 
@@ -20,19 +20,19 @@
 5. No Neon Auth, configure issuer, audience, JWKS e origin. Copie os valores apenas para os secrets da API.
 6. Valide /health/ready usando a API publicada. A resposta deve confirmar banco, RLS e runtime role restrito.
 
-## 3. Resend
+## 3. Brevo
 
-1. Crie e verifique o dominio de envio no painel Resend antes de habilitar emails.
-2. Crie uma API key com o menor escopo aplicavel e guarde-a como Resend__ApiKey somente no backend.
-3. Configure Resend__FromAddress com um endereco do dominio verificado.
-4. Quando webhooks forem habilitados, guarde o segredo como Resend__WebhookSecret e valide assinatura antes de processar eventos.
-5. Nunca coloque chave Resend no Mobile, Admin, APK, repositorio ou arquivos dotenv versionados.
+1. Verifique o remetente ou dominio no painel Brevo antes de habilitar emails.
+2. Configure `Email__SmtpHost=smtp-relay.brevo.com`, `Email__SmtpPort=587` e `Email__UseSsl=true` no backend.
+3. Armazene `Email__Username`, `Email__Password` e `Email__From` somente como secrets do Render.
+4. Configure separadamente o SMTP do Neon Auth para confirmacao e recuperacao de senha.
+5. Nunca coloque senha SMTP no Mobile, Admin, APK, repositorio ou arquivos dotenv versionados.
 
 ## 4. Render
 
 1. Publique o repositorio em GitHub, GitLab ou Bitbucket e valide render.yaml.
 2. Crie o Blueprint no Render; ele provisiona API e Admin como servicos separados.
-3. No servico API, informe os secrets marcados sync:false: banco pooled, configuracao Neon Auth, GEMINI_API_KEY, Gemini__Model, Resend e OTEL quando houver coletor.
+3. No servico API, informe os secrets marcados sync:false: banco pooled, configuracao Neon Auth, `Email__Username`, `Email__Password`, `Email__From`, `GEMINI_API_KEY`, `Gemini__Model` e OTEL quando houver coletor.
 4. Mantenha Gemini__Enabled=false no primeiro deploy. Habilite-o somente apos um teste autenticado em homologacao e definicao de limite de custo.
 5. No Admin, configure Api__BaseUrl com a URL HTTPS publica da API e AllowedHosts com o dominio do Admin.
 6. Aplique migrations antes do deploy da API usando uma conexao direta Neon de operador. A API nunca deve possuir RASS_MIGRATIONS_CONNECTION.

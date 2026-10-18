@@ -7,6 +7,7 @@ import '../../core/network/api_client.dart';
 import '../../core/storage/offline_finance_store.dart';
 import '../auth/auth_controller.dart';
 import '../finance/finance_repository.dart';
+import '../finance/financial_assistant_page.dart';
 import 'finance_forms.dart';
 import '../synchronization/finance_sync_service.dart';
 
@@ -29,6 +30,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   List<DashboardMetric> _metrics = const [];
   List<AccountSummary> _accounts = const [];
   List<CategorySummary> _categories = const [];
+  List<GoalSummary> _goals = const [];
   List<TransactionSummary> _transactions = const [];
   List<SyncConflict> _conflicts = const [];
   String? _financialInsight;
@@ -72,6 +74,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
           _metrics = const [];
           _accounts = const [];
           _categories = const [];
+          _goals = const [];
           _transactions = const [];
           _conflicts = const [];
           _loading = false;
@@ -86,6 +89,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         _repository.dashboard(tenant.id, DateTime.now()),
         _repository.accounts(tenant.id),
         _repository.categories(tenant.id),
+        _repository.goals(tenant.id),
         _repository.transactions(tenant.id),
         _repository.syncConflicts(tenant.id),
       ]);
@@ -96,8 +100,9 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         _metrics = values[0] as List<DashboardMetric>;
         _accounts = values[1] as List<AccountSummary>;
         _categories = values[2] as List<CategorySummary>;
-        _transactions = values[3] as List<TransactionSummary>;
-        _conflicts = values[4] as List<SyncConflict>;
+        _goals = values[3] as List<GoalSummary>;
+        _transactions = values[4] as List<TransactionSummary>;
+        _conflicts = values[5] as List<SyncConflict>;
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -213,6 +218,136 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     );
   }
 
+  Future<void> _openGoals() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _GoalsPage(
+          goals: _goals,
+          onCreate: _createGoal,
+          onRefresh: () async {
+            await _load();
+            return _goals;
+          },
+          onAddProgress: _addGoalProgress,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFinancialAssistant() async {
+    final tenant = _tenant;
+    if (tenant == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => FinancialAssistantPage(
+          repository: _repository,
+          tenantId: tenant.id,
+          subject: widget.authController.session.subject,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createGoal() async {
+    final tenant = _tenant;
+    if (tenant == null) return;
+    final input = await showGoalForm(context);
+    if (input == null || !mounted) return;
+    await _mutate(
+      () => _repository.createGoal(
+        tenantId: tenant.id,
+        name: input.name,
+        targetAmount: input.targetAmount,
+        currency: 'BRL',
+        targetDate: input.targetDate,
+      ),
+    );
+  }
+
+  Future<void> _addGoalProgress(GoalSummary goal) async {
+    final tenant = _tenant;
+    if (tenant == null || goal.id.startsWith('local-')) return;
+    final controller = TextEditingController();
+    final amount = await showDialog<num>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Adicionar à meta ${goal.name}'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Valor (R\$)'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = _parseAmount(controller.text);
+              if (value == null || value <= 0) return;
+              Navigator.pop(dialogContext, value);
+            },
+            child: const Text('Adicionar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (amount == null || !mounted) return;
+    await _mutate(
+      () => _repository.addGoalProgress(
+        tenantId: tenant.id,
+        goal: goal,
+        amount: amount,
+      ),
+    );
+  }
+
+  Future<CategorySummary?> _createCategoryForTransaction(String flow) async {
+    final tenant = _tenant;
+    if (tenant == null) return null;
+    final input = await showCategoryForm(
+      context,
+      initialFlow: flow,
+      lockFlow: true,
+    );
+    if (input == null || !mounted) return null;
+    try {
+      final state = await _repository.createCategory(
+        tenantId: tenant.id,
+        name: input.name,
+        flow: flow,
+      );
+      if (state == FinanceWriteState.pending) {
+        _notice(
+          'Categoria salva no dispositivo. Conecte-se para sincronizá-la antes de usá-la em um lançamento.',
+        );
+        await _load();
+        return null;
+      }
+      await _load();
+      final matches = _categories.where(
+        (item) =>
+            item.flow == flow &&
+            item.name.toLowerCase() == input.name.toLowerCase() &&
+            !item.archived &&
+            !item.id.startsWith('local-'),
+      );
+      if (matches.isEmpty) {
+        _notice(
+          'A categoria foi criada, mas ainda não está disponível. Atualize e tente novamente.',
+        );
+        return null;
+      }
+      return matches.first;
+    } on ApiException catch (error) {
+      if (mounted) _notice(_messageFor(error));
+      return null;
+    }
+  }
+
   Future<void> _createTransaction(String flow) async {
     final tenant = _tenant;
     if (tenant == null) return;
@@ -231,17 +366,12 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               item.flow == flow,
         )
         .toList(growable: false);
-    if (categories.isEmpty) {
-      _notice(
-        'Crie uma categoria de ${flow == 'Income' ? 'receita' : 'despesa'} antes de continuar.',
-      );
-      return;
-    }
     final input = await showTransactionForm(
       context,
       flow: flow,
       accounts: accounts,
       categories: categories,
+      onCreateCategory: _createCategoryForTransaction,
     );
     if (input == null || !mounted) return;
     await _mutate(
@@ -285,7 +415,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
       _notice(
         result == FinanceWriteState.pending
             ? 'Salvo no dispositivo. Será sincronizado quando houver conexão.'
-            : 'Lançamento salvo.',
+            : 'Alteração salva.',
       );
       await _load();
     } on ApiException catch (error) {
@@ -465,6 +595,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               conflictCount: _conflicts.length,
               onReviewConflicts: _reviewConflicts,
               onCategories: _openCategories,
+              onGoals: _openGoals,
+              onFinancialAssistant: _openFinancialAssistant,
             ),
           };
     return Scaffold(
@@ -660,11 +792,66 @@ class _Transactions extends StatelessWidget {
                     : const Color(0xFFD92D20),
               ),
             ),
+            onTap: () => _showTransactionDetails(context, item),
           );
         },
       ),
     );
   }
+}
+
+Future<void> _showTransactionDetails(
+  BuildContext context,
+  TransactionSummary transaction,
+) => showModalBottomSheet<void>(
+  context: context,
+  builder: (context) {
+    final income = transaction.flow.toLowerCase() == 'income';
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              transaction.description.isEmpty
+                  ? 'Detalhes do lançamento'
+                  : transaction.description,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 16),
+            _DetailRow(
+              label: income ? 'Receita' : 'Despesa',
+              value:
+                  '${income ? '+' : '-'}${_money(transaction.amount, transaction.currency)}',
+            ),
+            _DetailRow(label: 'Data', value: _date(transaction.occurredAt)),
+            _DetailRow(label: 'Status', value: transaction.status),
+          ],
+        ),
+      ),
+    );
+  },
+);
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ],
+    ),
+  );
 }
 
 class _Accounts extends StatelessWidget {
@@ -721,6 +908,8 @@ class _Menu extends StatelessWidget {
     required this.conflictCount,
     required this.onReviewConflicts,
     required this.onCategories,
+    required this.onGoals,
+    required this.onFinancialAssistant,
   });
   final TenantSummary tenant;
   final bool canSwitch;
@@ -730,6 +919,8 @@ class _Menu extends StatelessWidget {
   final int conflictCount;
   final Future<void> Function() onReviewConflicts;
   final Future<void> Function() onCategories;
+  final Future<void> Function() onGoals;
+  final Future<void> Function() onFinancialAssistant;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -749,6 +940,20 @@ class _Menu extends StatelessWidget {
         subtitle: const Text('Organize receitas e despesas.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onCategories,
+      ),
+      ListTile(
+        leading: const Icon(Icons.flag_outlined),
+        title: const Text('Metas'),
+        subtitle: const Text('Acompanhe objetivos financeiros.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onGoals,
+      ),
+      ListTile(
+        leading: const Icon(Icons.auto_awesome_outlined),
+        title: const Text('Assistente financeiro'),
+        subtitle: const Text('Pergunte sobre dados autorizados.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onFinancialAssistant,
       ),
       ListTile(
         leading: const Icon(Icons.sync_outlined),
@@ -870,6 +1075,132 @@ class _CategoriesPageState extends State<_CategoriesPage> {
   }
 }
 
+class _GoalsPage extends StatefulWidget {
+  const _GoalsPage({
+    required this.goals,
+    required this.onCreate,
+    required this.onRefresh,
+    required this.onAddProgress,
+  });
+
+  final List<GoalSummary> goals;
+  final Future<void> Function() onCreate;
+  final Future<List<GoalSummary>> Function() onRefresh;
+  final Future<void> Function(GoalSummary goal) onAddProgress;
+
+  @override
+  State<_GoalsPage> createState() => _GoalsPageState();
+}
+
+class _GoalsPageState extends State<_GoalsPage> {
+  late List<GoalSummary> _goals = widget.goals;
+  bool _loading = false;
+
+  Future<void> _refresh() async {
+    setState(() => _loading = true);
+    try {
+      final refreshed = await widget.onRefresh();
+      if (mounted) setState(() => _goals = refreshed);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _create() async {
+    await widget.onCreate();
+    await _refresh();
+  }
+
+  Future<void> _addProgress(GoalSummary goal) async {
+    await widget.onAddProgress(goal);
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final active = _goals.where((goal) => goal.status == 'Active').toList();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Metas')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _loading ? null : _create,
+        tooltip: 'Nova meta',
+        child: const Icon(Icons.add),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : active.isEmpty
+          ? _MessageState(
+              icon: Icons.flag_outlined,
+              title: 'Nenhuma meta ativa',
+              message: 'Crie uma meta para acompanhar seus objetivos.',
+              action: 'Atualizar',
+              onAction: _refresh,
+            )
+          : RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: active.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final goal = active[index];
+                  final localOnly = goal.id.startsWith('local-');
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  goal.name,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                              if (localOnly)
+                                const Icon(
+                                  Icons.cloud_upload_outlined,
+                                  semanticLabel: 'Aguardando sincronização',
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${_money(goal.currentAmount, goal.currency)} de ${_money(goal.targetAmount, goal.currency)}',
+                          ),
+                          const SizedBox(height: 8),
+                          LinearProgressIndicator(value: goal.progress),
+                          const SizedBox(height: 8),
+                          Text(
+                            goal.targetDate == null
+                                ? 'Sem data alvo'
+                                : 'Meta para ${_date(goal.targetDate!)}',
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: localOnly
+                                  ? null
+                                  : () => _addProgress(goal),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Adicionar valor'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+    );
+  }
+}
+
 class _Metric extends StatelessWidget {
   const _Metric({required this.title, required this.value});
   final String title;
@@ -946,3 +1277,13 @@ String _money(num value, String currency) {
 
 String _date(DateTime value) =>
     '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}';
+
+num? _parseAmount(String value) {
+  var normalized = value.trim();
+  if (normalized.contains(',') && normalized.contains('.')) {
+    normalized = normalized.replaceAll('.', '').replaceAll(',', '.');
+  } else {
+    normalized = normalized.replaceAll(',', '.');
+  }
+  return num.tryParse(normalized);
+}

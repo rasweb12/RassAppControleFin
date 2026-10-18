@@ -5,7 +5,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Http.Resilience;
 using Npgsql;
 using RassAppControleFin.Application.Abstractions.Persistence;
+using RassAppControleFin.Application.Abstractions;
 using RassAppControleFin.Infrastructure.Configuration;
+using RassAppControleFin.Infrastructure.Email;
 using RassAppControleFin.Infrastructure.Persistence;
 using RassAppControleFin.MultiTenancy;
 using RassAppControleFin.Security;
@@ -26,8 +28,7 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddOptions<NeonOptions>().BindConfiguration(NeonOptions.SectionName)
             .ValidateOnStart();
-        services.AddOptions<ResendOptions>().BindConfiguration(ResendOptions.SectionName)
-            .ValidateOnStart();
+        services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName);
         services.AddOptions<GeminiOptions>().BindConfiguration(GeminiOptions.SectionName)
             .ValidateDataAnnotations().Validate(GeminiOptions.HasSafeModelIdentifier,
                 "Configure a supported Gemini model identifier.").ValidateOnStart();
@@ -74,6 +75,7 @@ public static class DependencyInjection
             });
         services.AddScoped<IAiProvider, GeminiAiProvider>();
         services.AddScoped<IAiAuditService, AiAuditService>();
+        services.AddScoped<IEmailSender, BrevoSmtpEmailSender>();
         return services;
     }
 }

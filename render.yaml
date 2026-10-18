@@ -37,11 +37,17 @@ services:
         value: "2048"
       - key: Gemini__Temperature
         value: "0.3"
-      - key: Resend__ApiKey
+      - key: Email__SmtpHost
+        value: smtp-relay.brevo.com
+      - key: Email__SmtpPort
+        value: "587"
+      - key: Email__UseSsl
+        value: "true"
+      - key: Email__Username
         sync: false
-      - key: Resend__FromAddress
+      - key: Email__Password
         sync: false
-      - key: Resend__WebhookSecret
+      - key: Email__From
         sync: false
       - key: OTEL_EXPORTER_OTLP_ENDPOINT
         sync: false

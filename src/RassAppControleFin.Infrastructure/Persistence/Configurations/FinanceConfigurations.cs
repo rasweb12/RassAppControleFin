@@ -7,7 +7,7 @@ namespace RassAppControleFin.Infrastructure.Persistence.Configurations;
 
 internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>, IEntityTypeConfiguration<Category>,
     IEntityTypeConfiguration<CreditCard>, IEntityTypeConfiguration<FinancialTransaction>, IEntityTypeConfiguration<Transfer>,
-    IEntityTypeConfiguration<Budget>, IEntityTypeConfiguration<Goal>,
+    IEntityTypeConfiguration<Budget>, IEntityTypeConfiguration<Goal>, IEntityTypeConfiguration<ExpenseReductionGoal>,
     IEntityTypeConfiguration<LedgerEntry>, IEntityTypeConfiguration<CardMovementRow>,
     IEntityTypeConfiguration<SyncOperationReceipt>, IEntityTypeConfiguration<FinancialOutboxRow>
 {
@@ -128,6 +128,19 @@ internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>,
             t.HasCheckConstraint("CK_Goals_Amounts", "\"TargetAmount\" > 0 AND \"CurrentAmount\" BETWEEN 0 AND \"TargetAmount\"");
             t.HasCheckConstraint("CK_Goals_Status", "\"Status\" IN ('Active','Completed','Archived')");
             t.HasCheckConstraint("CK_Goals_Name", "length(btrim(\"Name\")) BETWEEN 1 AND 120");
+        });
+    }
+    public void Configure(EntityTypeBuilder<ExpenseReductionGoal> b)
+    {
+        Aggregate(b, "ExpenseReductionGoals"); Currency(b, "ExpenseReductionGoals");
+        b.Property(x => x.ReferenceAmount).HasPrecision(16, 2);
+        b.Property(x => x.TargetAmount).HasPrecision(16, 2);
+        b.HasOne<Category>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.CategoryId }).OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.PeriodStart, x.PeriodEnd });
+        b.ToTable("ExpenseReductionGoals", t =>
+        {
+            t.HasCheckConstraint("CK_ExpenseReductionGoals_Amounts", "\"ReferenceAmount\" > \"TargetAmount\" AND \"TargetAmount\" >= 0");
+            t.HasCheckConstraint("CK_ExpenseReductionGoals_Period", "\"PeriodStart\" < \"PeriodEnd\"");
         });
     }
     public void Configure(EntityTypeBuilder<LedgerEntry> b)

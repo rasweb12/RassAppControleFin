@@ -42,6 +42,17 @@ class TransferInput {
   final String description;
 }
 
+class GoalInput {
+  const GoalInput({
+    required this.name,
+    required this.targetAmount,
+    this.targetDate,
+  });
+  final String name;
+  final num targetAmount;
+  final DateTime? targetDate;
+}
+
 Future<FinanceAction?> showFinanceActionSheet(BuildContext context) =>
     showModalBottomSheet<FinanceAction>(
       context: context,
@@ -87,24 +98,40 @@ Future<AccountInput?> showAccountForm(BuildContext context) =>
       builder: (_) => const _AccountForm(),
     );
 
-Future<CategoryInput?> showCategoryForm(BuildContext context) =>
-    showModalBottomSheet<CategoryInput>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const _CategoryForm(),
-    );
+Future<CategoryInput?> showCategoryForm(
+  BuildContext context, {
+  String? initialFlow,
+  bool lockFlow = false,
+}) => showModalBottomSheet<CategoryInput>(
+  context: context,
+  isScrollControlled: true,
+  builder: (_) =>
+      _CategoryForm(initialFlow: initialFlow ?? 'Expense', lockFlow: lockFlow),
+);
 
 Future<TransactionInput?> showTransactionForm(
   BuildContext context, {
   required String flow,
   required List<AccountSummary> accounts,
   required List<CategorySummary> categories,
+  required Future<CategorySummary?> Function(String flow) onCreateCategory,
 }) => showModalBottomSheet<TransactionInput>(
   context: context,
   isScrollControlled: true,
-  builder: (_) =>
-      _TransactionForm(flow: flow, accounts: accounts, categories: categories),
+  builder: (_) => _TransactionForm(
+    flow: flow,
+    accounts: accounts,
+    categories: categories,
+    onCreateCategory: onCreateCategory,
+  ),
 );
+
+Future<GoalInput?> showGoalForm(BuildContext context) =>
+    showModalBottomSheet<GoalInput>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _GoalForm(),
+    );
 
 Future<TransferInput?> showTransferForm(
   BuildContext context,
@@ -172,7 +199,9 @@ class _AccountFormState extends State<_AccountForm> {
 }
 
 class _CategoryForm extends StatefulWidget {
-  const _CategoryForm();
+  const _CategoryForm({required this.initialFlow, required this.lockFlow});
+  final String initialFlow;
+  final bool lockFlow;
   @override
   State<_CategoryForm> createState() => _CategoryFormState();
 }
@@ -180,7 +209,7 @@ class _CategoryForm extends StatefulWidget {
 class _CategoryFormState extends State<_CategoryForm> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
-  String _flow = 'Expense';
+  late String _flow = widget.initialFlow;
 
   @override
   void dispose() {
@@ -200,15 +229,22 @@ class _CategoryFormState extends State<_CategoryForm> {
         validator: _required,
       ),
       const SizedBox(height: 12),
-      DropdownButtonFormField<String>(
-        initialValue: _flow,
-        decoration: const InputDecoration(labelText: 'Tipo'),
-        items: const [
-          DropdownMenuItem(value: 'Expense', child: Text('Despesa')),
-          DropdownMenuItem(value: 'Income', child: Text('Receita')),
-        ],
-        onChanged: (value) => setState(() => _flow = value ?? 'Expense'),
-      ),
+      if (widget.lockFlow)
+        TextFormField(
+          initialValue: _flow == 'Income' ? 'Receita' : 'Despesa',
+          readOnly: true,
+          decoration: const InputDecoration(labelText: 'Tipo'),
+        )
+      else
+        DropdownButtonFormField<String>(
+          initialValue: _flow,
+          decoration: const InputDecoration(labelText: 'Tipo'),
+          items: const [
+            DropdownMenuItem(value: 'Expense', child: Text('Despesa')),
+            DropdownMenuItem(value: 'Income', child: Text('Receita')),
+          ],
+          onChanged: (value) => setState(() => _flow = value ?? 'Expense'),
+        ),
     ],
     submit: 'Salvar categoria',
     onSubmit: () {
@@ -226,10 +262,12 @@ class _TransactionForm extends StatefulWidget {
     required this.flow,
     required this.accounts,
     required this.categories,
+    required this.onCreateCategory,
   });
   final String flow;
   final List<AccountSummary> accounts;
   final List<CategorySummary> categories;
+  final Future<CategorySummary?> Function(String flow) onCreateCategory;
   @override
   State<_TransactionForm> createState() => _TransactionFormState();
 }
@@ -240,12 +278,28 @@ class _TransactionFormState extends State<_TransactionForm> {
   final _description = TextEditingController();
   String? _accountId;
   String? _categoryId;
+  late List<CategorySummary> _categories = List.of(widget.categories);
+  bool _creatingCategory = false;
 
   @override
   void dispose() {
     _amount.dispose();
     _description.dispose();
     super.dispose();
+  }
+
+  Future<void> _createCategory() async {
+    if (_creatingCategory) return;
+    setState(() => _creatingCategory = true);
+    final category = await widget.onCreateCategory(widget.flow);
+    if (!mounted) return;
+    setState(() {
+      _creatingCategory = false;
+      if (category != null) {
+        _categories = [..._categories, category];
+        _categoryId = category.id;
+      }
+    });
   }
 
   @override
@@ -269,7 +323,7 @@ class _TransactionFormState extends State<_TransactionForm> {
       DropdownButtonFormField<String>(
         initialValue: _categoryId,
         decoration: const InputDecoration(labelText: 'Categoria'),
-        items: widget.categories
+        items: _categories
             .map(
               (item) =>
                   DropdownMenuItem(value: item.id, child: Text(item.name)),
@@ -277,6 +331,18 @@ class _TransactionFormState extends State<_TransactionForm> {
             .toList(),
         onChanged: (value) => setState(() => _categoryId = value),
         validator: (value) => value == null ? 'Selecione uma categoria.' : null,
+      ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: _creatingCategory ? null : _createCategory,
+          icon: const Icon(Icons.add),
+          label: Text(
+            _creatingCategory
+                ? 'Criando categoria...'
+                : 'Criar categoria de ${widget.flow == 'Income' ? 'receita' : 'despesa'}',
+          ),
+        ),
       ),
       const SizedBox(height: 12),
       TextFormField(
@@ -298,9 +364,7 @@ class _TransactionFormState extends State<_TransactionForm> {
       final account = widget.accounts.firstWhere(
         (item) => item.id == _accountId,
       );
-      final category = widget.categories.firstWhere(
-        (item) => item.id == _categoryId,
-      );
+      final category = _categories.firstWhere((item) => item.id == _categoryId);
       Navigator.pop(
         context,
         TransactionInput(
@@ -308,6 +372,81 @@ class _TransactionFormState extends State<_TransactionForm> {
           category: category,
           amount: _number(_amount.text)!,
           description: _description.text.trim(),
+        ),
+      );
+    },
+  );
+}
+
+class _GoalForm extends StatefulWidget {
+  const _GoalForm();
+
+  @override
+  State<_GoalForm> createState() => _GoalFormState();
+}
+
+class _GoalFormState extends State<_GoalForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _targetAmount = TextEditingController();
+  DateTime? _targetDate;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _targetAmount.dispose();
+    super.dispose();
+  }
+
+  Future<void> _chooseDate() async {
+    final today = DateTime.now();
+    final chosen = await showDatePicker(
+      context: context,
+      initialDate: _targetDate ?? today.add(const Duration(days: 30)),
+      firstDate: today,
+      lastDate: DateTime(today.year + 30),
+    );
+    if (chosen != null && mounted) setState(() => _targetDate = chosen);
+  }
+
+  @override
+  Widget build(BuildContext context) => _Sheet(
+    title: 'Nova meta',
+    formKey: _formKey,
+    fields: [
+      TextFormField(
+        controller: _name,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Nome da meta'),
+        validator: _required,
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _targetAmount,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(labelText: 'Valor da meta (R\$)'),
+        validator: _positive,
+      ),
+      const SizedBox(height: 12),
+      OutlinedButton.icon(
+        onPressed: _chooseDate,
+        icon: const Icon(Icons.event_outlined),
+        label: Text(
+          _targetDate == null
+              ? 'Definir data alvo (opcional)'
+              : 'Meta para ${_targetDate!.day.toString().padLeft(2, '0')}/${_targetDate!.month.toString().padLeft(2, '0')}/${_targetDate!.year}',
+        ),
+      ),
+    ],
+    submit: 'Salvar meta',
+    onSubmit: () {
+      if (!_formKey.currentState!.validate()) return;
+      Navigator.pop(
+        context,
+        GoalInput(
+          name: _name.text.trim(),
+          targetAmount: _number(_targetAmount.text)!,
+          targetDate: _targetDate,
         ),
       );
     },

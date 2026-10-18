@@ -101,6 +101,44 @@ class CategorySummary {
       );
 }
 
+class GoalSummary {
+  const GoalSummary({
+    required this.id,
+    required this.name,
+    required this.targetAmount,
+    required this.currentAmount,
+    required this.currency,
+    required this.targetDate,
+    required this.status,
+    required this.version,
+  });
+  final String id;
+  final String name;
+  final num targetAmount;
+  final num currentAmount;
+  final String currency;
+  final DateTime? targetDate;
+  final String status;
+  final int version;
+
+  double get progress => targetAmount == 0
+      ? 0
+      : (currentAmount / targetAmount).clamp(0, 1).toDouble();
+
+  factory GoalSummary.fromJson(Map<String, dynamic> json) => GoalSummary(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    targetAmount: json['targetAmount'] as num,
+    currentAmount: json['currentAmount'] as num,
+    currency: json['currency'] as String,
+    targetDate: json['targetDate'] == null
+        ? null
+        : DateTime.parse(json['targetDate'] as String).toLocal(),
+    status: json['status'] as String,
+    version: json['version'] as int,
+  );
+}
+
 class TransactionSummary {
   const TransactionSummary({
     required this.id,
@@ -240,6 +278,14 @@ class FinanceRepository {
     );
   }
 
+  Future<List<GoalSummary>> goals(String tenantId) => _loadPage(
+    tenantId: tenantId,
+    endpoint: '/api/v1/goals',
+    entityType: 'goal',
+    parser: GoalSummary.fromJson,
+    pageSize: '100',
+  );
+
   Future<FinanceWriteState> createAccount({
     required String tenantId,
     required String name,
@@ -296,6 +342,78 @@ class FinanceRepository {
         'isArchived': false,
       },
     );
+  }
+
+  Future<FinanceWriteState> createGoal({
+    required String tenantId,
+    required String name,
+    required num targetAmount,
+    required String currency,
+    DateTime? targetDate,
+  }) {
+    final operationId = _newOperationId();
+    return _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/goals',
+      entityType: 'goal',
+      entityId: 'local-$operationId',
+      payload: {
+        'operationId': operationId,
+        'name': name,
+        'targetAmount': targetAmount,
+        'currency': currency,
+        'targetDate': targetDate?.toUtc().toIso8601String(),
+      },
+      localResource: {
+        'id': 'local-$operationId',
+        'name': name,
+        'targetAmount': targetAmount,
+        'currentAmount': 0,
+        'currency': currency,
+        'targetDate': targetDate?.toUtc().toIso8601String(),
+        'status': 'Active',
+        'version': 0,
+      },
+    );
+  }
+
+  Future<FinanceWriteState> addGoalProgress({
+    required String tenantId,
+    required GoalSummary goal,
+    required num amount,
+  }) async {
+    final operationId = _newOperationId();
+    final result = await _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/goals/${goal.id}/progress',
+      entityType: 'goal',
+      entityId: goal.id,
+      payload: {
+        'operationId': operationId,
+        'version': goal.version,
+        'amount': amount,
+        'currency': goal.currency,
+      },
+    );
+    if (result == FinanceWriteState.pending) {
+      final store = await _store;
+      await store.cacheOne(tenantId, 'goal', {
+        'id': goal.id,
+        'name': goal.name,
+        'targetAmount': goal.targetAmount,
+        'currentAmount': (goal.currentAmount + amount).clamp(
+          0,
+          goal.targetAmount,
+        ),
+        'currency': goal.currency,
+        'targetDate': goal.targetDate?.toUtc().toIso8601String(),
+        'status': goal.currentAmount + amount >= goal.targetAmount
+            ? 'Completed'
+            : goal.status,
+        'version': goal.version + 1,
+      });
+    }
+    return result;
   }
 
   Future<FinanceWriteState> createTransaction({

@@ -43,6 +43,17 @@ public sealed class FinanceDomainTests
         Assert.False(goal.AddProgress(Money.Create(0.01m, "BRL")));
     }
 
+    [Fact]
+    public void Expense_reduction_goal_requires_a_lower_target_and_valid_period()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var goal = ExpenseReductionGoal.Create(Guid.NewGuid(), Guid.NewGuid(), "user", null,
+            Money.Create(900m, "BRL"), Money.Create(700m, "BRL"), now, now.AddMonths(1), now);
+        Assert.Equal(200m, goal.ReferenceAmount - goal.TargetAmount);
+        Assert.Throws<ArgumentException>(() => ExpenseReductionGoal.Create(Guid.NewGuid(), Guid.NewGuid(), "user", null,
+            Money.Create(900m, "BRL"), Money.Create(900m, "BRL"), now, now.AddMonths(1), now));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

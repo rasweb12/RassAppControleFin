@@ -13,7 +13,7 @@ registram contexto historico; Sprint 2 validada em sprint-2-review.md.
 Pasta canonica: D:\Curso\APP\RassAppControleFin, repositorio independente que
 estava vazio. O caminho antigo ja nao existia no inicio da analise.
 RassAppFinanceiro, branch feature/v0.9.0-devsec, e referencia somente de leitura.
-Stack ativa: Neon, Resend, Render e Gemini; Admin.Web e cliente Flutter; versao
+Stack ativa: Neon, Brevo, Render e Gemini; Admin.Web e cliente Flutter; versao
 1.0.0-alpha.1. Nenhuma dependencia do repositorio antigo.
 
 Evidencias da referencia: Domain referencia EF Core; interfaces de tenant
@@ -184,12 +184,12 @@ async retorna Result sem reflexao nem exceptions para fluxo normal.
 422 Domain, 503 Infrastructure. Unexpected 500 com ProblemDetails generico;
 sem stack trace no cliente. Cancellation de request nao vira erro interno.
 
-## Resend, Render, AI, observabilidade
+## Brevo, Render, AI, observabilidade
 
-Resend implementara IEmailSender em Infrastructure: outbox, idempotency key,
-dominio verificado e webhooks assinados. Configuracao tipada na fundacao;
-nenhum envio ou dominio conectado nesta sprint. Emails de identidade continuam
-no fluxo Neon Auth; SMTP customizado compativel antes de producao.
+Brevo implementa IEmailSender em Infrastructure via SMTP STARTTLS. A
+configuracao tipada usa secrets `Email__*`; nenhum segredo e exposto ao
+Mobile. Emails de identidade continuam no fluxo Neon Auth, que possui
+configuracao SMTP independente. Consulte `brevo-smtp.md`.
 
 Render: containers separados API/Admin, binding 0.0.0.0:$PORT, health/live
 e health/ready. Migrations como job controlado. Blazor precisa WebSockets e

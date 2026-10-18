@@ -25,10 +25,13 @@ public sealed class NeonOptions
     public string Origin { get; init; } = "http://localhost:5081";
 }
 
-public sealed class ResendOptions
+public sealed class EmailOptions
 {
-    public const string SectionName = "Resend";
-    public string ApiKey { get; init; } = "";
-    public string FromAddress { get; init; } = "";
-    public string WebhookSecret { get; init; } = "";
+    public const string SectionName = "Email";
+    [Required] public string SmtpHost { get; init; } = "smtp-relay.brevo.com";
+    [Range(1, 65535)] public int SmtpPort { get; init; } = 587;
+    [Required] public string Username { get; init; } = "";
+    [Required] public string Password { get; init; } = "";
+    [Required, EmailAddress] public string From { get; init; } = "";
+    public bool UseSsl { get; init; } = true;
 }

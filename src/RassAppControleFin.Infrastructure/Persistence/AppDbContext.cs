@@ -18,6 +18,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Transfer> Transfers => Set<Transfer>();
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<Goal> Goals => Set<Goal>();
+    public DbSet<ExpenseReductionGoal> ExpenseReductionGoals => Set<ExpenseReductionGoal>();
 
     internal void Authorize(Guid tenantId, string userId)
     {
@@ -47,6 +48,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         Scope<Transfer>(modelBuilder);
         Scope<Budget>(modelBuilder);
         Scope<Goal>(modelBuilder);
+        Scope<ExpenseReductionGoal>(modelBuilder);
         Scope<LedgerEntry>(modelBuilder);
         Scope<CardMovementRow>(modelBuilder);
         Scope<SyncOperationReceipt>(modelBuilder);

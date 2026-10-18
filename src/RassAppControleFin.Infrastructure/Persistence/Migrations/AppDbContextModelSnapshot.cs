@@ -18,7 +18,7 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("app")
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -242,6 +242,70 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_CreditCards_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
 
                             t.HasCheckConstraint("CK_CreditCards_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.ExpenseReductionGoal", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("PeriodEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("PeriodStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("ReferenceAmount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<decimal>("TargetAmount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "CategoryId");
+
+                    b.HasIndex("TenantId", "UserId", "PeriodStart", "PeriodEnd");
+
+                    b.ToTable("ExpenseReductionGoals", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_ExpenseReductionGoals_Amounts", "\"ReferenceAmount\" > \"TargetAmount\" AND \"TargetAmount\" >= 0");
+
+                            t.HasCheckConstraint("CK_ExpenseReductionGoals_Currency", "\"Currency\" IN ('BRL','USD','EUR')");
+
+                            t.HasCheckConstraint("CK_ExpenseReductionGoals_Period", "\"PeriodStart\" < \"PeriodEnd\"");
+
+                            t.HasCheckConstraint("CK_ExpenseReductionGoals_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_ExpenseReductionGoals_Version", "\"Version\" > 0");
                         });
                 });
 
@@ -757,6 +821,20 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.ExpenseReductionGoal", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.Category", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.FinancialTransaction", b =>
