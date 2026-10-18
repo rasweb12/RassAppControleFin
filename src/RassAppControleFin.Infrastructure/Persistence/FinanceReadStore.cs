@@ -67,6 +67,20 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
         db.Goals.AsNoTracking().OrderBy(x => x.Status).ThenBy(x => x.TargetDate).ThenBy(x => x.Name)
             .Select(x => new GoalView(x.Id, x.Name, x.TargetAmount, x.CurrentAmount, x.Currency, x.TargetDate, x.Status, x.Version)),
         q.Page, q.PageSize, ct), ct);
+    public Task<Result<Page<ExpenseReductionGoalView>>> ExpenseReductionGoalsAsync(ListExpenseReductionGoalsQuery q, CancellationToken ct) => Read(async () =>
+    {
+        var goals = db.ExpenseReductionGoals.AsNoTracking().OrderByDescending(x => x.PeriodStart).ThenBy(x => x.Id);
+        var rows = await goals.Select(x => new ExpenseReductionGoalView(x.Id, x.CategoryId, x.ReferenceAmount, x.TargetAmount,
+            db.Transactions.Where(t => t.Status == TransactionStatus.Posted && t.Flow == FinancialFlow.Expense
+                && t.Currency == x.Currency && t.OccurredAt >= x.PeriodStart && t.OccurredAt < x.PeriodEnd
+                && (!x.CategoryId.HasValue || t.CategoryId == x.CategoryId)).Sum(t => (decimal?)t.Amount) ?? 0,
+            x.Currency, x.PeriodStart, x.PeriodEnd, x.Version, x.IsArchived)).ToListAsync(ct);
+        return new Page<ExpenseReductionGoalView>(rows.Skip((q.Page - 1) * q.PageSize).Take(q.PageSize).ToList(), rows.Count, q.Page, q.PageSize);
+    }, ct);
+    public Task<Result<Page<FinancialNotificationView>>> NotificationsAsync(ListNotificationsQuery q, CancellationToken ct) => Read(() => PageAsync(
+        db.FinancialNotifications.AsNoTracking().OrderBy(x => x.ReadAt != null).ThenByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
+            .Select(x => new FinancialNotificationView(x.Id, x.Type, x.Title, x.Message, x.CreatedAt, x.ReadAt, x.Version)),
+        q.Page, q.PageSize, ct), ct);
     public Task<Result<DashboardView>> DashboardAsync(DashboardQuery q, CancellationToken ct) => Read(async () =>
     {
         var balances = await db.Accounts.AsNoTracking().GroupBy(x => x.Currency)

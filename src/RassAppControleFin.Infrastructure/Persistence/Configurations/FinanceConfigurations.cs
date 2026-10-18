@@ -7,7 +7,7 @@ namespace RassAppControleFin.Infrastructure.Persistence.Configurations;
 
 internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>, IEntityTypeConfiguration<Category>,
     IEntityTypeConfiguration<CreditCard>, IEntityTypeConfiguration<FinancialTransaction>, IEntityTypeConfiguration<Transfer>,
-    IEntityTypeConfiguration<Budget>, IEntityTypeConfiguration<Goal>, IEntityTypeConfiguration<ExpenseReductionGoal>,
+    IEntityTypeConfiguration<Budget>, IEntityTypeConfiguration<Goal>, IEntityTypeConfiguration<ExpenseReductionGoal>, IEntityTypeConfiguration<FinancialNotification>,
     IEntityTypeConfiguration<LedgerEntry>, IEntityTypeConfiguration<CardMovementRow>,
     IEntityTypeConfiguration<SyncOperationReceipt>, IEntityTypeConfiguration<FinancialOutboxRow>
 {
@@ -141,6 +141,20 @@ internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>,
         {
             t.HasCheckConstraint("CK_ExpenseReductionGoals_Amounts", "\"ReferenceAmount\" > \"TargetAmount\" AND \"TargetAmount\" >= 0");
             t.HasCheckConstraint("CK_ExpenseReductionGoals_Period", "\"PeriodStart\" < \"PeriodEnd\"");
+        });
+    }
+    public void Configure(EntityTypeBuilder<FinancialNotification> b)
+    {
+        Aggregate(b, "FinancialNotifications");
+        b.Property(x => x.Type).HasMaxLength(64);
+        b.Property(x => x.Title).HasMaxLength(160);
+        b.Property(x => x.Message).HasMaxLength(1000);
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.ReadAt, x.CreatedAt, x.Id });
+        b.ToTable("FinancialNotifications", t =>
+        {
+            t.HasCheckConstraint("CK_FinancialNotifications_Type", "length(btrim(\"Type\")) BETWEEN 1 AND 64");
+            t.HasCheckConstraint("CK_FinancialNotifications_Title", "length(btrim(\"Title\")) BETWEEN 1 AND 160");
+            t.HasCheckConstraint("CK_FinancialNotifications_Message", "length(btrim(\"Message\")) BETWEEN 1 AND 1000");
         });
     }
     public void Configure(EntityTypeBuilder<LedgerEntry> b)

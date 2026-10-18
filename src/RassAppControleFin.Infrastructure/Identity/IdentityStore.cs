@@ -178,6 +178,34 @@ public sealed class IdentityStore(AppDbContext db, IOptions<DatabaseOptions> opt
         { return Result.Failure(new("MEMBERSHIP_CONFLICT", "Membership recusado.", ErrorType.Conflict)); }
     }
 
+    public async Task<Result<ProfileInfo>> GetProfileAsync(string subject, Guid tenantId, CancellationToken ct)
+    {
+        await using var tx = await Scope(subject, tenantId, ct);
+        var row = await db.Database.SqlQuery<ProfileRow>($"""
+            SELECT "Id", "DisplayName", "Version" FROM app."UserProfiles"
+            WHERE "TenantId"={tenantId} AND "UserId"={subject}
+            """).SingleOrDefaultAsync(ct);
+        return row is null
+            ? Result<ProfileInfo>.Failure(new("PROFILE_NOT_FOUND", "Perfil nao encontrado.", ErrorType.NotFound))
+            : Result<ProfileInfo>.Success(new(row.Id, row.DisplayName, row.Version));
+    }
+
+    public async Task<Result<ProfileInfo>> UpdateProfileAsync(string subject, Guid tenantId, string displayName, long version, CancellationToken ct)
+    {
+        var name = displayName.Trim();
+        await using var tx = await Scope(subject, tenantId, ct);
+        var row = await db.Database.SqlQuery<ProfileRow>($"""
+            UPDATE app."UserProfiles" SET "DisplayName"={name}, "Version"="Version"+1
+            WHERE "TenantId"={tenantId} AND "UserId"={subject} AND "Version"={version}
+            RETURNING "Id", "DisplayName", "Version"
+            """).SingleOrDefaultAsync(ct);
+        if (row is null)
+            return Result<ProfileInfo>.Failure(new("PROFILE_VERSION_CONFLICT", "Perfil alterado. Atualize os dados.", ErrorType.Conflict));
+        await Audit(subject, tenantId, "profile.updated", row.Id, ct);
+        await tx.CommitAsync(ct);
+        return Result<ProfileInfo>.Success(new(row.Id, row.DisplayName, row.Version));
+    }
+
     private Task<int> Audit(string subject, Guid? tenant, string action, Guid resource, CancellationToken ct)
         => db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO app."AuditEntries" ("Id","UserId","TenantId","Action","ResourceId","Outcome","CorrelationId","CreatedAt")
@@ -186,4 +214,5 @@ public sealed class IdentityStore(AppDbContext db, IOptions<DatabaseOptions> opt
             """, ct);
 
     private sealed class MembershipRow { public Guid TenantId { get; set; } public string Role { get; set; } = ""; }
+    private sealed class ProfileRow { public Guid Id { get; set; } public string DisplayName { get; set; } = ""; public long Version { get; set; } }
 }

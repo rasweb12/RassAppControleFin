@@ -309,6 +309,61 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.FinancialNotification", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "ReadAt", "CreatedAt", "Id");
+
+                    b.ToTable("FinancialNotifications", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_FinancialNotifications_Message", "length(btrim(\"Message\")) BETWEEN 1 AND 1000");
+
+                            t.HasCheckConstraint("CK_FinancialNotifications_Title", "length(btrim(\"Title\")) BETWEEN 1 AND 160");
+
+                            t.HasCheckConstraint("CK_FinancialNotifications_Type", "length(btrim(\"Type\")) BETWEEN 1 AND 64");
+
+                            t.HasCheckConstraint("CK_FinancialNotifications_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_FinancialNotifications_Version", "\"Version\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.FinancialTransaction", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -835,6 +890,15 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId", "UserId", "CategoryId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.FinancialNotification", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.FinancialTransaction", b =>

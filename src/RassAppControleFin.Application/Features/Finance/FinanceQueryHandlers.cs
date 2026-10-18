@@ -16,6 +16,8 @@ public sealed class FinanceQueryHandlers(IFinanceReadStore store, IUserContext u
     IRequestHandler<ListCardMovementsQuery, Result<Page<CardMovementView>>>,
     IRequestHandler<ListBudgetsQuery, Result<Page<BudgetView>>>,
     IRequestHandler<ListGoalsQuery, Result<Page<GoalView>>>,
+    IRequestHandler<ListExpenseReductionGoalsQuery, Result<Page<ExpenseReductionGoalView>>>,
+    IRequestHandler<ListNotificationsQuery, Result<Page<FinancialNotificationView>>>,
     IRequestHandler<DashboardQuery, Result<DashboardView>>
 {
     private Task<Result<T>> Read<T>(string permission, Func<Task<Result<T>>> read)
@@ -38,6 +40,10 @@ public sealed class FinanceQueryHandlers(IFinanceReadStore store, IUserContext u
         => Read(Permissions.TransactionsRead, () => store.BudgetsAsync(q, ct));
     public Task<Result<Page<GoalView>>> Handle(ListGoalsQuery q, CancellationToken ct)
         => Read(Permissions.TransactionsRead, () => store.GoalsAsync(q, ct));
+    public Task<Result<Page<ExpenseReductionGoalView>>> Handle(ListExpenseReductionGoalsQuery q, CancellationToken ct)
+        => Read(Permissions.TransactionsRead, () => store.ExpenseReductionGoalsAsync(q, ct));
+    public Task<Result<Page<FinancialNotificationView>>> Handle(ListNotificationsQuery q, CancellationToken ct)
+        => Read(Permissions.TransactionsRead, () => store.NotificationsAsync(q, ct));
     public Task<Result<DashboardView>> Handle(DashboardQuery q, CancellationToken ct)
         => Read(Permissions.TransactionsRead, () => store.DashboardAsync(q, ct));
 }
@@ -70,6 +76,8 @@ public sealed class ListTransactionsValidator : PageValidator<ListTransactionsQu
 }
 public sealed class ListBudgetsValidator : PageValidator<ListBudgetsQuery>;
 public sealed class ListGoalsValidator : PageValidator<ListGoalsQuery>;
+public sealed class ListExpenseReductionGoalsValidator : PageValidator<ListExpenseReductionGoalsQuery>;
+public sealed class ListNotificationsValidator : PageValidator<ListNotificationsQuery>;
 public sealed class DashboardValidator : AbstractValidator<DashboardQuery>
 {
     public DashboardValidator()

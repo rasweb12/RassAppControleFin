@@ -30,6 +30,8 @@ class FinanceSyncService {
     'CreateGoalCommand',
     'AddGoalProgressCommand',
     'ArchiveGoalCommand',
+    'CreateExpenseReductionGoalCommand',
+    'ArchiveExpenseReductionGoalCommand',
   };
 
   Future<FinanceSyncResult> synchronize(String tenantId) async {
@@ -174,6 +176,7 @@ class FinanceSyncService {
     final transfers = await _loadPaged('/api/v1/transfers', tenantId);
     final budgets = await _loadPaged('/api/v1/budgets', tenantId);
     final goals = await _loadPaged('/api/v1/goals', tenantId);
+    final expenseReductionGoals = await _loadPaged('/api/v1/expense-reduction-goals', tenantId);
     final movements = <Map<String, dynamic>>[];
     for (final card in cards) {
       final cardId = _requiredText(card['id']);
@@ -190,6 +193,7 @@ class FinanceSyncService {
       'transfer': transfers,
       'budget': budgets,
       'goal': goals,
+      'expenseReductionGoal': expenseReductionGoals,
       'cardMovement': movements,
       'dashboard': await _loadDashboard(tenantId),
     };

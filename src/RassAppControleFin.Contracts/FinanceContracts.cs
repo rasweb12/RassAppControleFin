@@ -38,6 +38,12 @@ public sealed record BudgetDto(Guid Id, Guid? CategoryId, decimal Amount, decima
     DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
 public sealed record GoalDto(Guid Id, string Name, decimal TargetAmount, decimal CurrentAmount, string Currency,
     DateTimeOffset? TargetDate, string Status, long Version);
+public sealed record CreateExpenseReductionGoalRequest(Guid OperationId, Guid? CategoryId, decimal ReferenceAmount,
+    decimal TargetAmount, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd);
+public sealed record ExpenseReductionGoalDto(Guid Id, Guid? CategoryId, decimal ReferenceAmount, decimal TargetAmount,
+    decimal ActualExpense, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
+public sealed record FinancialNotificationDto(Guid Id, string Type, string Title, string Message, DateTimeOffset CreatedAt,
+    DateTimeOffset? ReadAt, long Version);
 public sealed record DashboardMetricDto(string Currency, decimal NetWorth, decimal Income, decimal Expense,
     decimal SavingsRate, decimal BudgetUsed, int ActiveGoals);
 public sealed record DashboardDto(DateTimeOffset From, DateTimeOffset To, IReadOnlyList<DashboardMetricDto> Metrics);

@@ -84,6 +84,17 @@ public static class FinanceEndpoints
             => Send(s, new ArchiveGoalCommand(r.OperationId, id, r.Version), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
         finance.MapGet("/goals", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => Goals(s, new ListGoalsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
+        finance.MapPost("/expense-reduction-goals", (CreateExpenseReductionGoalRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new CreateExpenseReductionGoalCommand(r.OperationId, r.CategoryId, r.ReferenceAmount, r.TargetAmount,
+                r.Currency, r.PeriodStart, r.PeriodEnd), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapPost("/expense-reduction-goals/{id:guid}/archive", (Guid id, VersionedOperationRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new ArchiveExpenseReductionGoalCommand(r.OperationId, id, r.Version), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapGet("/expense-reduction-goals", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
+            => ExpenseReductionGoals(s, new ListExpenseReductionGoalsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
+        finance.MapGet("/notifications", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
+            => Notifications(s, new ListNotificationsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
+        finance.MapPost("/notifications/{id:guid}/read", (Guid id, VersionedOperationRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new MarkNotificationReadCommand(r.OperationId, id, r.Version), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
     }
 
     private static async Task<IResult> Send(ISender sender, IFinanceMutation command, HttpContext context, CancellationToken ct)
@@ -117,5 +128,21 @@ public static class FinanceEndpoints
         return (result.IsSuccess ? Result<PageDto<GoalDto>>.Success(new(result.Value.Items.Select(x =>
             new GoalDto(x.Id, x.Name, x.TargetAmount, x.CurrentAmount, x.Currency, x.TargetDate, x.Status, x.Version)).ToArray(),
             result.Value.Total, result.Value.PageNumber, result.Value.PageSize)) : Result<PageDto<GoalDto>>.Failure(result.Error!)).ToHttp(context);
+    }
+    private static async Task<IResult> ExpenseReductionGoals(ISender sender, ListExpenseReductionGoalsQuery query, HttpContext context, CancellationToken ct)
+    {
+        var result = await sender.Send(query, ct);
+        return (result.IsSuccess ? Result<PageDto<ExpenseReductionGoalDto>>.Success(new(result.Value.Items.Select(x =>
+            new ExpenseReductionGoalDto(x.Id, x.CategoryId, x.ReferenceAmount, x.TargetAmount, x.ActualExpense, x.Currency,
+                x.PeriodStart, x.PeriodEnd, x.Version, x.IsArchived)).ToArray(), result.Value.Total, result.Value.PageNumber,
+            result.Value.PageSize)) : Result<PageDto<ExpenseReductionGoalDto>>.Failure(result.Error!)).ToHttp(context);
+    }
+    private static async Task<IResult> Notifications(ISender sender, ListNotificationsQuery query, HttpContext context, CancellationToken ct)
+    {
+        var result = await sender.Send(query, ct);
+        return (result.IsSuccess ? Result<PageDto<FinancialNotificationDto>>.Success(new(result.Value.Items.Select(x =>
+            new FinancialNotificationDto(x.Id, x.Type, x.Title, x.Message, x.CreatedAt, x.ReadAt, x.Version)).ToArray(),
+            result.Value.Total, result.Value.PageNumber, result.Value.PageSize))
+            : Result<PageDto<FinancialNotificationDto>>.Failure(result.Error!)).ToHttp(context);
     }
 }

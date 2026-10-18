@@ -15,6 +15,8 @@ public interface IFinanceUnit : IAsyncDisposable
     Task<FinancialTransaction?> TransactionAsync(Guid id, CancellationToken ct);
     Task<Budget?> BudgetAsync(Guid id, CancellationToken ct);
     Task<Goal?> GoalAsync(Guid id, CancellationToken ct);
+    Task<ExpenseReductionGoal?> ExpenseReductionGoalAsync(Guid id, CancellationToken ct);
+    Task<FinancialNotification?> NotificationAsync(Guid id, CancellationToken ct);
     void Add(FinancialAggregate resource);
     void Ledger(Guid accountId, decimal delta, string kind, Guid resourceId, Guid? transferId = null);
     void CardMovement(Guid cardId, Guid? accountId, Guid? categoryId, decimal amount, string currency,
@@ -31,6 +33,8 @@ public interface IFinanceReadStore
     Task<Result<Page<CardMovementView>>> CardMovementsAsync(ListCardMovementsQuery query, CancellationToken ct);
     Task<Result<Page<BudgetView>>> BudgetsAsync(ListBudgetsQuery query, CancellationToken ct);
     Task<Result<Page<GoalView>>> GoalsAsync(ListGoalsQuery query, CancellationToken ct);
+    Task<Result<Page<ExpenseReductionGoalView>>> ExpenseReductionGoalsAsync(ListExpenseReductionGoalsQuery query, CancellationToken ct);
+    Task<Result<Page<FinancialNotificationView>>> NotificationsAsync(ListNotificationsQuery query, CancellationToken ct);
     Task<Result<DashboardView>> DashboardAsync(DashboardQuery query, CancellationToken ct);
 }
 

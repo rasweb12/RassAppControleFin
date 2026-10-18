@@ -139,6 +139,69 @@ class GoalSummary {
   );
 }
 
+class ExpenseReductionGoalSummary {
+  const ExpenseReductionGoalSummary({
+    required this.id,
+    required this.categoryId,
+    required this.referenceAmount,
+    required this.targetAmount,
+    required this.actualExpense,
+    required this.currency,
+    required this.periodStart,
+    required this.periodEnd,
+    required this.version,
+    required this.archived,
+  });
+  final String id;
+  final String? categoryId;
+  final num referenceAmount;
+  final num targetAmount;
+  final num actualExpense;
+  final String currency;
+  final DateTime periodStart;
+  final DateTime periodEnd;
+  final int version;
+  final bool archived;
+
+  num get requiredReduction => referenceAmount - targetAmount;
+  num get achievedReduction => (referenceAmount - actualExpense).clamp(0, requiredReduction);
+  double get progress => requiredReduction == 0 ? 0 : (achievedReduction / requiredReduction).clamp(0, 1).toDouble();
+
+  factory ExpenseReductionGoalSummary.fromJson(Map<String, dynamic> json) => ExpenseReductionGoalSummary(
+    id: json['id'] as String,
+    categoryId: json['categoryId'] as String?,
+    referenceAmount: json['referenceAmount'] as num,
+    targetAmount: json['targetAmount'] as num,
+    actualExpense: json['actualExpense'] as num,
+    currency: json['currency'] as String,
+    periodStart: DateTime.parse(json['periodStart'] as String).toLocal(),
+    periodEnd: DateTime.parse(json['periodEnd'] as String).toLocal(),
+    version: json['version'] as int,
+    archived: json['isArchived'] as bool,
+  );
+}
+
+class FinancialNotificationSummary {
+  const FinancialNotificationSummary({required this.id, required this.type, required this.title, required this.message, required this.createdAt, required this.readAt, required this.version});
+  final String id;
+  final String type;
+  final String title;
+  final String message;
+  final DateTime createdAt;
+  final DateTime? readAt;
+  final int version;
+  bool get isRead => readAt != null;
+  factory FinancialNotificationSummary.fromJson(Map<String, dynamic> json) => FinancialNotificationSummary(
+    id: json['id'] as String,
+    type: json['type'] as String,
+    title: json['title'] as String,
+    message: json['message'] as String,
+    createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
+    readAt: json['readAt'] == null ? null : DateTime.parse(json['readAt'] as String).toLocal(),
+    version: json['version'] as int,
+  );
+}
+
 class TransactionSummary {
   const TransactionSummary({
     required this.id,
@@ -285,6 +348,66 @@ class FinanceRepository {
     parser: GoalSummary.fromJson,
     pageSize: '100',
   );
+
+  Future<List<ExpenseReductionGoalSummary>> expenseReductionGoals(String tenantId) => _loadPage(
+    tenantId: tenantId,
+    endpoint: '/api/v1/expense-reduction-goals',
+    entityType: 'expenseReductionGoal',
+    parser: ExpenseReductionGoalSummary.fromJson,
+    pageSize: '100',
+  );
+  Future<List<FinancialNotificationSummary>> notifications(String tenantId) => _loadPage(
+    tenantId: tenantId,
+    endpoint: '/api/v1/notifications',
+    entityType: 'notification',
+    parser: FinancialNotificationSummary.fromJson,
+    pageSize: '100',
+  );
+  Future<void> markNotificationRead({required String tenantId, required FinancialNotificationSummary notification}) async {
+    if (notification.isRead) return;
+    await _auth.postAuthenticated('/api/v1/notifications/${notification.id}/read', {
+      'operationId': _newOperationId(), 'version': notification.version,
+    }, tenantId: tenantId);
+  }
+
+  Future<FinanceWriteState> createExpenseReductionGoal({
+    required String tenantId,
+    String? categoryId,
+    required num referenceAmount,
+    required num targetAmount,
+    required String currency,
+    required DateTime periodStart,
+    required DateTime periodEnd,
+  }) {
+    final operationId = _newOperationId();
+    return _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/expense-reduction-goals',
+      entityType: 'expenseReductionGoal',
+      entityId: 'local-$operationId',
+      payload: {
+        'operationId': operationId,
+        'categoryId': categoryId,
+        'referenceAmount': referenceAmount,
+        'targetAmount': targetAmount,
+        'currency': currency,
+        'periodStart': periodStart.toUtc().toIso8601String(),
+        'periodEnd': periodEnd.toUtc().toIso8601String(),
+      },
+      localResource: {
+        'id': 'local-$operationId',
+        'categoryId': categoryId,
+        'referenceAmount': referenceAmount,
+        'targetAmount': targetAmount,
+        'actualExpense': 0,
+        'currency': currency,
+        'periodStart': periodStart.toUtc().toIso8601String(),
+        'periodEnd': periodEnd.toUtc().toIso8601String(),
+        'version': 0,
+        'isArchived': false,
+      },
+    );
+  }
 
   Future<FinanceWriteState> createAccount({
     required String tenantId,

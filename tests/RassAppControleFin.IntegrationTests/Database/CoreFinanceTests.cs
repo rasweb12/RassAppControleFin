@@ -72,6 +72,8 @@ public sealed class CoreFinanceTests(PostgresFixture fixture)
             new TestTenant(DevelopmentSeed.TenantA), alice);
         var handler = new FinanceMutationHandlers(aliceFactory, alice,
             new TestTenant(DevelopmentSeed.TenantA));
+        // Start after a local marker so retained development outbox rows cannot affect this paging assertion.
+        var createdAfter = DateTimeOffset.UtcNow.AddSeconds(-1);
 
         var firstAccount = await handler.Handle(new OpenAccountCommand(Guid.NewGuid(), "Sync A", "BRL", 10m), default);
         var secondAccount = await handler.Handle(new OpenAccountCommand(Guid.NewGuid(), "Sync B", "BRL", 20m), default);
@@ -79,7 +81,7 @@ public sealed class CoreFinanceTests(PostgresFixture fixture)
         Assert.True(secondAccount.IsSuccess, secondAccount.Error?.Code);
 
         var aliceStore = new FinanceSyncReadStore(db, aliceFactory);
-        var firstPage = await aliceStore.PullAsync(null, null, 1, default);
+        var firstPage = await aliceStore.PullAsync(createdAfter, Guid.Empty, 1, default);
         Assert.True(firstPage.IsSuccess, firstPage.Error?.Code);
         Assert.Single(firstPage.Value.Changes);
         Assert.True(firstPage.Value.HasMore);
@@ -87,7 +89,10 @@ public sealed class CoreFinanceTests(PostgresFixture fixture)
         var marker = firstPage.Value.Changes.Single();
         var secondPage = await aliceStore.PullAsync(marker.OccurredAt, marker.CursorId, 10, default);
         Assert.True(secondPage.IsSuccess, secondPage.Error?.Code);
-        Assert.Contains(secondPage.Value.Changes, change => change.ResourceId == secondAccount.Value.ResourceId);
+        var returnedIds = firstPage.Value.Changes.Concat(secondPage.Value.Changes)
+            .Select(change => change.ResourceId).ToHashSet();
+        Assert.Contains(firstAccount.Value.ResourceId, returnedIds);
+        Assert.Contains(secondAccount.Value.ResourceId, returnedIds);
 
         var bob = new FinanceUser(DevelopmentSeed.Bob);
         var bobFactory = new FinanceUnitFactory(db, TransactionFactory(db, bob),

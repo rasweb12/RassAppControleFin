@@ -36,6 +36,18 @@ public static class IdentityEndpoints
         app.MapPost("/api/v1/tenants/members", async (AddTenantMemberRequest input, ISender sender, HttpContext ctx, CancellationToken ct)
             => (await sender.Send(new AddMemberCommand(input.Subject, input.Role), ct)).ToHttp(ctx))
             .RequireAuthorization(Permissions.MembershipsManage);
+        app.MapGet("/api/v1/profile", async (ISender sender, HttpContext ctx, CancellationToken ct) =>
+        {
+            var result = await sender.Send(new GetProfileQuery(), ct);
+            return (result.IsSuccess ? Result<ProfileDto>.Success(new(result.Value.Id, result.Value.DisplayName, result.Value.Version))
+                : Result<ProfileDto>.Failure(result.Error!)).ToHttp(ctx);
+        }).RequireAuthorization();
+        app.MapPut("/api/v1/profile", async (UpdateProfileRequest input, ISender sender, HttpContext ctx, CancellationToken ct) =>
+        {
+            var result = await sender.Send(new UpdateProfileCommand(input.DisplayName, input.Version), ct);
+            return (result.IsSuccess ? Result<ProfileDto>.Success(new(result.Value.Id, result.Value.DisplayName, result.Value.Version))
+                : Result<ProfileDto>.Failure(result.Error!)).ToHttp(ctx);
+        }).RequireAuthorization();
     }
     private static Result<AuthSessionDto> Session(Result<ApplicationSession> result) => result.IsSuccess
         ? Result<AuthSessionDto>.Success(new(result.Value.SessionId, result.Value.Provider.AccessToken,

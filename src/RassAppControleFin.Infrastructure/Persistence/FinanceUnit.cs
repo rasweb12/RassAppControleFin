@@ -67,6 +67,10 @@ internal sealed class FinanceUnit(AppDbContext db, ITenantTransaction transactio
         => db.Budgets.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<Goal?> GoalAsync(Guid id, CancellationToken ct)
         => db.Goals.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    public Task<ExpenseReductionGoal?> ExpenseReductionGoalAsync(Guid id, CancellationToken ct)
+        => db.ExpenseReductionGoals.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    public Task<FinancialNotification?> NotificationAsync(Guid id, CancellationToken ct)
+        => db.FinancialNotifications.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public void Add(FinancialAggregate resource) => db.Add(resource);
     public void Ledger(Guid accountId, decimal delta, string kind, Guid resourceId, Guid? transferId = null)
         => db.Add(new LedgerEntry { Id = Guid.NewGuid(), TenantId = tenantId, UserId = userId, AccountId = accountId,

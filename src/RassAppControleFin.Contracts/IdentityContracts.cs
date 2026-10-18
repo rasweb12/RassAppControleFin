@@ -10,3 +10,5 @@ public sealed record AuthSessionDto(Guid SessionId, string AccessToken, string S
 public sealed record TenantDto(Guid Id, string Name, string Role);
 public sealed record AddTenantMemberRequest(string Subject, string Role);
 public sealed record SessionInfoDto(string Subject, Guid SessionId);
+public sealed record ProfileDto(Guid Id, string DisplayName, long Version);
+public sealed record UpdateProfileRequest(string DisplayName, long Version);

@@ -27,6 +27,9 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
     IRequestHandler<CreateGoalCommand, Result<MutationReceipt>>,
     IRequestHandler<AddGoalProgressCommand, Result<MutationReceipt>>,
     IRequestHandler<ArchiveGoalCommand, Result<MutationReceipt>>
+    , IRequestHandler<CreateExpenseReductionGoalCommand, Result<MutationReceipt>>
+    , IRequestHandler<ArchiveExpenseReductionGoalCommand, Result<MutationReceipt>>
+    , IRequestHandler<MarkNotificationReadCommand, Result<MutationReceipt>>
 {
     private Guid TenantId => tenant.TenantId!.Value;
     private string Subject => user.Subject!;
@@ -272,6 +275,40 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
         if (goal.Version != c.Version) return Conflict();
         goal.Archive();
         return Result<MutationReceipt>.Success(new(goal.Id, c.OperationId, goal.Version));
+    }, ct);
+
+    public Task<Result<MutationReceipt>> Handle(CreateExpenseReductionGoalCommand c, CancellationToken ct) => Execute(c, async unit =>
+    {
+        if (c.CategoryId is { } categoryId)
+        {
+            var category = await unit.CategoryAsync(categoryId, ct);
+            if (category is null) return Missing();
+            if (category.IsArchived || category.Flow != FinancialFlow.Expense)
+                return Fail("EXPENSE_REDUCTION_CATEGORY_INVALID", "A meta requer categoria de despesa ativa.");
+        }
+        var goal = ExpenseReductionGoal.Create(Guid.NewGuid(), TenantId, Subject, c.CategoryId,
+            Money.Create(c.ReferenceAmount, c.Currency), Money.Create(c.TargetAmount, c.Currency),
+            c.PeriodStart, c.PeriodEnd, DateTimeOffset.UtcNow);
+        unit.Add(goal);
+        return Result<MutationReceipt>.Success(new(goal.Id, c.OperationId, goal.Version));
+    }, ct);
+
+    public Task<Result<MutationReceipt>> Handle(ArchiveExpenseReductionGoalCommand c, CancellationToken ct) => Execute(c, async unit =>
+    {
+        var goal = await unit.ExpenseReductionGoalAsync(c.Id, ct);
+        if (goal is null) return Missing();
+        if (goal.Version != c.Version) return Conflict();
+        goal.Archive();
+        return Result<MutationReceipt>.Success(new(goal.Id, c.OperationId, goal.Version));
+    }, ct);
+
+    public Task<Result<MutationReceipt>> Handle(MarkNotificationReadCommand c, CancellationToken ct) => Execute(c, async unit =>
+    {
+        var notification = await unit.NotificationAsync(c.Id, ct);
+        if (notification is null) return Missing();
+        if (notification.Version != c.Version) return Conflict();
+        notification.MarkRead(DateTimeOffset.UtcNow);
+        return Result<MutationReceipt>.Success(new(notification.Id, c.OperationId, notification.Version));
     }, ct);
 }
 

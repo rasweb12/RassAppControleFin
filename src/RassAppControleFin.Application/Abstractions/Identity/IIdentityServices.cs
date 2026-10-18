@@ -6,6 +6,7 @@ public sealed record ProviderSession(string Subject, string AccessToken, string 
     DateTimeOffset AccessExpiresAt, DateTimeOffset SessionExpiresAt);
 public sealed record ApplicationSession(Guid SessionId, ProviderSession Provider);
 public sealed record TenantInfo(Guid Id, string Name, string Role);
+public sealed record ProfileInfo(Guid Id, string DisplayName, long Version);
 
 public interface INeonAuthService
 {
@@ -27,5 +28,8 @@ public interface IIdentityStore
     Task<IReadOnlyList<TenantInfo>> ListTenantsAsync(string subject, CancellationToken cancellationToken);
     Task<string?> GetMembershipRoleAsync(string subject, Guid tenantId, CancellationToken cancellationToken);
     Task<Result> AddMemberAsync(string subject, Guid tenantId, string memberSubject, string role,
+        CancellationToken cancellationToken);
+    Task<Result<ProfileInfo>> GetProfileAsync(string subject, Guid tenantId, CancellationToken cancellationToken);
+    Task<Result<ProfileInfo>> UpdateProfileAsync(string subject, Guid tenantId, string displayName, long version,
         CancellationToken cancellationToken);
 }

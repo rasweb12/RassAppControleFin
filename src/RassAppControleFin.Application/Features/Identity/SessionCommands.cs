@@ -15,6 +15,8 @@ public sealed record RequestPasswordResetCommand(string Email) : IRequest<Result
 public sealed record ResetPasswordCommand(string Token, string NewPassword) : IRequest<Result>;
 public sealed record ListTenantsQuery : IRequest<Result<IReadOnlyList<TenantInfo>>>;
 public sealed record AddMemberCommand(string Subject, string Role) : IRequest<Result>;
+public sealed record GetProfileQuery : IRequest<Result<ProfileInfo>>;
+public sealed record UpdateProfileCommand(string DisplayName, long Version) : IRequest<Result<ProfileInfo>>;
 
 public sealed class SignInValidator : AbstractValidator<SignInCommand>
 {
@@ -61,6 +63,8 @@ public sealed class AddMemberValidator : AbstractValidator<AddMemberCommand>
         RuleFor(x => x.Role).Must(x => x is "User" or "TenantAdmin" or "SupportAgent" or "FinancialAdmin");
     }
 }
+public sealed class UpdateProfileValidator : AbstractValidator<UpdateProfileCommand>
+{ public UpdateProfileValidator() { RuleFor(x => x.DisplayName).NotEmpty().MaximumLength(120); RuleFor(x => x.Version).GreaterThan(0); } }
 
 public sealed class SessionHandlers(INeonAuthService auth, IIdentityStore store, ICurrentUser user, ITenantContext tenant)
     : IRequestHandler<SignInCommand, Result<ApplicationSession>>,
@@ -70,7 +74,9 @@ public sealed class SessionHandlers(INeonAuthService auth, IIdentityStore store,
       IRequestHandler<RequestPasswordResetCommand, Result>,
       IRequestHandler<ResetPasswordCommand, Result>,
       IRequestHandler<ListTenantsQuery, Result<IReadOnlyList<TenantInfo>>>,
-      IRequestHandler<AddMemberCommand, Result>
+      IRequestHandler<AddMemberCommand, Result>,
+      IRequestHandler<GetProfileQuery, Result<ProfileInfo>>,
+      IRequestHandler<UpdateProfileCommand, Result<ProfileInfo>>
 {
     public async Task<Result<ApplicationSession>> Handle(SignInCommand command, CancellationToken ct)
         => await Register(await auth.SignInAsync(command.Email, command.Password, ct), ct);
@@ -111,5 +117,13 @@ public sealed class SessionHandlers(INeonAuthService auth, IIdentityStore store,
         => user.Subject is not null && tenant.TenantId is { } id
             ? store.AddMemberAsync(user.Subject, id, command.Subject, command.Role, ct)
             : Task.FromResult(Result.Failure(new("TENANT_REQUIRED", "Tenant autorizado necessario.", ErrorType.Forbidden)));
+    public Task<Result<ProfileInfo>> Handle(GetProfileQuery command, CancellationToken ct)
+        => user.Subject is not null && tenant.TenantId is { } id
+            ? store.GetProfileAsync(user.Subject, id, ct)
+            : Task.FromResult(Result<ProfileInfo>.Failure(new("TENANT_REQUIRED", "Tenant autorizado necessario.", ErrorType.Forbidden)));
+    public Task<Result<ProfileInfo>> Handle(UpdateProfileCommand command, CancellationToken ct)
+        => user.Subject is not null && tenant.TenantId is { } id
+            ? store.UpdateProfileAsync(user.Subject, id, command.DisplayName, command.Version, ct)
+            : Task.FromResult(Result<ProfileInfo>.Failure(new("TENANT_REQUIRED", "Tenant autorizado necessario.", ErrorType.Forbidden)));
 
 }

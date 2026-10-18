@@ -1,4 +1,5 @@
 using RassAppControleFin.Domain.Entities.Finance;
+using RassAppControleFin.Domain.Entities;
 using RassAppControleFin.Domain.ValueObjects;
 using Xunit;
 
@@ -52,6 +53,24 @@ public sealed class FinanceDomainTests
         Assert.Equal(200m, goal.ReferenceAmount - goal.TargetAmount);
         Assert.Throws<ArgumentException>(() => ExpenseReductionGoal.Create(Guid.NewGuid(), Guid.NewGuid(), "user", null,
             Money.Create(900m, "BRL"), Money.Create(900m, "BRL"), now, now.AddMonths(1), now));
+    }
+
+    [Fact]
+    public void Profile_rename_trims_the_name_and_increments_version()
+    {
+        var profile = UserProfile.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Nome inicial", DateTimeOffset.UtcNow);
+        profile.Rename("  Novo nome  ");
+        Assert.Equal("Novo nome", profile.DisplayName);
+        Assert.Equal(2, profile.Version);
+    }
+
+    [Fact]
+    public void Financial_notification_can_be_marked_read_only_once()
+    {
+        var notification = FinancialNotification.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "budget", "Orçamento", "Atenção", DateTimeOffset.UtcNow);
+        Assert.True(notification.MarkRead(DateTimeOffset.UtcNow));
+        Assert.False(notification.MarkRead(DateTimeOffset.UtcNow));
+        Assert.Equal(2, notification.Version);
     }
 
     [Theory]

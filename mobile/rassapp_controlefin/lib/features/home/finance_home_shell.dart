@@ -8,6 +8,7 @@ import '../../core/storage/offline_finance_store.dart';
 import '../auth/auth_controller.dart';
 import '../finance/finance_repository.dart';
 import '../finance/financial_assistant_page.dart';
+import '../finance/financial_notifications_page.dart';
 import 'finance_forms.dart';
 import '../synchronization/finance_sync_service.dart';
 
@@ -31,6 +32,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   List<AccountSummary> _accounts = const [];
   List<CategorySummary> _categories = const [];
   List<GoalSummary> _goals = const [];
+  List<ExpenseReductionGoalSummary> _expenseReductionGoals = const [];
   List<TransactionSummary> _transactions = const [];
   List<SyncConflict> _conflicts = const [];
   String? _financialInsight;
@@ -75,6 +77,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
           _accounts = const [];
           _categories = const [];
           _goals = const [];
+          _expenseReductionGoals = const [];
           _transactions = const [];
           _conflicts = const [];
           _loading = false;
@@ -90,6 +93,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         _repository.accounts(tenant.id),
         _repository.categories(tenant.id),
         _repository.goals(tenant.id),
+        _repository.expenseReductionGoals(tenant.id),
         _repository.transactions(tenant.id),
         _repository.syncConflicts(tenant.id),
       ]);
@@ -101,8 +105,9 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         _accounts = values[1] as List<AccountSummary>;
         _categories = values[2] as List<CategorySummary>;
         _goals = values[3] as List<GoalSummary>;
-        _transactions = values[4] as List<TransactionSummary>;
-        _conflicts = values[5] as List<SyncConflict>;
+        _expenseReductionGoals = values[4] as List<ExpenseReductionGoalSummary>;
+        _transactions = values[5] as List<TransactionSummary>;
+        _conflicts = values[6] as List<SyncConflict>;
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -234,6 +239,32 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     );
   }
 
+  Future<void> _openExpenseReductionGoals() async {
+    final tenant = _tenant;
+    if (tenant == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _ExpenseReductionGoalsPage(
+          goals: _expenseReductionGoals,
+          onRefresh: () async {
+            await _load();
+            return _expenseReductionGoals;
+          },
+          onCreate: (reference, target) => _mutate(
+            () => _repository.createExpenseReductionGoal(
+              tenantId: tenant.id,
+              referenceAmount: reference,
+              targetAmount: target,
+              currency: 'BRL',
+              periodStart: DateTime(DateTime.now().year, DateTime.now().month),
+              periodEnd: DateTime(DateTime.now().year, DateTime.now().month + 1),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openFinancialAssistant() async {
     final tenant = _tenant;
     if (tenant == null) return;
@@ -246,6 +277,14 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         ),
       ),
     );
+  }
+
+  Future<void> _openNotifications() async {
+    final tenant = _tenant;
+    if (tenant == null) return;
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => FinancialNotificationsPage(repository: _repository, tenantId: tenant.id),
+    ));
   }
 
   Future<void> _createGoal() async {
@@ -596,6 +635,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               onReviewConflicts: _reviewConflicts,
               onCategories: _openCategories,
               onGoals: _openGoals,
+              onExpenseReductionGoals: _openExpenseReductionGoals,
+              onNotifications: _openNotifications,
               onFinancialAssistant: _openFinancialAssistant,
             ),
           };
@@ -898,6 +939,73 @@ class _Accounts extends StatelessWidget {
   }
 }
 
+class _ExpenseReductionGoalsPage extends StatefulWidget {
+  const _ExpenseReductionGoalsPage({required this.goals, required this.onRefresh, required this.onCreate});
+  final List<ExpenseReductionGoalSummary> goals;
+  final Future<List<ExpenseReductionGoalSummary>> Function() onRefresh;
+  final Future<void> Function(num reference, num target) onCreate;
+
+  @override
+  State<_ExpenseReductionGoalsPage> createState() => _ExpenseReductionGoalsPageState();
+}
+
+class _ExpenseReductionGoalsPageState extends State<_ExpenseReductionGoalsPage> {
+  late List<ExpenseReductionGoalSummary> _goals = widget.goals;
+
+  Future<void> _refresh() async {
+    final goals = await widget.onRefresh();
+    if (mounted) setState(() => _goals = goals);
+  }
+
+  Future<void> _create() async {
+    final reference = TextEditingController();
+    final target = TextEditingController();
+    final values = await showDialog<(num, num)>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Meta de redução mensal'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: reference, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Gasto de referência (R\$)')),
+          TextField(controller: target, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Limite desejado (R\$)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(onPressed: () {
+            final from = num.tryParse(reference.text.replaceAll(',', '.'));
+            final to = num.tryParse(target.text.replaceAll(',', '.'));
+            if (from == null || to == null || from <= 0 || to < 0 || to >= from) return;
+            Navigator.pop(context, (from, to));
+          }, child: const Text('Criar')),
+        ],
+      ),
+    );
+    reference.dispose(); target.dispose();
+    if (values == null) return;
+    await widget.onCreate(values.$1, values.$2);
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Redução de despesas'), actions: [IconButton(onPressed: _refresh, tooltip: 'Atualizar', icon: const Icon(Icons.refresh))]),
+    floatingActionButton: FloatingActionButton(onPressed: _create, tooltip: 'Criar meta de redução', child: const Icon(Icons.add)),
+    body: _goals.isEmpty
+      ? const Center(child: Text('Nenhuma meta de redução criada.'))
+      : ListView.separated(
+          padding: const EdgeInsets.all(16), itemCount: _goals.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (_, index) {
+            final goal = _goals[index];
+            return Card(child: ListTile(
+              title: Text('Meta: R\$ ${goal.targetAmount.toStringAsFixed(2)}'),
+              subtitle: Text('Gasto atual: R\$ ${goal.actualExpense.toStringAsFixed(2)} de R\$ ${goal.referenceAmount.toStringAsFixed(2)}'),
+              trailing: SizedBox(width: 48, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text('${(goal.progress * 100).round()}%'), LinearProgressIndicator(value: goal.progress)])),
+            ));
+          },
+        ),
+  );
+}
+
 class _Menu extends StatelessWidget {
   const _Menu({
     required this.tenant,
@@ -909,6 +1017,8 @@ class _Menu extends StatelessWidget {
     required this.onReviewConflicts,
     required this.onCategories,
     required this.onGoals,
+    required this.onExpenseReductionGoals,
+    required this.onNotifications,
     required this.onFinancialAssistant,
   });
   final TenantSummary tenant;
@@ -920,6 +1030,8 @@ class _Menu extends StatelessWidget {
   final Future<void> Function() onReviewConflicts;
   final Future<void> Function() onCategories;
   final Future<void> Function() onGoals;
+  final Future<void> Function() onExpenseReductionGoals;
+  final Future<void> Function() onNotifications;
   final Future<void> Function() onFinancialAssistant;
 
   @override
@@ -949,11 +1061,25 @@ class _Menu extends StatelessWidget {
         onTap: onGoals,
       ),
       ListTile(
+        leading: const Icon(Icons.trending_down_outlined),
+        title: const Text('Redução de despesas'),
+        subtitle: const Text('Compare seu gasto atual com uma meta de economia.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onExpenseReductionGoals,
+      ),
+      ListTile(
         leading: const Icon(Icons.auto_awesome_outlined),
         title: const Text('Assistente financeiro'),
         subtitle: const Text('Pergunte sobre dados autorizados.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onFinancialAssistant,
+      ),
+      ListTile(
+        leading: const Icon(Icons.notifications_outlined),
+        title: const Text('Notificações'),
+        subtitle: const Text('Alertas e avisos financeiros.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onNotifications,
       ),
       ListTile(
         leading: const Icon(Icons.sync_outlined),

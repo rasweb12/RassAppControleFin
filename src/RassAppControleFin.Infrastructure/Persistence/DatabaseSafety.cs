@@ -34,10 +34,10 @@ internal static class DatabaseSafety
                 AND (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
                     WHERE n.nspname='app' AND c.relname IN ('TenantMemberships','UserSessions','AuditEntries',
                       'Accounts','Categories','CreditCards','Transactions','Transfers','LedgerEntries',
-                      'CardMovements','SyncOperations','FinancialOutbox','Budgets','Goals')
+                      'CardMovements','SyncOperations','FinancialOutbox','Budgets','Goals','ExpenseReductionGoals','FinancialNotifications')
                     AND c.relrowsecurity AND c.relforcerowsecurity
                     AND NOT pg_has_role(current_user,c.relowner,'MEMBER')
-                    AND NOT has_table_privilege(current_user,c.oid,'TRUNCATE'))=14
+                    AND NOT has_table_privilege(current_user,c.oid,'TRUNCATE'))=16
             ) AS "Value"
             """).SingleAsync(cancellationToken);
     }
@@ -60,14 +60,14 @@ internal static class DatabaseSafety
             return "database.migration_pending";
 
         var requiredTablesPresent = await db.Database.SqlQuery<bool>($"""
-            SELECT count(*) = 16 AS "Value"
+            SELECT count(*) = 18 AS "Value"
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'app'
               AND c.relname IN (
                   'TenantMemberships', 'UserSessions', 'AuditEntries', 'Accounts', 'Categories',
                   'CreditCards', 'Transactions', 'Transfers', 'LedgerEntries', 'CardMovements',
-                  'SyncOperations', 'FinancialOutbox', 'Budgets', 'Goals', 'Tenants', 'UserProfiles')
+                  'SyncOperations', 'FinancialOutbox', 'Budgets', 'Goals', 'ExpenseReductionGoals', 'FinancialNotifications', 'Tenants', 'UserProfiles')
               AND c.relkind IN ('r', 'p')
             """).SingleAsync(cancellationToken);
 

@@ -44,6 +44,10 @@ public sealed record BudgetView(Guid Id, Guid? CategoryId, decimal Amount, decim
     DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
 public sealed record GoalView(Guid Id, string Name, decimal TargetAmount, decimal CurrentAmount, string Currency,
     DateTimeOffset? TargetDate, string Status, long Version);
+public sealed record ExpenseReductionGoalView(Guid Id, Guid? CategoryId, decimal ReferenceAmount, decimal TargetAmount,
+    decimal ActualExpense, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
+public sealed record FinancialNotificationView(Guid Id, string Type, string Title, string Message, DateTimeOffset CreatedAt,
+    DateTimeOffset? ReadAt, long Version);
 public sealed record DashboardMetric(string Currency, decimal NetWorth, decimal Income, decimal Expense,
     decimal SavingsRate, decimal BudgetUsed, int ActiveGoals);
 public sealed record DashboardView(DateTimeOffset From, DateTimeOffset To, IReadOnlyList<DashboardMetric> Metrics);
@@ -71,6 +75,15 @@ public sealed record AddGoalProgressCommand(Guid OperationId, Guid Id, long Vers
 { public string Permission => Permissions.TransactionsWrite; }
 public sealed record ArchiveGoalCommand(Guid OperationId, Guid Id, long Version) : IFinanceMutation
 { public string Permission => Permissions.TransactionsWrite; }
+public sealed record CreateExpenseReductionGoalCommand(Guid OperationId, Guid? CategoryId, decimal ReferenceAmount,
+    decimal TargetAmount, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsWrite; }
+public sealed record ArchiveExpenseReductionGoalCommand(Guid OperationId, Guid Id, long Version) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsWrite; }
+public sealed record MarkNotificationReadCommand(Guid OperationId, Guid Id, long Version) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsRead; }
 public sealed record ListBudgetsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<BudgetView>>>, IPageQuery;
 public sealed record ListGoalsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<GoalView>>>, IPageQuery;
+public sealed record ListExpenseReductionGoalsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<ExpenseReductionGoalView>>>, IPageQuery;
+public sealed record ListNotificationsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<FinancialNotificationView>>>, IPageQuery;
 public sealed record DashboardQuery(DateTimeOffset From, DateTimeOffset To) : IRequest<Result<DashboardView>>;

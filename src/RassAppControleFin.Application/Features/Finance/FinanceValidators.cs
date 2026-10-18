@@ -101,3 +101,18 @@ public sealed class ArchiveGoalValidator : MutationValidator<ArchiveGoalCommand>
 {
     public ArchiveGoalValidator() { RuleFor(x => x.Id).NotEmpty(); RuleFor(x => x.Version).GreaterThan(0); }
 }
+public sealed class CreateExpenseReductionGoalValidator : MutationValidator<CreateExpenseReductionGoalCommand>
+{
+    public CreateExpenseReductionGoalValidator()
+    {
+        RuleFor(x => x.CategoryId).NotEqual(Guid.Empty).When(x => x.CategoryId.HasValue);
+        RuleFor(x => x).Must(x => Money.IsValid(x.ReferenceAmount, x.Currency) && Money.IsValid(x.TargetAmount, x.Currency));
+        RuleFor(x => x).Must(x => x.TargetAmount < x.ReferenceAmount).WithMessage("A meta deve ser menor que a referência.");
+        RuleFor(x => x.PeriodStart).Must(x => x.Offset == TimeSpan.Zero);
+        RuleFor(x => x.PeriodEnd).Must(x => x.Offset == TimeSpan.Zero).GreaterThan(x => x.PeriodStart);
+    }
+}
+public sealed class ArchiveExpenseReductionGoalValidator : MutationValidator<ArchiveExpenseReductionGoalCommand>
+{ public ArchiveExpenseReductionGoalValidator() { RuleFor(x => x.Id).NotEmpty(); RuleFor(x => x.Version).GreaterThan(0); } }
+public sealed class MarkNotificationReadValidator : MutationValidator<MarkNotificationReadCommand>
+{ public MarkNotificationReadValidator() { RuleFor(x => x.Id).NotEmpty(); RuleFor(x => x.Version).GreaterThan(0); } }
