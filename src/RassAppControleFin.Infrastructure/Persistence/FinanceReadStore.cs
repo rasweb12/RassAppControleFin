@@ -19,7 +19,7 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
         => new(await query.Skip((page - 1) * size).Take(size).ToListAsync(ct), await query.CountAsync(ct), page, size);
     public Task<Result<Page<AccountView>>> AccountsAsync(ListAccountsQuery q, CancellationToken ct) => Read(() => PageAsync(
         db.Accounts.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Select(x => new AccountView(x.Id, x.Name, x.Currency, x.Balance, x.Version, x.IsArchived)), q.Page, q.PageSize, ct), ct);
+            .Select(x => new AccountView(x.Id, x.Name, x.Currency, x.Balance, x.OverdraftLimit, x.Version, x.IsArchived)), q.Page, q.PageSize, ct), ct);
     public Task<Result<Page<CategoryView>>> CategoriesAsync(ListCategoriesQuery q, CancellationToken ct) => Read(() => PageAsync(
         db.Categories.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id)
             .Select(x => new CategoryView(x.Id, x.Name, x.Flow.ToString(), x.Version, x.IsArchived)), q.Page, q.PageSize, ct), ct);

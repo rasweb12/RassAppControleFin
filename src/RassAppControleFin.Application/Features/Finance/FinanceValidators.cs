@@ -10,7 +10,8 @@ public abstract class MutationValidator<T> : AbstractValidator<T> where T : IFin
 public sealed class OpenAccountValidator : MutationValidator<OpenAccountCommand>
 {
     public OpenAccountValidator() { RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
-        RuleFor(x => x).Must(x => Money.IsValid(x.OpeningBalance, x.Currency, true)).WithMessage("Saldo/moeda invalidos."); }
+        RuleFor(x => x).Must(x => Money.IsValid(x.OpeningBalance, x.Currency, true)).WithMessage("Saldo/moeda invalidos.");
+        RuleFor(x => x).Must(x => Money.IsValid(x.OverdraftLimit, x.Currency, true)).WithMessage("Limite de cheque especial/moeda invalidos."); }
 }
 public sealed class MaintainResourceValidator : MutationValidator<MaintainResourceCommand>
 {

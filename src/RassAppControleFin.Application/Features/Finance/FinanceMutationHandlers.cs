@@ -70,7 +70,7 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
 
     public Task<Result<MutationReceipt>> Handle(OpenAccountCommand c, CancellationToken ct) => Execute(c, unit =>
     {
-        var account = Account.Open(Guid.NewGuid(), TenantId, Subject, c.Name, Money.Create(c.OpeningBalance, c.Currency, true), DateTimeOffset.UtcNow);
+        var account = Account.Open(Guid.NewGuid(), TenantId, Subject, c.Name, Money.Create(c.OpeningBalance, c.Currency, true), DateTimeOffset.UtcNow, c.OverdraftLimit);
         unit.Add(account);
         if (c.OpeningBalance != 0) unit.Ledger(account.Id, c.OpeningBalance, "Opening", account.Id);
         return Task.FromResult(Result<MutationReceipt>.Success(new(account.Id, c.OperationId, account.Version)));

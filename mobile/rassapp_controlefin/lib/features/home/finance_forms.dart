@@ -5,9 +5,14 @@ import '../finance/finance_repository.dart';
 enum FinanceAction { account, category, income, expense, transfer }
 
 class AccountInput {
-  const AccountInput({required this.name, required this.openingBalance});
+  const AccountInput({
+    required this.name,
+    required this.openingBalance,
+    required this.overdraftLimit,
+  });
   final String name;
   final num openingBalance;
+  final num overdraftLimit;
 }
 
 class CategoryInput {
@@ -152,11 +157,13 @@ class _AccountFormState extends State<_AccountForm> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _balance = TextEditingController(text: '0');
+  final _overdraftLimit = TextEditingController(text: '0');
 
   @override
   void dispose() {
     _name.dispose();
     _balance.dispose();
+    _overdraftLimit.dispose();
     super.dispose();
   }
 
@@ -170,6 +177,21 @@ class _AccountFormState extends State<_AccountForm> {
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Nome da conta'),
         validator: _required,
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _overdraftLimit,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(
+          labelText: 'Cheque especial (R\$)',
+          helperText: 'Opcional. Permite saldo negativo ate este limite.',
+        ),
+        validator: (value) {
+          final amount = _number(value);
+          return amount == null || amount < 0
+              ? 'Informe zero ou um limite positivo.'
+              : null;
+        },
       ),
       const SizedBox(height: 12),
       TextFormField(
@@ -192,6 +214,7 @@ class _AccountFormState extends State<_AccountForm> {
         AccountInput(
           name: _name.text.trim(),
           openingBalance: _number(_balance.text)!,
+          overdraftLimit: _number(_overdraftLimit.text)!,
         ),
       );
     },

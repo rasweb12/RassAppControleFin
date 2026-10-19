@@ -42,7 +42,8 @@ internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>,
         Aggregate(b, "Accounts"); Currency(b, "Accounts");
         b.Property(x => x.Name).HasMaxLength(120);
         b.Property(x => x.Balance).HasPrecision(16, 2);
-        b.ToTable("Accounts", t => t.HasCheckConstraint("CK_Accounts_Balance", "\"Balance\" >= 0"));
+        b.Property(x => x.OverdraftLimit).HasPrecision(16, 2).HasDefaultValue(0m);
+        b.ToTable("Accounts", t => t.HasCheckConstraint("CK_Accounts_Balance", "\"OverdraftLimit\" >= 0 AND \"Balance\" >= -\"OverdraftLimit\""));
         b.ToTable("Accounts", t => t.HasCheckConstraint("CK_Accounts_Name", "length(btrim(\"Name\")) BETWEEN 1 AND 120"));
     }
     public void Configure(EntityTypeBuilder<Category> b)

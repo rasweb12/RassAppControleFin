@@ -1,6 +1,6 @@
 namespace RassAppControleFin.Contracts;
 
-public sealed record OpenAccountRequest(Guid OperationId, string Name, string Currency, decimal OpeningBalance);
+public sealed record OpenAccountRequest(Guid OperationId, string Name, string Currency, decimal OpeningBalance, decimal OverdraftLimit = 0m);
 public sealed record MaintainResourceRequest(Guid OperationId, long Version, string Name, bool Archive);
 public sealed record CreateCategoryRequest(Guid OperationId, string Name, string Flow);
 public sealed record CreateCardRequest(Guid OperationId, string Name, string Currency, decimal Limit, int ClosingDay, int DueDay);
@@ -16,7 +16,7 @@ public sealed record CreateCardMovementRequest(Guid OperationId, Guid CardId, lo
 
 public sealed record MutationReceiptDto(Guid ResourceId, Guid OperationId, long Version, long? SourceVersion,
     long? DestinationVersion, decimal? SourceBalance, decimal? DestinationBalance);
-public sealed record AccountDto(Guid Id, string Name, string Currency, decimal Balance, long Version, bool IsArchived);
+public sealed record AccountDto(Guid Id, string Name, string Currency, decimal Balance, decimal OverdraftLimit, long Version, bool IsArchived);
 public sealed record CategoryDto(Guid Id, string Name, string Flow, long Version, bool IsArchived);
 public sealed record CardDto(Guid Id, string Name, string Currency, decimal Limit, decimal Outstanding,
     int ClosingDay, int DueDay, long Version, bool IsArchived);

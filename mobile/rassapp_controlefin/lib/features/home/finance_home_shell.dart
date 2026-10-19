@@ -195,6 +195,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         name: input.name,
         currency: 'BRL',
         openingBalance: input.openingBalance,
+        overdraftLimit: input.overdraftLimit,
       ),
     );
   }
@@ -219,6 +220,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         builder: (_) => _CategoriesPage(
           categories: _categories,
           onCreate: _createCategory,
+          onMaintain: _maintainCategory,
           onRefresh: () async {
             await _load();
             return _categories;
@@ -476,6 +478,100 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     });
   }
 
+  Future<void> _editTransaction(
+    TransactionSummary transaction,
+    AccountSummary account,
+  ) async {
+    final tenant = _tenant;
+    if (tenant == null || transaction.id.startsWith('local-')) return;
+    final input = await _showTransactionEditForm(context, transaction);
+    if (input == null || !mounted) return;
+    await _mutate(() async {
+      await _repository.editTransaction(
+        tenantId: tenant.id,
+        transaction: transaction,
+        account: account,
+        amount: input.amount,
+        description: input.description,
+      );
+      return FinanceWriteState.applied;
+    });
+  }
+
+  Future<void> _maintainAccount(AccountSummary account) async {
+    final tenant = _tenant;
+    if (tenant == null || account.id.startsWith('local-')) return;
+    final action = await _showResourceActions(
+      context,
+      title: account.name,
+      archiveLabel: account.archived ? 'Reativar conta' : 'Arquivar conta',
+    );
+    if (action == null || !mounted) return;
+    if (action == _ResourceAction.rename) {
+      final name = await _showRenameForm(context, account.name, 'Renomear conta');
+      if (name == null || !mounted) return;
+      await _mutate(() async {
+        await _repository.maintainAccount(
+          tenantId: tenant.id,
+          account: account,
+          name: name,
+          archive: account.archived,
+        );
+        return FinanceWriteState.applied;
+      });
+      return;
+    }
+    await _mutate(() async {
+      await _repository.maintainAccount(
+        tenantId: tenant.id,
+        account: account,
+        name: account.name,
+        archive: !account.archived,
+      );
+      return FinanceWriteState.applied;
+    });
+  }
+
+  Future<void> _maintainCategory(CategorySummary category) async {
+    final tenant = _tenant;
+    if (tenant == null || category.id.startsWith('local-')) return;
+    final action = await _showResourceActions(
+      context,
+      title: category.name,
+      archiveLabel: category.archived
+          ? 'Reativar categoria'
+          : 'Arquivar categoria',
+    );
+    if (action == null || !mounted) return;
+    if (action == _ResourceAction.rename) {
+      final name = await _showRenameForm(
+        context,
+        category.name,
+        'Renomear categoria',
+      );
+      if (name == null || !mounted) return;
+      await _mutate(() async {
+        await _repository.maintainCategory(
+          tenantId: tenant.id,
+          category: category,
+          name: name,
+          archive: category.archived,
+        );
+        return FinanceWriteState.applied;
+      });
+      return;
+    }
+    await _mutate(() async {
+      await _repository.maintainCategory(
+        tenantId: tenant.id,
+        category: category,
+        name: category.name,
+        archive: !category.archived,
+      );
+      return FinanceWriteState.applied;
+    });
+  }
+
   Future<void> _mutate(Future<FinanceWriteState> Function() operation) async {
     try {
       final result = await operation();
@@ -661,8 +757,13 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               accounts: _accounts,
               onRefresh: _load,
               onCancel: _cancelTransaction,
+              onEdit: _editTransaction,
             ),
-            2 => _Accounts(items: _accounts, onRefresh: _load),
+            2 => _Accounts(
+              items: _accounts,
+              onRefresh: _load,
+              onMaintain: _maintainAccount,
+            ),
             _ => _Menu(
               tenant: _tenant!,
               canSwitch: _tenants.length > 1,
@@ -1057,11 +1158,13 @@ class _Transactions extends StatelessWidget {
     required this.accounts,
     required this.onRefresh,
     required this.onCancel,
+    required this.onEdit,
   });
   final List<TransactionSummary> items;
   final List<AccountSummary> accounts;
   final Future<void> Function() onRefresh;
   final Future<void> Function(TransactionSummary, AccountSummary) onCancel;
+  final Future<void> Function(TransactionSummary, AccountSummary) onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -1112,6 +1215,7 @@ class _Transactions extends StatelessWidget {
                 context,
                 item,
                 account == null ? null : () => onCancel(item, account!),
+                account == null ? null : () => onEdit(item, account!),
               );
             },
           );
@@ -1125,6 +1229,7 @@ Future<void> _showTransactionDetails(
   BuildContext context,
   TransactionSummary transaction,
   Future<void> Function()? onCancel,
+  Future<void> Function()? onEdit,
 ) => showModalBottomSheet<void>(
   context: context,
   builder: (context) {
@@ -1152,6 +1257,17 @@ Future<void> _showTransactionDetails(
             ),
             _DetailRow(label: 'Data', value: _date(transaction.occurredAt)),
             _DetailRow(label: 'Status', value: transaction.status),
+            if (onEdit != null && transaction.status != 'Cancelled') ...[
+              const SizedBox(height: 12),
+              FilledButton.tonalIcon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await onEdit();
+                },
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Editar valor e descrição'),
+              ),
+            ],
             if (onCancel != null && transaction.status != 'Cancelled') ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -1209,9 +1325,14 @@ class _DetailRow extends StatelessWidget {
 }
 
 class _Accounts extends StatelessWidget {
-  const _Accounts({required this.items, required this.onRefresh});
+  const _Accounts({
+    required this.items,
+    required this.onRefresh,
+    required this.onMaintain,
+  });
   final List<AccountSummary> items;
   final Future<void> Function() onRefresh;
+  final Future<void> Function(AccountSummary) onMaintain;
 
   @override
   Widget build(BuildContext context) {
@@ -1237,13 +1358,20 @@ class _Accounts extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.account_balance_outlined),
               title: Text(item.name),
-              subtitle: Text(item.archived ? 'Conta arquivada' : 'Conta ativa'),
+              subtitle: Text(
+                item.archived
+                    ? 'Conta arquivada'
+                    : item.overdraftLimit > 0
+                    ? 'Cheque especial: ${_money(item.overdraftLimit, item.currency)}'
+                    : 'Conta ativa',
+              ),
               trailing: Text(
                 _money(item.balance, item.currency),
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
+              onTap: () => onMaintain(item),
             ),
           );
         },
@@ -1502,10 +1630,12 @@ class _CategoriesPage extends StatefulWidget {
     required this.categories,
     required this.onCreate,
     required this.onRefresh,
+    required this.onMaintain,
   });
   final List<CategorySummary> categories;
   final Future<void> Function() onCreate;
   final Future<List<CategorySummary>> Function() onRefresh;
+  final Future<void> Function(CategorySummary) onMaintain;
 
   @override
   State<_CategoriesPage> createState() => _CategoriesPageState();
@@ -1574,6 +1704,11 @@ class _CategoriesPageState extends State<_CategoriesPage> {
                     ),
                     title: Text(category.name),
                     subtitle: Text(income ? 'Receita' : 'Despesa'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      await widget.onMaintain(category);
+                      await _refresh();
+                    },
                   );
                 },
               ),
@@ -1775,6 +1910,131 @@ class _MessageState extends StatelessWidget {
       ),
     ),
   );
+}
+
+enum _ResourceAction { rename, archive }
+
+class _TransactionEditInput {
+  const _TransactionEditInput({required this.amount, required this.description});
+  final num amount;
+  final String description;
+}
+
+Future<_TransactionEditInput?> _showTransactionEditForm(
+  BuildContext context,
+  TransactionSummary transaction,
+) async {
+  final amount = TextEditingController(
+    text: transaction.amount.toStringAsFixed(2).replaceAll('.', ','),
+  );
+  final description = TextEditingController(text: transaction.description);
+  final result = await showDialog<_TransactionEditInput>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Editar lançamento'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: amount,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Valor (R\$)'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: description,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Descrição'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final parsedAmount = _parseAmount(amount.text);
+            if (parsedAmount == null || parsedAmount <= 0) return;
+            Navigator.pop(
+              dialogContext,
+              _TransactionEditInput(
+                amount: parsedAmount,
+                description: description.text.trim(),
+              ),
+            );
+          },
+          child: const Text('Salvar'),
+        ),
+      ],
+    ),
+  );
+  amount.dispose();
+  description.dispose();
+  return result;
+}
+
+Future<_ResourceAction?> _showResourceActions(
+  BuildContext context, {
+  required String title,
+  required String archiveLabel,
+}) => showModalBottomSheet<_ResourceAction>(
+  context: context,
+  builder: (context) => SafeArea(
+    child: Wrap(
+      children: [
+        ListTile(title: Text(title)),
+        ListTile(
+          leading: const Icon(Icons.edit_outlined),
+          title: const Text('Renomear'),
+          onTap: () => Navigator.pop(context, _ResourceAction.rename),
+        ),
+        ListTile(
+          leading: const Icon(Icons.archive_outlined),
+          title: Text(archiveLabel),
+          onTap: () => Navigator.pop(context, _ResourceAction.archive),
+        ),
+      ],
+    ),
+  ),
+);
+
+Future<String?> _showRenameForm(
+  BuildContext context,
+  String initialName,
+  String title,
+) async {
+  final controller = TextEditingController(text: initialName);
+  final result = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        decoration: const InputDecoration(labelText: 'Nome'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = controller.text.trim();
+            if (name.isEmpty) return;
+            Navigator.pop(dialogContext, name);
+          },
+          child: const Text('Salvar'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  return result;
 }
 
 String _money(num value, String currency) {

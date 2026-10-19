@@ -55,6 +55,12 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<decimal>("OverdraftLimit")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)")
+                        .HasDefaultValue(0m);
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -63,7 +69,7 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
 
                     b.ToTable("Accounts", "app", t =>
                         {
-                            t.HasCheckConstraint("CK_Accounts_Balance", "\"Balance\" >= 0");
+                            t.HasCheckConstraint("CK_Accounts_Balance", "\"OverdraftLimit\" >= 0 AND \"Balance\" >= -\"OverdraftLimit\"");
 
                             t.HasCheckConstraint("CK_Accounts_Currency", "\"Currency\" IN ('BRL','USD','EUR')");
 

@@ -80,6 +80,7 @@ class AccountSummary {
     required this.balance,
     required this.version,
     required this.archived,
+    this.overdraftLimit = 0,
   });
   final String id;
   final String name;
@@ -87,6 +88,7 @@ class AccountSummary {
   final num balance;
   final int version;
   final bool archived;
+  final num overdraftLimit;
 
   factory AccountSummary.fromJson(Map<String, dynamic> json) => AccountSummary(
     id: json['id'] as String,
@@ -95,6 +97,7 @@ class AccountSummary {
     balance: json['balance'] as num,
     version: json['version'] as int,
     archived: json['isArchived'] as bool,
+    overdraftLimit: json['overdraftLimit'] as num? ?? 0,
   );
 }
 
@@ -485,6 +488,7 @@ class FinanceRepository {
     required String name,
     required String currency,
     required num openingBalance,
+    num overdraftLimit = 0,
   }) async {
     final operationId = _newOperationId();
     final result = await _postOrQueue(
@@ -497,12 +501,14 @@ class FinanceRepository {
         'name': name,
         'currency': currency,
         'openingBalance': openingBalance,
+        'overdraftLimit': overdraftLimit,
       },
       localResource: {
         'id': 'local-$operationId',
         'name': name,
         'currency': currency,
         'balance': openingBalance,
+        'overdraftLimit': overdraftLimit,
         'version': 0,
         'isArchived': false,
       },

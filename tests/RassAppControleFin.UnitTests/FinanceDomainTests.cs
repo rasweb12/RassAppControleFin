@@ -17,6 +17,18 @@ public sealed class FinanceDomainTests
     }
 
     [Fact]
+    public void Account_allows_balance_down_to_configured_overdraft_limit()
+    {
+        var account = Account.Open(Guid.NewGuid(), Guid.NewGuid(), "user", "Conta", Money.Create(100m, "BRL", true),
+            DateTimeOffset.UtcNow, overdraftLimit: 250m);
+
+        Assert.True(account.TryApply(-350m));
+        Assert.Equal(-250m, account.Balance);
+        Assert.False(account.TryApply(-0.01m));
+        Assert.Equal(-250m, account.Balance);
+    }
+
+    [Fact]
     public void Credit_card_has_no_cardholder_data_and_enforces_limit()
     {
         var card = CreditCard.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Cartao", Money.Create(100m, "BRL"), 10, 20, DateTimeOffset.UtcNow);
