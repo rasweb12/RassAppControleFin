@@ -1,5 +1,3 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
-
 import '../../core/network/api_client.dart';
 import '../../core/storage/offline_finance_store.dart';
 import '../auth/auth_controller.dart';
@@ -7,12 +5,10 @@ import '../auth/auth_controller.dart';
 enum FinanceSyncResult { synchronized, offline, blocked, failed }
 
 class FinanceSyncService {
-  FinanceSyncService(this._auth, this._store, {Connectivity? connectivity})
-    : _connectivity = connectivity ?? Connectivity();
+  FinanceSyncService(this._auth, this._store);
 
   final AuthController _auth;
   final OfflineFinanceStore _store;
-  final Connectivity _connectivity;
   bool _running = false;
 
   static const _knownEventTypes = <String>{
@@ -38,11 +34,6 @@ class FinanceSyncService {
     if (_running) return FinanceSyncResult.failed;
     _running = true;
     try {
-      final state = await _connectivity.checkConnectivity();
-      if (state.contains(ConnectivityResult.none)) {
-        return FinanceSyncResult.offline;
-      }
-
       var blocked = false;
       for (final operation in await _store.pending(tenantId)) {
         try {
@@ -69,7 +60,12 @@ class FinanceSyncService {
           );
         }
       }
-      await _pullChanges(tenantId);
+      try {
+        await _pullChanges(tenantId);
+      } on ApiException catch (error) {
+        if (_isRetryable(error.failure)) return FinanceSyncResult.offline;
+        rethrow;
+      }
       return blocked
           ? FinanceSyncResult.blocked
           : FinanceSyncResult.synchronized;
@@ -176,7 +172,10 @@ class FinanceSyncService {
     final transfers = await _loadPaged('/api/v1/transfers', tenantId);
     final budgets = await _loadPaged('/api/v1/budgets', tenantId);
     final goals = await _loadPaged('/api/v1/goals', tenantId);
-    final expenseReductionGoals = await _loadPaged('/api/v1/expense-reduction-goals', tenantId);
+    final expenseReductionGoals = await _loadPaged(
+      '/api/v1/expense-reduction-goals',
+      tenantId,
+    );
     final movements = <Map<String, dynamic>>[];
     for (final card in cards) {
       final cardId = _requiredText(card['id']);

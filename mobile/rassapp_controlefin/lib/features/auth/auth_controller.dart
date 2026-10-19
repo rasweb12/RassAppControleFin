@@ -16,6 +16,7 @@ class AuthController extends ChangeNotifier {
   AuthSession? _session;
   Future<AuthSession>? _renewal;
   bool _loading = true;
+  bool _persistSession = true;
   int _generation = 0;
 
   bool get isLoading => _loading;
@@ -33,14 +34,23 @@ class AuthController extends ChangeNotifier {
 
   Future<void> restore() async {
     _session = await _store.read();
+    _persistSession = _session != null;
     _loading = false;
     notifyListeners();
   }
 
-  Future<void> signIn(String email, String password) => _authenticate(
-    '/api/v1/auth/sign-in',
-    {'email': email, 'password': password},
-  );
+  Future<void> signIn(
+    String email,
+    String password, {
+    bool rememberSession = true,
+  }) {
+    _persistSession = rememberSession;
+    return _authenticate('/api/v1/auth/sign-in', {
+      'email': email,
+      'password': password,
+    });
+  }
+
   Future<void> signUp(String name, String email, String password) =>
       _authenticate('/api/v1/auth/sign-up', {
         'name': name,
@@ -204,7 +214,7 @@ class AuthController extends ChangeNotifier {
     required int expectedGeneration,
   }) async {
     if (expectedGeneration != _generation) return;
-    await _store.save(session);
+    if (_persistSession) await _store.save(session);
     if (expectedGeneration != _generation) return;
     _session = session;
     notifyListeners();

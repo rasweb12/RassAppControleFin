@@ -744,21 +744,17 @@ class FinanceRepository {
     required AccountSummary account,
     required num amount,
     required String description,
-  }) => _auth.putAuthenticated(
-    '/api/v1/transactions/${transaction.id}',
-    {
-      'operationId': _newOperationId(),
-      'version': transaction.version,
-      'categoryId': transaction.categoryId,
-      'amount': amount,
-      'currency': transaction.currency,
-      'status': transaction.status,
-      'occurredAt': transaction.occurredAt.toUtc().toIso8601String(),
-      'description': description,
-      'accountVersion': account.version,
-    },
-    tenantId: tenantId,
-  );
+  }) => _auth.putAuthenticated('/api/v1/transactions/${transaction.id}', {
+    'operationId': _newOperationId(),
+    'version': transaction.version,
+    'categoryId': transaction.categoryId,
+    'amount': amount,
+    'currency': transaction.currency,
+    'status': transaction.status,
+    'occurredAt': transaction.occurredAt.toUtc().toIso8601String(),
+    'description': description,
+    'accountVersion': account.version,
+  }, tenantId: tenantId);
 
   Future<FinanceSyncResult> synchronize(String tenantId) async =>
       (await _syncService).synchronize(tenantId);

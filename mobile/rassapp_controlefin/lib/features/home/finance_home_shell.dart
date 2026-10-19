@@ -405,9 +405,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   Future<void> _createTransaction(String flow) async {
     final tenant = _tenant;
     if (tenant == null) return;
-    final accounts = _accounts
-        .where((item) => !item.archived && !item.id.startsWith('local-'))
-        .toList(growable: false);
+    final accounts = await _activeAccounts(tenant.id);
+    if (!mounted) return;
     if (accounts.isEmpty) {
       _notice('Cadastre uma conta antes de registrar um lançamento.');
       return;
@@ -441,10 +440,9 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
 
   Future<void> _createTransfer() async {
     final tenant = _tenant;
-    final accounts = _accounts
-        .where((item) => !item.archived && !item.id.startsWith('local-'))
-        .toList(growable: false);
     if (tenant == null) return;
+    final accounts = await _activeAccounts(tenant.id);
+    if (!mounted) return;
     if (accounts.length < 2) {
       _notice('Cadastre ao menos duas contas ativas para transferir valores.');
       return;
@@ -478,6 +476,23 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     });
   }
 
+  Future<List<AccountSummary>> _activeAccounts(String tenantId) async {
+    try {
+      final accounts = await _repository.accounts(tenantId);
+      if (mounted) {
+        setState(() => _accounts = accounts);
+      }
+      return accounts
+          .where((item) => !item.archived && !item.id.startsWith('local-'))
+          .toList(growable: false);
+    } on ApiException catch (error) {
+      if (mounted) _notice(_messageFor(error));
+      return _accounts
+          .where((item) => !item.archived && !item.id.startsWith('local-'))
+          .toList(growable: false);
+    }
+  }
+
   Future<void> _editTransaction(
     TransactionSummary transaction,
     AccountSummary account,
@@ -508,7 +523,11 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     );
     if (action == null || !mounted) return;
     if (action == _ResourceAction.rename) {
-      final name = await _showRenameForm(context, account.name, 'Renomear conta');
+      final name = await _showRenameForm(
+        context,
+        account.name,
+        'Renomear conta',
+      );
       if (name == null || !mounted) return;
       await _mutate(() async {
         await _repository.maintainAccount(
@@ -594,14 +613,14 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     try {
       if (tenant != null) {
         final result = await _repository.synchronize(tenant.id);
-        if (mounted && result != FinanceSyncResult.synchronized) {
+        if (mounted) {
           _notice(switch (result) {
+            FinanceSyncResult.synchronized => 'Dados sincronizados.',
             FinanceSyncResult.offline =>
-              'Sem conexão. Seus lançamentos pendentes permanecem protegidos neste dispositivo.',
+              'Não foi possível alcançar o servidor. Seus lançamentos pendentes permanecem protegidos neste dispositivo.',
             FinanceSyncResult.blocked =>
               'Há uma operação que precisa de revisão antes de sincronizar.',
             FinanceSyncResult.failed => 'A sincronização já está em andamento.',
-            FinanceSyncResult.synchronized => '',
           });
         }
       }
@@ -1644,6 +1663,7 @@ class _CategoriesPage extends StatefulWidget {
 class _CategoriesPageState extends State<_CategoriesPage> {
   late List<CategorySummary> _categories = widget.categories;
   bool _loading = false;
+  bool _showArchived = false;
 
   Future<void> _refresh() async {
     setState(() => _loading = true);
@@ -1658,14 +1678,28 @@ class _CategoriesPageState extends State<_CategoriesPage> {
 
   Future<void> _create() async {
     await widget.onCreate();
+    if (!mounted) return;
     await _refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    final active = _categories.where((item) => !item.archived).toList();
+    final visible = _categories
+        .where((item) => _showArchived || !item.archived)
+        .toList(growable: false);
     return Scaffold(
-      appBar: AppBar(title: const Text('Categorias')),
+      appBar: AppBar(
+        title: const Text('Categorias'),
+        actions: [
+          IconButton(
+            tooltip: _showArchived ? 'Ocultar arquivadas' : 'Exibir arquivadas',
+            onPressed: () => setState(() => _showArchived = !_showArchived),
+            icon: Icon(
+              _showArchived ? Icons.inventory_2 : Icons.inventory_2_outlined,
+            ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _loading ? null : _create,
         tooltip: 'Nova categoria',
@@ -1673,7 +1707,7 @@ class _CategoriesPageState extends State<_CategoriesPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : active.isEmpty
+          : visible.isEmpty
           ? _MessageState(
               icon: Icons.category_outlined,
               title: 'Nenhuma categoria cadastrada',
@@ -1685,10 +1719,10 @@ class _CategoriesPageState extends State<_CategoriesPage> {
               onRefresh: _refresh,
               child: ListView.separated(
                 padding: const EdgeInsets.all(16),
-                itemCount: active.length,
+                itemCount: visible.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, index) {
-                  final category = active[index];
+                  final category = visible[index];
                   final income = category.flow.toLowerCase() == 'income';
                   return ListTile(
                     leading: CircleAvatar(
@@ -1703,10 +1737,17 @@ class _CategoriesPageState extends State<_CategoriesPage> {
                       ),
                     ),
                     title: Text(category.name),
-                    subtitle: Text(income ? 'Receita' : 'Despesa'),
+                    subtitle: Text(
+                      category.archived
+                          ? 'Arquivada · ${income ? 'Receita' : 'Despesa'}'
+                          : income
+                          ? 'Receita'
+                          : 'Despesa',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
                       await widget.onMaintain(category);
+                      if (!mounted) return;
                       await _refresh();
                     },
                   );
@@ -1915,7 +1956,10 @@ class _MessageState extends StatelessWidget {
 enum _ResourceAction { rename, archive }
 
 class _TransactionEditInput {
-  const _TransactionEditInput({required this.amount, required this.description});
+  const _TransactionEditInput({
+    required this.amount,
+    required this.description,
+  });
   final num amount;
   final String description;
 }
