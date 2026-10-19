@@ -24,6 +24,24 @@ class TenantSummary {
   );
 }
 
+class ProfileSummary {
+  const ProfileSummary({
+    required this.id,
+    required this.displayName,
+    required this.version,
+  });
+
+  final String id;
+  final String displayName;
+  final int version;
+
+  factory ProfileSummary.fromJson(Map<String, dynamic> json) => ProfileSummary(
+    id: json['id'] as String,
+    displayName: json['displayName'] as String,
+    version: json['version'] as int,
+  );
+}
+
 class DashboardMetric {
   const DashboardMetric({
     required this.currency,
@@ -85,11 +103,13 @@ class CategorySummary {
     required this.id,
     required this.name,
     required this.flow,
+    required this.version,
     required this.archived,
   });
   final String id;
   final String name;
   final String flow;
+  final int version;
   final bool archived;
 
   factory CategorySummary.fromJson(Map<String, dynamic> json) =>
@@ -97,6 +117,7 @@ class CategorySummary {
         id: json['id'] as String,
         name: json['name'] as String,
         flow: json['flow'] as String,
+        version: json['version'] as int? ?? 0,
         archived: json['isArchived'] as bool,
       );
 }
@@ -164,25 +185,37 @@ class ExpenseReductionGoalSummary {
   final bool archived;
 
   num get requiredReduction => referenceAmount - targetAmount;
-  num get achievedReduction => (referenceAmount - actualExpense).clamp(0, requiredReduction);
-  double get progress => requiredReduction == 0 ? 0 : (achievedReduction / requiredReduction).clamp(0, 1).toDouble();
+  num get achievedReduction =>
+      (referenceAmount - actualExpense).clamp(0, requiredReduction);
+  double get progress => requiredReduction == 0
+      ? 0
+      : (achievedReduction / requiredReduction).clamp(0, 1).toDouble();
 
-  factory ExpenseReductionGoalSummary.fromJson(Map<String, dynamic> json) => ExpenseReductionGoalSummary(
-    id: json['id'] as String,
-    categoryId: json['categoryId'] as String?,
-    referenceAmount: json['referenceAmount'] as num,
-    targetAmount: json['targetAmount'] as num,
-    actualExpense: json['actualExpense'] as num,
-    currency: json['currency'] as String,
-    periodStart: DateTime.parse(json['periodStart'] as String).toLocal(),
-    periodEnd: DateTime.parse(json['periodEnd'] as String).toLocal(),
-    version: json['version'] as int,
-    archived: json['isArchived'] as bool,
-  );
+  factory ExpenseReductionGoalSummary.fromJson(Map<String, dynamic> json) =>
+      ExpenseReductionGoalSummary(
+        id: json['id'] as String,
+        categoryId: json['categoryId'] as String?,
+        referenceAmount: json['referenceAmount'] as num,
+        targetAmount: json['targetAmount'] as num,
+        actualExpense: json['actualExpense'] as num,
+        currency: json['currency'] as String,
+        periodStart: DateTime.parse(json['periodStart'] as String).toLocal(),
+        periodEnd: DateTime.parse(json['periodEnd'] as String).toLocal(),
+        version: json['version'] as int,
+        archived: json['isArchived'] as bool,
+      );
 }
 
 class FinancialNotificationSummary {
-  const FinancialNotificationSummary({required this.id, required this.type, required this.title, required this.message, required this.createdAt, required this.readAt, required this.version});
+  const FinancialNotificationSummary({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.message,
+    required this.createdAt,
+    required this.readAt,
+    required this.version,
+  });
   final String id;
   final String type;
   final String title;
@@ -191,44 +224,56 @@ class FinancialNotificationSummary {
   final DateTime? readAt;
   final int version;
   bool get isRead => readAt != null;
-  factory FinancialNotificationSummary.fromJson(Map<String, dynamic> json) => FinancialNotificationSummary(
-    id: json['id'] as String,
-    type: json['type'] as String,
-    title: json['title'] as String,
-    message: json['message'] as String,
-    createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
-    readAt: json['readAt'] == null ? null : DateTime.parse(json['readAt'] as String).toLocal(),
-    version: json['version'] as int,
-  );
+  factory FinancialNotificationSummary.fromJson(Map<String, dynamic> json) =>
+      FinancialNotificationSummary(
+        id: json['id'] as String,
+        type: json['type'] as String,
+        title: json['title'] as String,
+        message: json['message'] as String,
+        createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
+        readAt: json['readAt'] == null
+            ? null
+            : DateTime.parse(json['readAt'] as String).toLocal(),
+        version: json['version'] as int,
+      );
 }
 
 class TransactionSummary {
   const TransactionSummary({
     required this.id,
+    required this.accountId,
+    required this.categoryId,
     required this.amount,
     required this.currency,
     required this.flow,
     required this.status,
     required this.occurredAt,
     required this.description,
+    required this.version,
   });
   final String id;
+  final String accountId;
+  final String categoryId;
   final num amount;
   final String currency;
   final String flow;
   final String status;
   final DateTime occurredAt;
   final String description;
+  final int version;
 
   factory TransactionSummary.fromJson(Map<String, dynamic> json) =>
       TransactionSummary(
         id: json['id'] as String,
+        accountId: json['accountId'] as String,
+        categoryId: json['categoryId'] as String,
         amount: json['amount'] as num,
         currency: json['currency'] as String,
         flow: json['flow'] as String,
         status: json['status'] as String,
         occurredAt: DateTime.parse(json['occurredAt'] as String).toLocal(),
         description: json['description'] as String,
+        version: json['version'] as int,
       );
 }
 
@@ -290,6 +335,20 @@ class FinanceRepository {
     }
   }
 
+  Future<ProfileSummary> profile(String tenantId) async {
+    final data = await _auth.getAuthenticated(
+      '/api/v1/profile',
+      tenantId: tenantId,
+    );
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException(
+        ApiFailure.unexpected,
+        'Não foi possível carregar seu perfil.',
+      );
+    }
+    return ProfileSummary.fromJson(data);
+  }
+
   Future<List<AccountSummary>> accounts(String tenantId) async {
     return _loadPage(
       tenantId: tenantId,
@@ -302,8 +361,12 @@ class FinanceRepository {
   Future<List<TransactionSummary>> transactions(String tenantId) async {
     try {
       final maps = await _loadAllTransactionPages(tenantId);
-      await (await _store).cacheAll(tenantId, 'transaction', maps);
-      return maps.map(TransactionSummary.fromJson).toList(growable: false);
+      final store = await _store;
+      await store.cacheAll(tenantId, 'transaction', maps);
+      return (await store.cached(
+        tenantId,
+        'transaction',
+      )).map(TransactionSummary.fromJson).toList(growable: false);
     } on ApiException catch (error) {
       if (!_canReadOffline(error)) rethrow;
       return (await (await _store).cached(
@@ -349,25 +412,33 @@ class FinanceRepository {
     pageSize: '100',
   );
 
-  Future<List<ExpenseReductionGoalSummary>> expenseReductionGoals(String tenantId) => _loadPage(
+  Future<List<ExpenseReductionGoalSummary>> expenseReductionGoals(
+    String tenantId,
+  ) => _loadPage(
     tenantId: tenantId,
     endpoint: '/api/v1/expense-reduction-goals',
     entityType: 'expenseReductionGoal',
     parser: ExpenseReductionGoalSummary.fromJson,
     pageSize: '100',
   );
-  Future<List<FinancialNotificationSummary>> notifications(String tenantId) => _loadPage(
-    tenantId: tenantId,
-    endpoint: '/api/v1/notifications',
-    entityType: 'notification',
-    parser: FinancialNotificationSummary.fromJson,
-    pageSize: '100',
-  );
-  Future<void> markNotificationRead({required String tenantId, required FinancialNotificationSummary notification}) async {
+  Future<List<FinancialNotificationSummary>> notifications(String tenantId) =>
+      _loadPage(
+        tenantId: tenantId,
+        endpoint: '/api/v1/notifications',
+        entityType: 'notification',
+        parser: FinancialNotificationSummary.fromJson,
+        pageSize: '100',
+      );
+  Future<void> markNotificationRead({
+    required String tenantId,
+    required FinancialNotificationSummary notification,
+  }) async {
     if (notification.isRead) return;
-    await _auth.postAuthenticated('/api/v1/notifications/${notification.id}/read', {
-      'operationId': _newOperationId(), 'version': notification.version,
-    }, tenantId: tenantId);
+    await _auth.postAuthenticated(
+      '/api/v1/notifications/${notification.id}/read',
+      {'operationId': _newOperationId(), 'version': notification.version},
+      tenantId: tenantId,
+    );
   }
 
   Future<FinanceWriteState> createExpenseReductionGoal({
@@ -466,6 +537,30 @@ class FinanceRepository {
       },
     );
   }
+
+  Future<void> maintainAccount({
+    required String tenantId,
+    required AccountSummary account,
+    required String name,
+    bool archive = false,
+  }) => _auth.patchAuthenticated('/api/v1/accounts/${account.id}', {
+    'operationId': _newOperationId(),
+    'version': account.version,
+    'name': name,
+    'archive': archive,
+  }, tenantId: tenantId);
+
+  Future<void> maintainCategory({
+    required String tenantId,
+    required CategorySummary category,
+    required String name,
+    bool archive = false,
+  }) => _auth.patchAuthenticated('/api/v1/categories/${category.id}', {
+    'operationId': _newOperationId(),
+    'version': category.version,
+    'name': name,
+    'archive': archive,
+  }, tenantId: tenantId);
 
   Future<FinanceWriteState> createGoal({
     required String tenantId,
@@ -626,6 +721,39 @@ class FinanceRepository {
     return result;
   }
 
+  Future<void> cancelTransaction({
+    required String tenantId,
+    required TransactionSummary transaction,
+    required AccountSummary account,
+  }) =>
+      _auth.postAuthenticated('/api/v1/transactions/${transaction.id}/cancel', {
+        'operationId': _newOperationId(),
+        'version': transaction.version,
+        'accountVersion': account.version,
+      }, tenantId: tenantId);
+
+  Future<void> editTransaction({
+    required String tenantId,
+    required TransactionSummary transaction,
+    required AccountSummary account,
+    required num amount,
+    required String description,
+  }) => _auth.putAuthenticated(
+    '/api/v1/transactions/${transaction.id}',
+    {
+      'operationId': _newOperationId(),
+      'version': transaction.version,
+      'categoryId': transaction.categoryId,
+      'amount': amount,
+      'currency': transaction.currency,
+      'status': transaction.status,
+      'occurredAt': transaction.occurredAt.toUtc().toIso8601String(),
+      'description': description,
+      'accountVersion': account.version,
+    },
+    tenantId: tenantId,
+  );
+
   Future<FinanceSyncResult> synchronize(String tenantId) async =>
       (await _syncService).synchronize(tenantId);
 
@@ -653,6 +781,7 @@ class FinanceRepository {
         tenantId: tenantId,
         queryParameters: {'page': '1', 'pageSize': pageSize},
       );
+
       final resources = ((data as Map<String, dynamic>)['items'] as List)
           .cast<Map<String, dynamic>>();
       await (await _store).cacheAll(tenantId, entityType, resources);

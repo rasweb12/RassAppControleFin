@@ -91,6 +91,29 @@ class OfflineFinanceStore {
     String entityType,
     Iterable<Map<String, dynamic>> resources,
   ) => _database.transaction(() async {
+    final existing =
+        await (_database.select(_database.cachedResources)..where(
+              (row) =>
+                  row.subject.equals(subject) &
+                  row.tenantId.equals(tenantId) &
+                  row.entityType.equals(entityType),
+            ))
+            .get();
+    final pendingLocalIds =
+        await (_database.select(_database.pendingSyncOperations)..where(
+              (row) =>
+                  row.subject.equals(subject) &
+                  row.tenantId.equals(tenantId) &
+                  row.entityType.equals(entityType) &
+                  (row.status.equals('pending') |
+                      row.status.equals('conflict')),
+            ))
+            .get();
+    final pendingIds = pendingLocalIds.map((row) => row.entityId).toSet();
+    final localResources = existing
+        .where((row) => pendingIds.contains(row.entityId))
+        .map((row) => jsonDecode(row.payloadJson) as Map<String, dynamic>)
+        .toList(growable: false);
     await (_database.delete(_database.cachedResources)..where(
           (row) =>
               row.subject.equals(subject) &
@@ -101,7 +124,7 @@ class OfflineFinanceStore {
     await _database.batch((batch) {
       batch.insertAll(
         _database.cachedResources,
-        resources.map(
+        [...localResources, ...resources].map(
           (resource) => CachedResourcesCompanion.insert(
             subject: subject,
             tenantId: tenantId,

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/storage/offline_finance_store.dart';
+import '../../core/theme/app_theme.dart';
 import '../auth/auth_controller.dart';
 import '../finance/finance_repository.dart';
 import '../finance/financial_assistant_page.dart';
@@ -28,6 +29,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   String? _error;
   List<TenantSummary> _tenants = const [];
   TenantSummary? _tenant;
+  ProfileSummary? _profile;
   List<DashboardMetric> _metrics = const [];
   List<AccountSummary> _accounts = const [];
   List<CategorySummary> _categories = const [];
@@ -73,6 +75,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         setState(() {
           _tenants = tenants;
           _tenant = null;
+          _profile = null;
           _metrics = const [];
           _accounts = const [];
           _categories = const [];
@@ -90,6 +93,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
           : tenants.first;
       final values = await Future.wait([
         _repository.dashboard(tenant.id, DateTime.now()),
+        _repository.profile(tenant.id),
         _repository.accounts(tenant.id),
         _repository.categories(tenant.id),
         _repository.goals(tenant.id),
@@ -101,13 +105,14 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
       setState(() {
         _tenants = tenants;
         _tenant = tenant;
+        _profile = values[1] as ProfileSummary;
         _metrics = values[0] as List<DashboardMetric>;
-        _accounts = values[1] as List<AccountSummary>;
-        _categories = values[2] as List<CategorySummary>;
-        _goals = values[3] as List<GoalSummary>;
-        _expenseReductionGoals = values[4] as List<ExpenseReductionGoalSummary>;
-        _transactions = values[5] as List<TransactionSummary>;
-        _conflicts = values[6] as List<SyncConflict>;
+        _accounts = values[2] as List<AccountSummary>;
+        _categories = values[3] as List<CategorySummary>;
+        _goals = values[4] as List<GoalSummary>;
+        _expenseReductionGoals = values[5] as List<ExpenseReductionGoalSummary>;
+        _transactions = values[6] as List<TransactionSummary>;
+        _conflicts = values[7] as List<SyncConflict>;
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -257,7 +262,10 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               targetAmount: target,
               currency: 'BRL',
               periodStart: DateTime(DateTime.now().year, DateTime.now().month),
-              periodEnd: DateTime(DateTime.now().year, DateTime.now().month + 1),
+              periodEnd: DateTime(
+                DateTime.now().year,
+                DateTime.now().month + 1,
+              ),
             ),
           ),
         ),
@@ -282,9 +290,14 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   Future<void> _openNotifications() async {
     final tenant = _tenant;
     if (tenant == null) return;
-    await Navigator.of(context).push<void>(MaterialPageRoute(
-      builder: (_) => FinancialNotificationsPage(repository: _repository, tenantId: tenant.id),
-    ));
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => FinancialNotificationsPage(
+          repository: _repository,
+          tenantId: tenant.id,
+        ),
+      ),
+    );
   }
 
   Future<void> _createGoal() async {
@@ -445,6 +458,22 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         description: input.description,
       ),
     );
+  }
+
+  Future<void> _cancelTransaction(
+    TransactionSummary transaction,
+    AccountSummary account,
+  ) async {
+    final tenant = _tenant;
+    if (tenant == null || transaction.id.startsWith('local-')) return;
+    await _mutate(() async {
+      await _repository.cancelTransaction(
+        tenantId: tenant.id,
+        transaction: transaction,
+        account: account,
+      );
+      return FinanceWriteState.applied;
+    });
   }
 
   Future<void> _mutate(Future<FinanceWriteState> Function() operation) async {
@@ -622,8 +651,17 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               insight: _financialInsight,
               insightLoading: _insightLoading,
               onGenerateInsight: _generateInsight,
+              onIncome: () => _createTransaction('Income'),
+              onExpense: () => _createTransaction('Expense'),
+              onTransfer: _createTransfer,
+              onGoals: _openGoals,
             ),
-            1 => _Transactions(items: _transactions, onRefresh: _load),
+            1 => _Transactions(
+              items: _transactions,
+              accounts: _accounts,
+              onRefresh: _load,
+              onCancel: _cancelTransaction,
+            ),
             2 => _Accounts(items: _accounts, onRefresh: _load),
             _ => _Menu(
               tenant: _tenant!,
@@ -642,7 +680,9 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
           };
     return Scaffold(
       appBar: AppBar(
-        title: Text(titles[_tab]),
+        title: _tab == 0 && _profile != null
+            ? Text('Olá, ${_profile!.displayName}')
+            : Text(titles[_tab]),
         actions: [
           if (!_loading && _tenant != null)
             IconButton(
@@ -698,92 +738,97 @@ class _Dashboard extends StatelessWidget {
     required this.insight,
     required this.insightLoading,
     required this.onGenerateInsight,
+    required this.onIncome,
+    required this.onExpense,
+    required this.onTransfer,
+    required this.onGoals,
   });
   final List<DashboardMetric> metrics;
   final Future<void> Function() onRefresh;
   final String? insight;
   final bool insightLoading;
   final Future<void> Function() onGenerateInsight;
+  final Future<void> Function() onIncome;
+  final Future<void> Function() onExpense;
+  final Future<void> Function() onTransfer;
+  final Future<void> Function() onGoals;
 
   @override
   Widget build(BuildContext context) {
     final metric = metrics.isEmpty ? null : metrics.first;
+    final currency = metric?.currency ?? 'BRL';
+    final netWorth = metric?.netWorth ?? 0;
+    final income = metric?.income ?? 0;
+    final expense = metric?.expense ?? 0;
+    final savingsRate = metric?.savingsRate ?? 0;
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          Text(
-            'Resumo financeiro',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          _DashboardHero(
+            value: _money(netWorth, currency),
+            onIncome: onIncome,
+            onExpense: onExpense,
+            onTransfer: onTransfer,
+            onGoals: onGoals,
           ),
-          const SizedBox(height: 14),
-          if (metric == null)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: Text(
-                'Registre receitas ou despesas para visualizar seu resumo.',
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _DashboardStat(
+                  title: 'Receitas',
+                  value: _money(income, currency),
+                  icon: Icons.south_rounded,
+                  color: AppTheme.income,
+                ),
               ),
-            )
-          else ...[
-            _Metric(
-              title: 'Patrimônio líquido',
-              value: _money(metric.netWorth, metric.currency),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _Metric(
-                    title: 'Receitas',
-                    value: _money(metric.income, metric.currency),
-                  ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _DashboardStat(
+                  title: 'Despesas',
+                  value: _money(expense, currency),
+                  icon: Icons.north_rounded,
+                  color: AppTheme.expense,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _Metric(
-                    title: 'Despesas',
-                    value: _money(metric.expense, metric.currency),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _Metric(
-              title: 'Taxa de economia',
-              value:
-                  '${(metric.savingsRate * 100).toStringAsFixed(1).replaceAll('.', ',')}%',
-            ),
-          ],
-          const SizedBox(height: 20),
-          Text(
-            'Insight financeiro',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          if (insight != null)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(insight!),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.insights_outlined, color: Color(0xFFF59E0B)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Taxa de economia',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          metric == null
+                              ? 'Registre lançamentos para acompanhar.'
+                              : '${(savingsRate * 100).toStringAsFixed(1).replaceAll('.', ',')}% no período',
+                          style: const TextStyle(color: AppTheme.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-          FilledButton.icon(
-            onPressed: insightLoading ? null : onGenerateInsight,
-            icon: insightLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.auto_awesome_outlined),
-            label: Text(
-              insightLoading ? 'Gerando insight...' : 'Gerar insight do mês',
-            ),
+          ),
+          const SizedBox(height: 24),
+          _InsightCard(
+            insight: insight,
+            loading: insightLoading,
+            onGenerate: onGenerateInsight,
           ),
         ],
       ),
@@ -791,10 +836,232 @@ class _Dashboard extends StatelessWidget {
   }
 }
 
+class _DashboardHero extends StatelessWidget {
+  const _DashboardHero({
+    required this.value,
+    required this.onIncome,
+    required this.onExpense,
+    required this.onTransfer,
+    required this.onGoals,
+  });
+  final String value;
+  final Future<void> Function() onIncome;
+  final Future<void> Function() onExpense;
+  final Future<void> Function() onTransfer;
+  final Future<void> Function() onGoals;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: AppTheme.navy,
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'PATRIMÔNIO LÍQUIDO',
+          style: TextStyle(
+            color: Color(0xFFCBD5E1),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const Divider(color: Color(0xFF334155), height: 32),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _QuickAction(
+              icon: Icons.add_rounded,
+              label: 'Receita',
+              color: AppTheme.income,
+              onTap: onIncome,
+            ),
+            _QuickAction(
+              icon: Icons.remove_rounded,
+              label: 'Despesa',
+              color: AppTheme.expense,
+              onTap: onExpense,
+            ),
+            _QuickAction(
+              icon: Icons.swap_horiz_rounded,
+              label: 'Transferir',
+              color: const Color(0xFF38BDF8),
+              onTap: onTransfer,
+            ),
+            _QuickAction(
+              icon: Icons.bolt_outlined,
+              label: 'Metas',
+              color: const Color(0xFFFFCC15),
+              onTap: onGoals,
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Future<void> Function() onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: label,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: 66,
+        child: Column(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _DashboardStat extends StatelessWidget {
+  const _DashboardStat({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppTheme.muted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _InsightCard extends StatelessWidget {
+  const _InsightCard({
+    required this.insight,
+    required this.loading,
+    required this.onGenerate,
+  });
+  final String? insight;
+  final bool loading;
+  final Future<void> Function() onGenerate;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: const Color(0xFF111C42),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.auto_awesome, color: Color(0xFFA5B4FC)),
+            SizedBox(width: 8),
+            Text(
+              'INSIGHT FINANCEIRO COM IA',
+              style: TextStyle(
+                color: Color(0xFFA5B4FC),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Text(
+          insight ??
+              'Gere uma análise com os dados financeiros autorizados deste período.',
+          style: const TextStyle(color: Colors.white, height: 1.4),
+        ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: loading ? null : onGenerate,
+          style: FilledButton.styleFrom(backgroundColor: AppTheme.blue),
+          icon: loading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.auto_awesome_outlined),
+          label: Text(loading ? 'Gerando insight...' : 'Gerar insight do mês'),
+        ),
+      ],
+    ),
+  );
+}
+
 class _Transactions extends StatelessWidget {
-  const _Transactions({required this.items, required this.onRefresh});
+  const _Transactions({
+    required this.items,
+    required this.accounts,
+    required this.onRefresh,
+    required this.onCancel,
+  });
   final List<TransactionSummary> items;
+  final List<AccountSummary> accounts;
   final Future<void> Function() onRefresh;
+  final Future<void> Function(TransactionSummary, AccountSummary) onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -833,7 +1100,20 @@ class _Transactions extends StatelessWidget {
                     : const Color(0xFFD92D20),
               ),
             ),
-            onTap: () => _showTransactionDetails(context, item),
+            onTap: () {
+              AccountSummary? account;
+              for (final candidate in accounts) {
+                if (candidate.id == item.accountId) {
+                  account = candidate;
+                  break;
+                }
+              }
+              _showTransactionDetails(
+                context,
+                item,
+                account == null ? null : () => onCancel(item, account!),
+              );
+            },
           );
         },
       ),
@@ -844,6 +1124,7 @@ class _Transactions extends StatelessWidget {
 Future<void> _showTransactionDetails(
   BuildContext context,
   TransactionSummary transaction,
+  Future<void> Function()? onCancel,
 ) => showModalBottomSheet<void>(
   context: context,
   builder: (context) {
@@ -871,6 +1152,38 @@ Future<void> _showTransactionDetails(
             ),
             _DetailRow(label: 'Data', value: _date(transaction.occurredAt)),
             _DetailRow(label: 'Status', value: transaction.status),
+            if (onCancel != null && transaction.status != 'Cancelled') ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (dialog) => AlertDialog(
+                      title: const Text('Cancelar lançamento?'),
+                      content: const Text(
+                        'O valor será estornado e o histórico será preservado.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialog, false),
+                          child: const Text('Voltar'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(dialog, true),
+                          child: const Text('Cancelar'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    Navigator.pop(context);
+                    await onCancel();
+                  }
+                },
+                icon: const Icon(Icons.cancel_outlined),
+                label: const Text('Cancelar lançamento'),
+              ),
+            ],
           ],
         ),
       ),
@@ -940,16 +1253,22 @@ class _Accounts extends StatelessWidget {
 }
 
 class _ExpenseReductionGoalsPage extends StatefulWidget {
-  const _ExpenseReductionGoalsPage({required this.goals, required this.onRefresh, required this.onCreate});
+  const _ExpenseReductionGoalsPage({
+    required this.goals,
+    required this.onRefresh,
+    required this.onCreate,
+  });
   final List<ExpenseReductionGoalSummary> goals;
   final Future<List<ExpenseReductionGoalSummary>> Function() onRefresh;
   final Future<void> Function(num reference, num target) onCreate;
 
   @override
-  State<_ExpenseReductionGoalsPage> createState() => _ExpenseReductionGoalsPageState();
+  State<_ExpenseReductionGoalsPage> createState() =>
+      _ExpenseReductionGoalsPageState();
 }
 
-class _ExpenseReductionGoalsPageState extends State<_ExpenseReductionGoalsPage> {
+class _ExpenseReductionGoalsPageState
+    extends State<_ExpenseReductionGoalsPage> {
   late List<ExpenseReductionGoalSummary> _goals = widget.goals;
 
   Future<void> _refresh() async {
@@ -964,22 +1283,53 @@ class _ExpenseReductionGoalsPageState extends State<_ExpenseReductionGoalsPage> 
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Meta de redução mensal'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: reference, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Gasto de referência (R\$)')),
-          TextField(controller: target, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Limite desejado (R\$)')),
-        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: reference,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Gasto de referência (R\$)',
+              ),
+            ),
+            TextField(
+              controller: target,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Limite desejado (R\$)',
+              ),
+            ),
+          ],
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          FilledButton(onPressed: () {
-            final from = num.tryParse(reference.text.replaceAll(',', '.'));
-            final to = num.tryParse(target.text.replaceAll(',', '.'));
-            if (from == null || to == null || from <= 0 || to < 0 || to >= from) return;
-            Navigator.pop(context, (from, to));
-          }, child: const Text('Criar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final from = num.tryParse(reference.text.replaceAll(',', '.'));
+              final to = num.tryParse(target.text.replaceAll(',', '.'));
+              if (from == null ||
+                  to == null ||
+                  from <= 0 ||
+                  to < 0 ||
+                  to >= from)
+                return;
+              Navigator.pop(context, (from, to));
+            },
+            child: const Text('Criar'),
+          ),
         ],
       ),
     );
-    reference.dispose(); target.dispose();
+    reference.dispose();
+    target.dispose();
     if (values == null) return;
     await widget.onCreate(values.$1, values.$2);
     await _refresh();
@@ -987,22 +1337,51 @@ class _ExpenseReductionGoalsPageState extends State<_ExpenseReductionGoalsPage> 
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Redução de despesas'), actions: [IconButton(onPressed: _refresh, tooltip: 'Atualizar', icon: const Icon(Icons.refresh))]),
-    floatingActionButton: FloatingActionButton(onPressed: _create, tooltip: 'Criar meta de redução', child: const Icon(Icons.add)),
-    body: _goals.isEmpty
-      ? const Center(child: Text('Nenhuma meta de redução criada.'))
-      : ListView.separated(
-          padding: const EdgeInsets.all(16), itemCount: _goals.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (_, index) {
-            final goal = _goals[index];
-            return Card(child: ListTile(
-              title: Text('Meta: R\$ ${goal.targetAmount.toStringAsFixed(2)}'),
-              subtitle: Text('Gasto atual: R\$ ${goal.actualExpense.toStringAsFixed(2)} de R\$ ${goal.referenceAmount.toStringAsFixed(2)}'),
-              trailing: SizedBox(width: 48, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text('${(goal.progress * 100).round()}%'), LinearProgressIndicator(value: goal.progress)])),
-            ));
-          },
+    appBar: AppBar(
+      title: const Text('Redução de despesas'),
+      actions: [
+        IconButton(
+          onPressed: _refresh,
+          tooltip: 'Atualizar',
+          icon: const Icon(Icons.refresh),
         ),
+      ],
+    ),
+    floatingActionButton: FloatingActionButton(
+      onPressed: _create,
+      tooltip: 'Criar meta de redução',
+      child: const Icon(Icons.add),
+    ),
+    body: _goals.isEmpty
+        ? const Center(child: Text('Nenhuma meta de redução criada.'))
+        : ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: _goals.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemBuilder: (_, index) {
+              final goal = _goals[index];
+              return Card(
+                child: ListTile(
+                  title: Text(
+                    'Meta: R\$ ${goal.targetAmount.toStringAsFixed(2)}',
+                  ),
+                  subtitle: Text(
+                    'Gasto atual: R\$ ${goal.actualExpense.toStringAsFixed(2)} de R\$ ${goal.referenceAmount.toStringAsFixed(2)}',
+                  ),
+                  trailing: SizedBox(
+                    width: 48,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('${(goal.progress * 100).round()}%'),
+                        LinearProgressIndicator(value: goal.progress),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
   );
 }
 
@@ -1063,7 +1442,9 @@ class _Menu extends StatelessWidget {
       ListTile(
         leading: const Icon(Icons.trending_down_outlined),
         title: const Text('Redução de despesas'),
-        subtitle: const Text('Compare seu gasto atual com uma meta de economia.'),
+        subtitle: const Text(
+          'Compare seu gasto atual com uma meta de economia.',
+        ),
         trailing: const Icon(Icons.chevron_right),
         onTap: onExpenseReductionGoals,
       ),

@@ -97,6 +97,26 @@ class AuthController extends ChangeNotifier {
     String? tenantId,
   }) => _postAuthenticated(path, payload, tenantId: tenantId);
 
+  Future<Object?> patchAuthenticated(
+    String path,
+    Object? payload, {
+    String? tenantId,
+  }) async => _api.patchData(
+    path,
+    payload,
+    headers: await authorizationHeaders(tenantId: tenantId),
+  );
+
+  Future<Object?> putAuthenticated(
+    String path,
+    Object? payload, {
+    String? tenantId,
+  }) async => _api.putData(
+    path,
+    payload,
+    headers: await authorizationHeaders(tenantId: tenantId),
+  );
+
   Future<Object?> _postAuthenticated(
     String path,
     Object? payload, {

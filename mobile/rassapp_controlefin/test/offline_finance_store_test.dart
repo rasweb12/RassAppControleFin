@@ -259,6 +259,7 @@ void main() {
           id: 'category-a',
           name: 'Salário',
           flow: 'Income',
+          version: 1,
           archived: false,
         ),
         amount: 50,
@@ -278,6 +279,37 @@ void main() {
       await database.close();
     },
   );
+
+  test('keeps a pending transaction when a remote page is empty', () async {
+    final database = OfflineDatabase(NativeDatabase.memory());
+    final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
+    const operationId = 'operation-1';
+    const localId = 'local-operation-1';
+    final transaction = <String, dynamic>{
+      'id': localId,
+      'amount': 42,
+      'currency': 'BRL',
+      'flow': 'Expense',
+      'status': 'Pending sync',
+      'occurredAt': DateTime.utc(2026, 10, 18).toIso8601String(),
+      'description': 'Mercado',
+    };
+
+    await store.cacheOne('tenant-a', 'transaction', transaction);
+    await store.enqueue(
+      tenantId: 'tenant-a',
+      endpoint: '/api/v1/transactions',
+      payload: {'operationId': operationId},
+      entityType: 'transaction',
+      entityId: localId,
+      operationType: 'create',
+    );
+
+    await store.cacheAll('tenant-a', 'transaction', const []);
+
+    expect(await store.cached('tenant-a', 'transaction'), [transaction]);
+    await database.close();
+  });
 }
 
 class _MemorySessionStore extends SessionStore {

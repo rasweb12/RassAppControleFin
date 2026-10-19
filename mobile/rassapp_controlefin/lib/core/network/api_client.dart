@@ -62,6 +62,30 @@ class ApiClient {
     ),
   );
 
+  Future<Object?> patchData(
+    String path,
+    Object? payload, {
+    Map<String, String> headers = const {},
+  }) => _send(
+    () => _client.patch(
+      AppConfig.apiBaseUri.resolve(path),
+      headers: _headers(headers),
+      body: jsonEncode(payload),
+    ),
+  );
+
+  Future<Object?> putData(
+    String path,
+    Object? payload, {
+    Map<String, String> headers = const {},
+  }) => _send(
+    () => _client.put(
+      AppConfig.apiBaseUri.resolve(path),
+      headers: _headers(headers),
+      body: jsonEncode(payload),
+    ),
+  );
+
   Future<Object?> get(
     String path, {
     Map<String, String> headers = const {},
