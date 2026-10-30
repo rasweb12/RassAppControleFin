@@ -367,12 +367,32 @@ class FinanceRepository {
   }
 
   Future<List<AccountSummary>> accounts(String tenantId) async {
-    return _loadPage(
-      tenantId: tenantId,
-      endpoint: '/api/v1/accounts',
-      entityType: 'account',
-      parser: AccountSummary.fromJson,
-    );
+    try {
+      final data = await _auth.getAuthenticated(
+        '/api/v1/accounts',
+        tenantId: tenantId,
+        queryParameters: const {'page': '1', 'pageSize': '50'},
+      );
+      final resources = ((data as Map<String, dynamic>)['items'] as List)
+          .cast<Map<String, dynamic>>();
+      final store = await _store;
+      final cached = await store.cached(tenantId, 'account');
+
+      // Accounts back financial history. Do not erase usable local accounts
+      // merely because a remote read unexpectedly comes back empty.
+      if (resources.isEmpty && cached.isNotEmpty) {
+        return cached.map(AccountSummary.fromJson).toList(growable: false);
+      }
+
+      await store.cacheAll(tenantId, 'account', resources);
+      return resources.map(AccountSummary.fromJson).toList(growable: false);
+    } on ApiException catch (error) {
+      if (!_canReadOffline(error)) rethrow;
+      return (await (await _store).cached(
+        tenantId,
+        'account',
+      )).map(AccountSummary.fromJson).toList(growable: false);
+    }
   }
 
   Future<List<TransactionSummary>> transactions(String tenantId) async {

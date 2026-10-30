@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
+import 'package:http/http.dart' as http;
 import 'package:rassapp_controlefin/core/network/api_client.dart';
 import 'package:rassapp_controlefin/core/storage/offline_database.dart';
 import 'package:rassapp_controlefin/core/storage/offline_finance_store.dart';
@@ -310,6 +312,50 @@ void main() {
     expect(await store.cached('tenant-a', 'transaction'), [transaction]);
     await database.close();
   });
+
+  test(
+    'keeps cached accounts when a remote page is unexpectedly empty',
+    () async {
+      final database = OfflineDatabase(NativeDatabase.memory());
+      final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
+      const account = <String, dynamic>{
+        'id': 'account-a',
+        'name': 'Conta local',
+        'currency': 'BRL',
+        'balance': 125,
+        'version': 1,
+        'isArchived': false,
+      };
+      await store.cacheOne('tenant-a', 'account', account);
+
+      final controller = AuthController(
+        ApiClient(
+          client: MockClient(
+            (_) async => http.Response(
+              jsonEncode({
+                'success': true,
+                'data': {'items': []},
+              }),
+              200,
+            ),
+          ),
+        ),
+        _MemorySessionStore(_session()),
+      );
+      await controller.restore();
+      final repository = FinanceRepository(
+        controller,
+        store: Future.value(store),
+      );
+
+      final accounts = await repository.accounts('tenant-a');
+
+      expect(accounts, hasLength(1));
+      expect(accounts.single.name, 'Conta local');
+      expect(await store.cached('tenant-a', 'account'), [account]);
+      await database.close();
+    },
+  );
 }
 
 class _MemorySessionStore extends SessionStore {
