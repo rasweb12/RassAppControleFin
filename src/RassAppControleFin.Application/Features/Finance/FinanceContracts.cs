@@ -53,6 +53,15 @@ public sealed record ExpenseReductionGoalView(Guid Id, Guid? CategoryId, decimal
     decimal ActualExpense, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
 public sealed record FinancialNotificationView(Guid Id, string Type, string Title, string Message, DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt, long Version);
+public sealed record PayYourselfFirstPlanView(Guid Id, decimal CurrentRate, decimal? GoalRate, DateOnly EffectiveFrom, long Version);
+public sealed record EmergencyFundPlanView(Guid Id, string TargetType, decimal? TargetMultiple, decimal TargetAmount,
+    decimal CurrentAmount, decimal MonthlyContributionTarget, string Currency, bool LiquidityRequired, string? Notes, long Version);
+public sealed record InvestmentAssetView(Guid Id, string Name, string? Ticker, string AssetClass, string AssetSubClass,
+    Guid? AccountId, string? Issuer, string Indexer, decimal? Rate, DateOnly? MaturityDate, string LiquidityType,
+    bool FgcProtected, bool TaxExempt, bool Active, string? Notes, DateTimeOffset UpdatedAt, long Version);
+public sealed record InvestmentTransactionView(Guid Id, Guid InvestmentAssetId, DateOnly Date, string Type, decimal? Quantity,
+    decimal? UnitPrice, decimal GrossAmount, decimal Fees, decimal Taxes, decimal NetAmount, string Currency, string? Notes, long Version);
+public sealed record TargetPortfolioAllocationView(Guid Id, Guid? InvestmentAssetId, string Key, string AssetClass, decimal Weight, long Version);
 public sealed record DashboardMetric(string Currency, decimal NetWorth, decimal Income, decimal Expense,
     decimal SavingsRate, decimal BudgetUsed, int ActiveGoals);
 public sealed record DashboardView(DateTimeOffset From, DateTimeOffset To, IReadOnlyList<DashboardMetric> Metrics);
@@ -87,8 +96,36 @@ public sealed record ArchiveExpenseReductionGoalCommand(Guid OperationId, Guid I
 { public string Permission => Permissions.TransactionsWrite; }
 public sealed record MarkNotificationReadCommand(Guid OperationId, Guid Id, long Version) : IFinanceMutation
 { public string Permission => Permissions.TransactionsRead; }
+public sealed record ConfigurePayYourselfFirstPlanCommand(Guid OperationId, long? Version, decimal CurrentRate,
+    decimal? GoalRate, DateOnly EffectiveFrom) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsWrite; }
+public sealed record ConfigureEmergencyFundPlanCommand(Guid OperationId, long? Version, string TargetType,
+    decimal? TargetMultiple, decimal TargetAmount, decimal CurrentAmount, decimal MonthlyContributionTarget,
+    string Currency, bool LiquidityRequired, string? Notes) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsWrite; }
+public sealed record CreateInvestmentAssetCommand(Guid OperationId, string Name, string? Ticker, string AssetClass,
+    string AssetSubClass, Guid? AccountId, string? Issuer, string Indexer, decimal? Rate, DateOnly? MaturityDate,
+    string LiquidityType, bool FgcProtected, bool TaxExempt, string? Notes) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsWrite; }
+public sealed record UpdateInvestmentAssetCommand(Guid OperationId, Guid Id, long Version, string Name, string? Ticker,
+    string AssetClass, string AssetSubClass, Guid? AccountId, string? Issuer, string Indexer, decimal? Rate,
+    DateOnly? MaturityDate, string LiquidityType, bool FgcProtected, bool TaxExempt, string? Notes, bool Active) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsWrite; }
+public sealed record RecordInvestmentTransactionCommand(Guid OperationId, Guid InvestmentAssetId, DateOnly Date,
+    string Type, decimal? Quantity, decimal? UnitPrice, decimal GrossAmount, decimal Fees, decimal Taxes,
+    string Currency, string? Notes) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsWrite; }
+public sealed record TargetPortfolioAllocationInput(Guid? Id, long? Version, Guid? InvestmentAssetId, string Key,
+    string AssetClass, decimal Weight);
+public sealed record SetTargetPortfolioCommand(Guid OperationId, IReadOnlyList<TargetPortfolioAllocationInput> Allocations) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsWrite; }
 public sealed record ListBudgetsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<BudgetView>>>, IPageQuery;
 public sealed record ListGoalsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<GoalView>>>, IPageQuery;
 public sealed record ListExpenseReductionGoalsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<ExpenseReductionGoalView>>>, IPageQuery;
 public sealed record ListNotificationsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<FinancialNotificationView>>>, IPageQuery;
+public sealed record GetPayYourselfFirstPlanQuery : IRequest<Result<PayYourselfFirstPlanView?>>;
+public sealed record GetEmergencyFundPlanQuery : IRequest<Result<EmergencyFundPlanView?>>;
+public sealed record ListInvestmentAssetsQuery(bool IncludeInactive = false, int Page = 1, int PageSize = 50) : IRequest<Result<Page<InvestmentAssetView>>>, IPageQuery;
+public sealed record ListInvestmentTransactionsQuery(Guid? InvestmentAssetId = null, int Page = 1, int PageSize = 50) : IRequest<Result<Page<InvestmentTransactionView>>>, IPageQuery;
+public sealed record ListTargetPortfolioQuery : IRequest<Result<IReadOnlyList<TargetPortfolioAllocationView>>>;
 public sealed record DashboardQuery(DateTimeOffset From, DateTimeOffset To) : IRequest<Result<DashboardView>>;

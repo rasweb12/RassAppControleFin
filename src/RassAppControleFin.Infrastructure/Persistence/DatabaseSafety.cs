@@ -6,7 +6,7 @@ internal static class DatabaseSafety
 {
     // The API maps the account classification fields introduced by this migration.
     // Accepting an older schema postpones the failure until a financial query runs.
-    internal const string ExpectedMigration = "AccountClassification";
+    internal const string ExpectedMigration = "InvestmentPlanningCore";
 
     internal static async Task<bool> VerifyAsync(AppDbContext db, string runtimeRole,
         CancellationToken cancellationToken)
@@ -36,10 +36,12 @@ internal static class DatabaseSafety
                 AND (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
                     WHERE n.nspname='app' AND c.relname IN ('TenantMemberships','UserSessions','AuditEntries',
                       'Accounts','Categories','CreditCards','Transactions','Transfers','LedgerEntries',
-                      'CardMovements','SyncOperations','FinancialOutbox','Budgets','Goals','ExpenseReductionGoals','FinancialNotifications')
+                      'CardMovements','SyncOperations','FinancialOutbox','Budgets','Goals','ExpenseReductionGoals','FinancialNotifications',
+                      'PayYourselfFirstPlans','PayYourselfFirstPlanRevisions','EmergencyFundPlans','InvestmentAssets',
+                      'InvestmentTransactions','TargetPortfolioAllocations')
                     AND c.relrowsecurity AND c.relforcerowsecurity
                     AND NOT pg_has_role(current_user,c.relowner,'MEMBER')
-                    AND NOT has_table_privilege(current_user,c.oid,'TRUNCATE'))=16
+                    AND NOT has_table_privilege(current_user,c.oid,'TRUNCATE'))=22
             ) AS "Value"
             """).SingleAsync(cancellationToken);
     }
@@ -62,14 +64,16 @@ internal static class DatabaseSafety
             return "database.migration_pending";
 
         var requiredTablesPresent = await db.Database.SqlQuery<bool>($"""
-            SELECT count(*) = 18 AS "Value"
+            SELECT count(*) = 24 AS "Value"
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'app'
               AND c.relname IN (
                   'TenantMemberships', 'UserSessions', 'AuditEntries', 'Accounts', 'Categories',
                   'CreditCards', 'Transactions', 'Transfers', 'LedgerEntries', 'CardMovements',
-                  'SyncOperations', 'FinancialOutbox', 'Budgets', 'Goals', 'ExpenseReductionGoals', 'FinancialNotifications', 'Tenants', 'UserProfiles')
+                  'SyncOperations', 'FinancialOutbox', 'Budgets', 'Goals', 'ExpenseReductionGoals', 'FinancialNotifications',
+                  'PayYourselfFirstPlans', 'PayYourselfFirstPlanRevisions', 'EmergencyFundPlans', 'InvestmentAssets',
+                  'InvestmentTransactions', 'TargetPortfolioAllocations', 'Tenants', 'UserProfiles')
               AND c.relkind IN ('r', 'p')
             """).SingleAsync(cancellationToken);
 

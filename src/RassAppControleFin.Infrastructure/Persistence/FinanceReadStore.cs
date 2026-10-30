@@ -82,6 +82,39 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
         db.FinancialNotifications.AsNoTracking().OrderBy(x => x.ReadAt != null).ThenByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
             .Select(x => new FinancialNotificationView(x.Id, x.Type, x.Title, x.Message, x.CreatedAt, x.ReadAt, x.Version)),
         q.Page, q.PageSize, ct), ct);
+    public Task<Result<PayYourselfFirstPlanView?>> PayYourselfFirstPlanAsync(CancellationToken ct) => Read(async () =>
+    {
+        var plan = await db.PayYourselfFirstPlans.AsNoTracking().SingleOrDefaultAsync(ct);
+        return plan is null ? null : new PayYourselfFirstPlanView(plan.Id, plan.CurrentRate, plan.GoalRate, plan.EffectiveFrom, plan.Version);
+    }, ct);
+    public Task<Result<EmergencyFundPlanView?>> EmergencyFundPlanAsync(CancellationToken ct) => Read(async () =>
+    {
+        var plan = await db.EmergencyFundPlans.AsNoTracking().SingleOrDefaultAsync(ct);
+        return plan is null ? null : new EmergencyFundPlanView(plan.Id, plan.TargetType.ToString(), plan.TargetMultiple,
+            plan.TargetAmount, plan.CurrentAmount, plan.MonthlyContributionTarget, plan.Currency, plan.LiquidityRequired,
+            plan.Notes, plan.Version);
+    }, ct);
+    public Task<Result<Page<InvestmentAssetView>>> InvestmentAssetsAsync(ListInvestmentAssetsQuery q, CancellationToken ct) => Read(() =>
+    {
+        var assets = db.InvestmentAssets.AsNoTracking();
+        if (!q.IncludeInactive) assets = assets.Where(x => x.Active);
+        return PageAsync(assets.OrderBy(x => x.Name).ThenBy(x => x.Id).Select(x => new InvestmentAssetView(x.Id, x.Name,
+            x.Ticker, x.AssetClass.ToString(), x.AssetSubClass, x.AccountId, x.Issuer, x.Indexer.ToString(), x.Rate,
+            x.MaturityDate, x.LiquidityType.ToString(), x.FgcProtected, x.TaxExempt, x.Active, x.Notes, x.UpdatedAt, x.Version)),
+            q.Page, q.PageSize, ct);
+    }, ct);
+    public Task<Result<Page<InvestmentTransactionView>>> InvestmentTransactionsAsync(ListInvestmentTransactionsQuery q, CancellationToken ct) => Read(() =>
+    {
+        var movements = db.InvestmentTransactions.AsNoTracking();
+        if (q.InvestmentAssetId is { } assetId) movements = movements.Where(x => x.InvestmentAssetId == assetId);
+        return PageAsync(movements.OrderByDescending(x => x.Date).ThenBy(x => x.Id).Select(x => new InvestmentTransactionView(
+            x.Id, x.InvestmentAssetId, x.Date, x.Type.ToString(), x.Quantity, x.UnitPrice, x.GrossAmount, x.Fees,
+            x.Taxes, x.NetAmount, x.Currency, x.Notes, x.Version)), q.Page, q.PageSize, ct);
+    }, ct);
+    public Task<Result<IReadOnlyList<TargetPortfolioAllocationView>>> TargetPortfolioAsync(CancellationToken ct) => Read(async () =>
+        (IReadOnlyList<TargetPortfolioAllocationView>)await db.TargetPortfolioAllocations.AsNoTracking().OrderBy(x => x.Key).ThenBy(x => x.Id)
+            .Select(x => new TargetPortfolioAllocationView(x.Id, x.InvestmentAssetId, x.Key, x.AssetClass.ToString(), x.Weight, x.Version))
+            .ToListAsync(ct), ct);
     public Task<Result<DashboardView>> DashboardAsync(DashboardQuery q, CancellationToken ct) => Read(async () =>
     {
         var balances = await db.Accounts.AsNoTracking().Where(x => x.IncludeInNetWorth).GroupBy(x => x.Currency)

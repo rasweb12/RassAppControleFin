@@ -18,6 +18,10 @@ public interface IFinanceUnit : IAsyncDisposable
     Task<Goal?> GoalAsync(Guid id, CancellationToken ct);
     Task<ExpenseReductionGoal?> ExpenseReductionGoalAsync(Guid id, CancellationToken ct);
     Task<FinancialNotification?> NotificationAsync(Guid id, CancellationToken ct);
+    Task<PayYourselfFirstPlan?> PayYourselfFirstPlanAsync(CancellationToken ct);
+    Task<EmergencyFundPlan?> EmergencyFundPlanAsync(CancellationToken ct);
+    Task<InvestmentAsset?> InvestmentAssetAsync(Guid id, CancellationToken ct);
+    Task<IReadOnlyList<TargetPortfolioAllocation>> TargetPortfolioAllocationsAsync(CancellationToken ct);
     Task<IReadOnlyList<BudgetAlert>> BudgetAlertsAsync(Guid categoryId, string currency, DateTimeOffset occurredAt,
         decimal pendingExpense, CancellationToken ct);
     Task<bool> NotificationExistsAsync(string type, CancellationToken ct);
@@ -39,6 +43,11 @@ public interface IFinanceReadStore
     Task<Result<Page<GoalView>>> GoalsAsync(ListGoalsQuery query, CancellationToken ct);
     Task<Result<Page<ExpenseReductionGoalView>>> ExpenseReductionGoalsAsync(ListExpenseReductionGoalsQuery query, CancellationToken ct);
     Task<Result<Page<FinancialNotificationView>>> NotificationsAsync(ListNotificationsQuery query, CancellationToken ct);
+    Task<Result<PayYourselfFirstPlanView?>> PayYourselfFirstPlanAsync(CancellationToken ct);
+    Task<Result<EmergencyFundPlanView?>> EmergencyFundPlanAsync(CancellationToken ct);
+    Task<Result<Page<InvestmentAssetView>>> InvestmentAssetsAsync(ListInvestmentAssetsQuery query, CancellationToken ct);
+    Task<Result<Page<InvestmentTransactionView>>> InvestmentTransactionsAsync(ListInvestmentTransactionsQuery query, CancellationToken ct);
+    Task<Result<IReadOnlyList<TargetPortfolioAllocationView>>> TargetPortfolioAsync(CancellationToken ct);
     Task<Result<DashboardView>> DashboardAsync(DashboardQuery query, CancellationToken ct);
 }
 

@@ -70,6 +70,41 @@ public static class FinanceEndpoints
         finance.MapGet("/transfers", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => Query(s, new ListTransfersQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
 
+        finance.MapPost("/investments/pay-yourself-first", (ConfigurePayYourselfFirstPlanRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new ConfigurePayYourselfFirstPlanCommand(r.OperationId, r.Version, r.CurrentRate, r.GoalRate, r.EffectiveFrom), h, ct))
+            .RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapGet("/investments/pay-yourself-first", (ISender s, HttpContext h, CancellationToken ct)
+            => PayYourselfFirst(s, h, ct)).RequireAuthorization(Permissions.TransactionsRead);
+        finance.MapPost("/investments/emergency-fund", (ConfigureEmergencyFundPlanRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new ConfigureEmergencyFundPlanCommand(r.OperationId, r.Version, r.TargetType, r.TargetMultiple,
+                r.TargetAmount, r.CurrentAmount, r.MonthlyContributionTarget, r.Currency, r.LiquidityRequired, r.Notes), h, ct))
+            .RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapGet("/investments/emergency-fund", (ISender s, HttpContext h, CancellationToken ct)
+            => EmergencyFund(s, h, ct)).RequireAuthorization(Permissions.TransactionsRead);
+        finance.MapPost("/investment-assets", (CreateInvestmentAssetRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new CreateInvestmentAssetCommand(r.OperationId, r.Name, r.Ticker, r.AssetClass, r.AssetSubClass,
+                r.AccountId, r.Issuer, r.Indexer, r.Rate, r.MaturityDate, r.LiquidityType, r.FgcProtected, r.TaxExempt, r.Notes), h, ct))
+            .RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapPut("/investment-assets/{id:guid}", (Guid id, UpdateInvestmentAssetRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new UpdateInvestmentAssetCommand(r.OperationId, id, r.Version, r.Name, r.Ticker, r.AssetClass,
+                r.AssetSubClass, r.AccountId, r.Issuer, r.Indexer, r.Rate, r.MaturityDate, r.LiquidityType, r.FgcProtected,
+                r.TaxExempt, r.Notes, r.Active), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapGet("/investment-assets", (bool includeInactive, int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
+            => InvestmentAssets(s, new ListInvestmentAssetsQuery(includeInactive, page, pageSize), h, ct))
+            .RequireAuthorization(Permissions.TransactionsRead);
+        finance.MapPost("/investment-transactions", (RecordInvestmentTransactionRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new RecordInvestmentTransactionCommand(r.OperationId, r.InvestmentAssetId, r.Date, r.Type, r.Quantity,
+                r.UnitPrice, r.GrossAmount, r.Fees, r.Taxes, r.Currency, r.Notes), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapGet("/investment-transactions", (Guid? investmentAssetId, int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
+            => InvestmentTransactions(s, new ListInvestmentTransactionsQuery(investmentAssetId, page, pageSize), h, ct))
+            .RequireAuthorization(Permissions.TransactionsRead);
+        finance.MapPut("/investments/target-portfolio", (SetTargetPortfolioRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new SetTargetPortfolioCommand(r.OperationId, r.Allocations.Select(x => new TargetPortfolioAllocationInput(
+                x.Id, x.Version, x.InvestmentAssetId, x.Key, x.AssetClass, x.Weight)).ToArray()), h, ct))
+            .RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapGet("/investments/target-portfolio", (ISender s, HttpContext h, CancellationToken ct)
+            => TargetPortfolio(s, h, ct)).RequireAuthorization(Permissions.TransactionsRead);
+
         finance.MapGet("/dashboard", (DateTimeOffset from, DateTimeOffset to, ISender s, HttpContext h, CancellationToken ct)
             => Dashboard(s, new DashboardQuery(from, to), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
         finance.MapPost("/budgets", (CreateBudgetRequest r, ISender s, HttpContext h, CancellationToken ct)
@@ -119,6 +154,44 @@ public static class FinanceEndpoints
             result.Value.Metrics.Select(x => new DashboardMetricDto(x.Currency, x.NetWorth, x.Income, x.Expense,
                 x.SavingsRate, x.BudgetUsed, x.ActiveGoals)).ToArray()))
             : Result<DashboardDto>.Failure(result.Error!)).ToHttp(context);
+    }
+    private static async Task<IResult> PayYourselfFirst(ISender sender, HttpContext context, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetPayYourselfFirstPlanQuery(), ct);
+        return (result.IsSuccess ? Result<PayYourselfFirstPlanDto?>.Success(result.Value is null ? null : new(
+            result.Value.Id, result.Value.CurrentRate, result.Value.GoalRate, result.Value.EffectiveFrom, result.Value.Version))
+            : Result<PayYourselfFirstPlanDto?>.Failure(result.Error!)).ToHttp(context);
+    }
+    private static async Task<IResult> EmergencyFund(ISender sender, HttpContext context, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetEmergencyFundPlanQuery(), ct);
+        return (result.IsSuccess ? Result<EmergencyFundPlanDto?>.Success(result.Value is null ? null : new(result.Value.Id,
+            result.Value.TargetType, result.Value.TargetMultiple, result.Value.TargetAmount, result.Value.CurrentAmount,
+            result.Value.MonthlyContributionTarget, result.Value.Currency, result.Value.LiquidityRequired, result.Value.Notes,
+            result.Value.Version)) : Result<EmergencyFundPlanDto?>.Failure(result.Error!)).ToHttp(context);
+    }
+    private static async Task<IResult> InvestmentAssets(ISender sender, ListInvestmentAssetsQuery query, HttpContext context, CancellationToken ct)
+    {
+        var result = await sender.Send(query, ct);
+        return (result.IsSuccess ? Result<PageDto<InvestmentAssetDto>>.Success(new(result.Value.Items.Select(x => new InvestmentAssetDto(
+            x.Id, x.Name, x.Ticker, x.AssetClass, x.AssetSubClass, x.AccountId, x.Issuer, x.Indexer, x.Rate, x.MaturityDate,
+            x.LiquidityType, x.FgcProtected, x.TaxExempt, x.Active, x.Notes, x.UpdatedAt, x.Version)).ToArray(), result.Value.Total,
+            result.Value.PageNumber, result.Value.PageSize)) : Result<PageDto<InvestmentAssetDto>>.Failure(result.Error!)).ToHttp(context);
+    }
+    private static async Task<IResult> InvestmentTransactions(ISender sender, ListInvestmentTransactionsQuery query, HttpContext context, CancellationToken ct)
+    {
+        var result = await sender.Send(query, ct);
+        return (result.IsSuccess ? Result<PageDto<InvestmentTransactionDto>>.Success(new(result.Value.Items.Select(x => new InvestmentTransactionDto(
+            x.Id, x.InvestmentAssetId, x.Date, x.Type, x.Quantity, x.UnitPrice, x.GrossAmount, x.Fees, x.Taxes, x.NetAmount,
+            x.Currency, x.Notes, x.Version)).ToArray(), result.Value.Total, result.Value.PageNumber, result.Value.PageSize))
+            : Result<PageDto<InvestmentTransactionDto>>.Failure(result.Error!)).ToHttp(context);
+    }
+    private static async Task<IResult> TargetPortfolio(ISender sender, HttpContext context, CancellationToken ct)
+    {
+        var result = await sender.Send(new ListTargetPortfolioQuery(), ct);
+        return (result.IsSuccess ? Result<IReadOnlyList<TargetPortfolioAllocationDto>>.Success(result.Value.Select(x => new TargetPortfolioAllocationDto(
+            x.Id, x.InvestmentAssetId, x.Key, x.AssetClass, x.Weight, x.Version)).ToArray())
+            : Result<IReadOnlyList<TargetPortfolioAllocationDto>>.Failure(result.Error!)).ToHttp(context);
     }
     private static async Task<IResult> Budgets(ISender sender, ListBudgetsQuery query, HttpContext context, CancellationToken ct)
     {

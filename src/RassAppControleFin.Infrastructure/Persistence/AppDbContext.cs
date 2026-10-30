@@ -20,6 +20,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Goal> Goals => Set<Goal>();
     public DbSet<ExpenseReductionGoal> ExpenseReductionGoals => Set<ExpenseReductionGoal>();
     public DbSet<FinancialNotification> FinancialNotifications => Set<FinancialNotification>();
+    public DbSet<PayYourselfFirstPlan> PayYourselfFirstPlans => Set<PayYourselfFirstPlan>();
+    public DbSet<PayYourselfFirstPlanRevision> PayYourselfFirstPlanRevisions => Set<PayYourselfFirstPlanRevision>();
+    public DbSet<EmergencyFundPlan> EmergencyFundPlans => Set<EmergencyFundPlan>();
+    public DbSet<InvestmentAsset> InvestmentAssets => Set<InvestmentAsset>();
+    public DbSet<InvestmentTransaction> InvestmentTransactions => Set<InvestmentTransaction>();
+    public DbSet<TargetPortfolioAllocation> TargetPortfolioAllocations => Set<TargetPortfolioAllocation>();
 
     internal void Authorize(Guid tenantId, string userId)
     {
@@ -51,6 +57,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         Scope<Goal>(modelBuilder);
         Scope<ExpenseReductionGoal>(modelBuilder);
         Scope<FinancialNotification>(modelBuilder);
+        Scope<PayYourselfFirstPlan>(modelBuilder);
+        Scope<PayYourselfFirstPlanRevision>(modelBuilder);
+        Scope<EmergencyFundPlan>(modelBuilder);
+        Scope<InvestmentAsset>(modelBuilder);
+        Scope<InvestmentTransaction>(modelBuilder);
+        Scope<TargetPortfolioAllocation>(modelBuilder);
         Scope<LedgerEntry>(modelBuilder);
         Scope<CardMovementRow>(modelBuilder);
         Scope<SyncOperationReceipt>(modelBuilder);

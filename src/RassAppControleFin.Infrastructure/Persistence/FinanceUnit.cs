@@ -71,6 +71,14 @@ internal sealed class FinanceUnit(AppDbContext db, ITenantTransaction transactio
         => db.ExpenseReductionGoals.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<FinancialNotification?> NotificationAsync(Guid id, CancellationToken ct)
         => db.FinancialNotifications.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    public Task<PayYourselfFirstPlan?> PayYourselfFirstPlanAsync(CancellationToken ct)
+        => db.PayYourselfFirstPlans.AsTracking().SingleOrDefaultAsync(ct);
+    public Task<EmergencyFundPlan?> EmergencyFundPlanAsync(CancellationToken ct)
+        => db.EmergencyFundPlans.AsTracking().SingleOrDefaultAsync(ct);
+    public Task<InvestmentAsset?> InvestmentAssetAsync(Guid id, CancellationToken ct)
+        => db.InvestmentAssets.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    public async Task<IReadOnlyList<TargetPortfolioAllocation>> TargetPortfolioAllocationsAsync(CancellationToken ct)
+        => await db.TargetPortfolioAllocations.AsTracking().OrderBy(x => x.Key).ToListAsync(ct);
     public async Task<IReadOnlyList<BudgetAlert>> BudgetAlertsAsync(Guid categoryId, string currency,
         DateTimeOffset occurredAt, decimal pendingExpense, CancellationToken ct)
     {

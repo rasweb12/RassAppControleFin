@@ -28,6 +28,12 @@ class FinanceSyncService {
     'ArchiveGoalCommand',
     'CreateExpenseReductionGoalCommand',
     'ArchiveExpenseReductionGoalCommand',
+    'ConfigurePayYourselfFirstPlanCommand',
+    'ConfigureEmergencyFundPlanCommand',
+    'CreateInvestmentAssetCommand',
+    'UpdateInvestmentAssetCommand',
+    'RecordInvestmentTransactionCommand',
+    'SetTargetPortfolioCommand',
   };
 
   Future<FinanceSyncResult> synchronize(String tenantId) async {
@@ -183,6 +189,11 @@ class FinanceSyncService {
       '/api/v1/expense-reduction-goals',
       tenantId,
     );
+    final investmentAssets = await _loadPaged('/api/v1/investment-assets', tenantId);
+    final investmentTransactions = await _loadPaged(
+      '/api/v1/investment-transactions',
+      tenantId,
+    );
     final movements = <Map<String, dynamic>>[];
     for (final card in cards) {
       final cardId = _requiredText(card['id']);
@@ -200,9 +211,48 @@ class FinanceSyncService {
       'budget': budgets,
       'goal': goals,
       'expenseReductionGoal': expenseReductionGoals,
+      'payYourselfFirstPlan': await _loadOptionalOne(
+        '/api/v1/investments/pay-yourself-first',
+        tenantId,
+      ),
+      'emergencyFundPlan': await _loadOptionalOne(
+        '/api/v1/investments/emergency-fund',
+        tenantId,
+      ),
+      'investmentAsset': investmentAssets,
+      'investmentTransaction': investmentTransactions,
+      'targetPortfolioAllocation': await _loadList(
+        '/api/v1/investments/target-portfolio',
+        tenantId,
+      ),
       'cardMovement': movements,
       'dashboard': await _loadDashboard(tenantId),
     };
+  }
+
+  Future<List<Map<String, dynamic>>> _loadOptionalOne(
+    String path,
+    String tenantId,
+  ) async {
+    final data = await _auth.getAuthenticated(path, tenantId: tenantId);
+    if (data == null) return const [];
+    return [_asMap(data, 'Recurso de investimento invalido.')];
+  }
+
+  Future<List<Map<String, dynamic>>> _loadList(
+    String path,
+    String tenantId,
+  ) async {
+    final data = await _auth.getAuthenticated(path, tenantId: tenantId);
+    if (data is! List) {
+      throw const ApiException(
+        ApiFailure.unexpected,
+        'Lista de investimentos invalida.',
+      );
+    }
+    return data
+        .map((item) => _asMap(item, 'Item de investimento invalido.'))
+        .toList(growable: false);
   }
 
   Future<List<Map<String, dynamic>>> _loadPaged(

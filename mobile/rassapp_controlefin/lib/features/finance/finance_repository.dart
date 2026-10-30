@@ -280,15 +280,17 @@ class TransactionSummary {
   factory TransactionSummary.fromJson(Map<String, dynamic> json) =>
       TransactionSummary(
         id: json['id'] as String,
-        accountId: json['accountId'] as String,
-        categoryId: json['categoryId'] as String,
+        // Older pending records did not retain these values. They can still be
+        // listed safely while the next sync reconciles the full server view.
+        accountId: json['accountId'] as String? ?? '',
+        categoryId: json['categoryId'] as String? ?? '',
         amount: json['amount'] as num,
         currency: json['currency'] as String,
         flow: json['flow'] as String,
         status: json['status'] as String,
         occurredAt: DateTime.parse(json['occurredAt'] as String).toLocal(),
         description: json['description'] as String,
-        version: json['version'] as int,
+        version: (json['version'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -377,6 +379,15 @@ class FinanceRepository {
     try {
       final maps = await _loadAllTransactionPages(tenantId);
       final store = await _store;
+      final cached = await store.cached(tenantId, 'transaction');
+
+      // Transactions are append-only financial history. A successful empty
+      // response cannot safely replace a nonempty local ledger; it may be a
+      // stale tenant context or a transient server-side read regression.
+      if (maps.isEmpty && cached.isNotEmpty) {
+        return cached.map(TransactionSummary.fromJson).toList(growable: false);
+      }
+
       await store.cacheAll(tenantId, 'transaction', maps);
       return (await store.cached(
         tenantId,
@@ -712,12 +723,15 @@ class FinanceRepository {
       },
       localResource: {
         'id': 'local-$operationId',
+        'accountId': account.id,
+        'categoryId': category.id,
         'amount': amount,
         'currency': account.currency,
         'flow': category.flow,
-        'status': 'Pending sync',
+        'status': 'Posted',
         'occurredAt': occurredAt,
         'description': description,
+        'version': 0,
       },
     );
     if (result == FinanceWriteState.pending) {
@@ -888,7 +902,22 @@ class FinanceRepository {
     Map<String, dynamic>? localResource,
   }) async {
     try {
-      await _auth.postAuthenticated(endpoint, payload, tenantId: tenantId);
+      final response = await _auth.postAuthenticated(
+        endpoint,
+        payload,
+        tenantId: tenantId,
+      );
+      if (localResource != null && response is Map) {
+        final resourceId = response['resourceId'];
+        if (resourceId is String && resourceId.isNotEmpty) {
+          final version = response['version'];
+          await (await _store).cacheOne(tenantId, entityType, {
+            ...localResource,
+            'id': resourceId,
+            'version': version is num ? version.toInt() : 0,
+          });
+        }
+      }
       return FinanceWriteState.applied;
     } on ApiException catch (error) {
       if (!_canQueueOffline(error)) rethrow;

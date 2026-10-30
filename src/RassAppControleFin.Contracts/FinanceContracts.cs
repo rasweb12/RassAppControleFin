@@ -48,6 +48,32 @@ public sealed record ExpenseReductionGoalDto(Guid Id, Guid? CategoryId, decimal 
     decimal ActualExpense, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
 public sealed record FinancialNotificationDto(Guid Id, string Type, string Title, string Message, DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt, long Version);
+public sealed record ConfigurePayYourselfFirstPlanRequest(Guid OperationId, long? Version, decimal CurrentRate,
+    decimal? GoalRate, DateOnly EffectiveFrom);
+public sealed record ConfigureEmergencyFundPlanRequest(Guid OperationId, long? Version, string TargetType,
+    decimal? TargetMultiple, decimal TargetAmount, decimal CurrentAmount, decimal MonthlyContributionTarget,
+    string Currency, bool LiquidityRequired, string? Notes);
+public sealed record CreateInvestmentAssetRequest(Guid OperationId, string Name, string? Ticker, string AssetClass,
+    string AssetSubClass, Guid? AccountId, string? Issuer, string Indexer, decimal? Rate, DateOnly? MaturityDate,
+    string LiquidityType, bool FgcProtected, bool TaxExempt, string? Notes);
+public sealed record UpdateInvestmentAssetRequest(Guid OperationId, long Version, string Name, string? Ticker,
+    string AssetClass, string AssetSubClass, Guid? AccountId, string? Issuer, string Indexer, decimal? Rate,
+    DateOnly? MaturityDate, string LiquidityType, bool FgcProtected, bool TaxExempt, string? Notes, bool Active);
+public sealed record RecordInvestmentTransactionRequest(Guid OperationId, Guid InvestmentAssetId, DateOnly Date,
+    string Type, decimal? Quantity, decimal? UnitPrice, decimal GrossAmount, decimal Fees, decimal Taxes,
+    string Currency, string? Notes);
+public sealed record TargetPortfolioAllocationRequest(Guid? Id, long? Version, Guid? InvestmentAssetId, string Key,
+    string AssetClass, decimal Weight);
+public sealed record SetTargetPortfolioRequest(Guid OperationId, IReadOnlyList<TargetPortfolioAllocationRequest> Allocations);
+public sealed record PayYourselfFirstPlanDto(Guid Id, decimal CurrentRate, decimal? GoalRate, DateOnly EffectiveFrom, long Version);
+public sealed record EmergencyFundPlanDto(Guid Id, string TargetType, decimal? TargetMultiple, decimal TargetAmount,
+    decimal CurrentAmount, decimal MonthlyContributionTarget, string Currency, bool LiquidityRequired, string? Notes, long Version);
+public sealed record InvestmentAssetDto(Guid Id, string Name, string? Ticker, string AssetClass, string AssetSubClass,
+    Guid? AccountId, string? Issuer, string Indexer, decimal? Rate, DateOnly? MaturityDate, string LiquidityType,
+    bool FgcProtected, bool TaxExempt, bool Active, string? Notes, DateTimeOffset UpdatedAt, long Version);
+public sealed record InvestmentTransactionDto(Guid Id, Guid InvestmentAssetId, DateOnly Date, string Type, decimal? Quantity,
+    decimal? UnitPrice, decimal GrossAmount, decimal Fees, decimal Taxes, decimal NetAmount, string Currency, string? Notes, long Version);
+public sealed record TargetPortfolioAllocationDto(Guid Id, Guid? InvestmentAssetId, string Key, string AssetClass, decimal Weight, long Version);
 public sealed record DashboardMetricDto(string Currency, decimal NetWorth, decimal Income, decimal Expense,
     decimal SavingsRate, decimal BudgetUsed, int ActiveGoals);
 public sealed record DashboardDto(DateTimeOffset From, DateTimeOffset To, IReadOnlyList<DashboardMetricDto> Metrics);

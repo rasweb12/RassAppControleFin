@@ -273,6 +273,75 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.EmergencyFundPlan", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<decimal>("CurrentAmount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<bool>("LiquidityRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("MonthlyContributionTarget")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<decimal>("TargetAmount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<decimal?>("TargetMultiple")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("numeric(9,2)");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("EmergencyFundPlans", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_EmergencyFundPlans_Amounts", "\"TargetAmount\" > 0 AND \"CurrentAmount\" >= 0 AND \"MonthlyContributionTarget\" >= 0");
+
+                            t.HasCheckConstraint("CK_EmergencyFundPlans_Currency", "\"Currency\" IN ('BRL','USD','EUR')");
+
+                            t.HasCheckConstraint("CK_EmergencyFundPlans_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_EmergencyFundPlans_Version", "\"Version\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.ExpenseReductionGoal", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -529,6 +598,323 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Goals_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
 
                             t.HasCheckConstraint("CK_Goals_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.InvestmentAsset", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("AssetClass")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("AssetSubClass")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("FgcProtected")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Indexer")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<string>("Issuer")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("LiquidityType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateOnly?>("MaturityDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<decimal?>("Rate")
+                        .HasPrecision(12, 8)
+                        .HasColumnType("numeric(12,8)");
+
+                    b.Property<bool>("TaxExempt")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Ticker")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "AccountId");
+
+                    b.HasIndex("TenantId", "UserId", "Active", "AssetClass");
+
+                    b.ToTable("InvestmentAssets", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_InvestmentAssets_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_InvestmentAssets_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.InvestmentTransaction", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("Fees")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<decimal>("GrossAmount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<Guid>("InvestmentAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("NetAmount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(22, 8)
+                        .HasColumnType("numeric(22,8)");
+
+                    b.Property<decimal>("Taxes")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<decimal?>("UnitPrice")
+                        .HasPrecision(16, 8)
+                        .HasColumnType("numeric(16,8)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "InvestmentAssetId", "Date", "Id");
+
+                    b.ToTable("InvestmentTransactions", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_InvestmentTransactions_Amounts", "\"GrossAmount\" >= 0 AND \"Fees\" >= 0 AND \"Taxes\" >= 0 AND \"NetAmount\" = \"GrossAmount\" - \"Fees\" - \"Taxes\"");
+
+                            t.HasCheckConstraint("CK_InvestmentTransactions_Currency", "\"Currency\" IN ('BRL','USD','EUR')");
+
+                            t.HasCheckConstraint("CK_InvestmentTransactions_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_InvestmentTransactions_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.PayYourselfFirstPlan", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("CurrentRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("GoalRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("PayYourselfFirstPlans", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_PayYourselfFirstPlans_Rates", "\"CurrentRate\" BETWEEN 0 AND 1 AND (\"GoalRate\" IS NULL OR \"GoalRate\" BETWEEN 0 AND 1)");
+
+                            t.HasCheckConstraint("CK_PayYourselfFirstPlans_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_PayYourselfFirstPlans_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.PayYourselfFirstPlanRevision", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("CurrentRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("GoalRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "PlanId", "EffectiveFrom")
+                        .IsUnique();
+
+                    b.ToTable("PayYourselfFirstPlanRevisions", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_PayYourselfFirstPlanRevisions_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_PayYourselfFirstPlanRevisions_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.TargetPortfolioAllocation", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AssetClass")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("InvestmentAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Weight")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("numeric(9,4)");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "InvestmentAssetId");
+
+                    b.HasIndex("TenantId", "UserId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("TargetPortfolioAllocations", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_TargetPortfolioAllocations_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_TargetPortfolioAllocations_Version", "\"Version\" > 0");
+
+                            t.HasCheckConstraint("CK_TargetPortfolioAllocations_Weight", "\"Weight\" BETWEEN 0 AND 100");
                         });
                 });
 
@@ -906,6 +1292,15 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.EmergencyFundPlan", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.ExpenseReductionGoal", b =>
                 {
                     b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
@@ -957,6 +1352,73 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.InvestmentAsset", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.Account", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "AccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.InvestmentTransaction", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.InvestmentAsset", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "InvestmentAssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.PayYourselfFirstPlan", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.PayYourselfFirstPlanRevision", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.PayYourselfFirstPlan", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.TargetPortfolioAllocation", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.InvestmentAsset", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "InvestmentAssetId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.Transfer", b =>

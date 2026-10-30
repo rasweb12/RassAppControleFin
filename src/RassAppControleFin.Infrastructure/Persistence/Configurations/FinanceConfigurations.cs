@@ -8,6 +8,9 @@ namespace RassAppControleFin.Infrastructure.Persistence.Configurations;
 internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>, IEntityTypeConfiguration<Category>,
     IEntityTypeConfiguration<CreditCard>, IEntityTypeConfiguration<FinancialTransaction>, IEntityTypeConfiguration<Transfer>,
     IEntityTypeConfiguration<Budget>, IEntityTypeConfiguration<Goal>, IEntityTypeConfiguration<ExpenseReductionGoal>, IEntityTypeConfiguration<FinancialNotification>,
+    IEntityTypeConfiguration<PayYourselfFirstPlan>, IEntityTypeConfiguration<PayYourselfFirstPlanRevision>,
+    IEntityTypeConfiguration<EmergencyFundPlan>, IEntityTypeConfiguration<InvestmentAsset>,
+    IEntityTypeConfiguration<InvestmentTransaction>, IEntityTypeConfiguration<TargetPortfolioAllocation>,
     IEntityTypeConfiguration<LedgerEntry>, IEntityTypeConfiguration<CardMovementRow>,
     IEntityTypeConfiguration<SyncOperationReceipt>, IEntityTypeConfiguration<FinancialOutboxRow>
 {
@@ -162,6 +165,79 @@ internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>,
             t.HasCheckConstraint("CK_FinancialNotifications_Title", "length(btrim(\"Title\")) BETWEEN 1 AND 160");
             t.HasCheckConstraint("CK_FinancialNotifications_Message", "length(btrim(\"Message\")) BETWEEN 1 AND 1000");
         });
+    }
+    public void Configure(EntityTypeBuilder<PayYourselfFirstPlan> b)
+    {
+        Aggregate(b, "PayYourselfFirstPlans");
+        b.Property(x => x.CurrentRate).HasPrecision(9, 6);
+        b.Property(x => x.GoalRate).HasPrecision(9, 6);
+        b.HasIndex(x => new { x.TenantId, x.UserId }).IsUnique();
+        b.ToTable("PayYourselfFirstPlans", t =>
+            t.HasCheckConstraint("CK_PayYourselfFirstPlans_Rates", "\"CurrentRate\" BETWEEN 0 AND 1 AND (\"GoalRate\" IS NULL OR \"GoalRate\" BETWEEN 0 AND 1)"));
+    }
+    public void Configure(EntityTypeBuilder<PayYourselfFirstPlanRevision> b)
+    {
+        Aggregate(b, "PayYourselfFirstPlanRevisions");
+        b.Property(x => x.CurrentRate).HasPrecision(9, 6);
+        b.Property(x => x.GoalRate).HasPrecision(9, 6);
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.PlanId, x.EffectiveFrom }).IsUnique();
+        b.HasOne<PayYourselfFirstPlan>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.PlanId }).OnDelete(DeleteBehavior.Restrict);
+    }
+    public void Configure(EntityTypeBuilder<EmergencyFundPlan> b)
+    {
+        Aggregate(b, "EmergencyFundPlans"); Currency(b, "EmergencyFundPlans");
+        b.Property(x => x.TargetType).HasConversion<string>().HasMaxLength(24);
+        b.Property(x => x.TargetMultiple).HasPrecision(9, 2);
+        b.Property(x => x.TargetAmount).HasPrecision(16, 2);
+        b.Property(x => x.CurrentAmount).HasPrecision(16, 2);
+        b.Property(x => x.MonthlyContributionTarget).HasPrecision(16, 2);
+        b.Property(x => x.Notes).HasMaxLength(1000);
+        b.HasIndex(x => new { x.TenantId, x.UserId }).IsUnique();
+        b.ToTable("EmergencyFundPlans", t =>
+            t.HasCheckConstraint("CK_EmergencyFundPlans_Amounts", "\"TargetAmount\" > 0 AND \"CurrentAmount\" >= 0 AND \"MonthlyContributionTarget\" >= 0"));
+    }
+    public void Configure(EntityTypeBuilder<InvestmentAsset> b)
+    {
+        Aggregate(b, "InvestmentAssets");
+        b.Property(x => x.Name).HasMaxLength(120);
+        b.Property(x => x.Ticker).HasMaxLength(20);
+        b.Property(x => x.AssetClass).HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.AssetSubClass).HasMaxLength(80);
+        b.Property(x => x.Issuer).HasMaxLength(120);
+        b.Property(x => x.Indexer).HasConversion<string>().HasMaxLength(12);
+        b.Property(x => x.Rate).HasPrecision(12, 8);
+        b.Property(x => x.LiquidityType).HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.Notes).HasMaxLength(2000);
+        b.Property(x => x.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.Active, x.AssetClass });
+        b.HasOne<Account>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.AccountId }).OnDelete(DeleteBehavior.Restrict);
+    }
+    public void Configure(EntityTypeBuilder<InvestmentTransaction> b)
+    {
+        Aggregate(b, "InvestmentTransactions"); Currency(b, "InvestmentTransactions");
+        b.Property(x => x.Type).HasConversion<string>().HasMaxLength(16);
+        b.Property(x => x.Quantity).HasPrecision(22, 8);
+        b.Property(x => x.UnitPrice).HasPrecision(16, 8);
+        b.Property(x => x.GrossAmount).HasPrecision(16, 2);
+        b.Property(x => x.Fees).HasPrecision(16, 2);
+        b.Property(x => x.Taxes).HasPrecision(16, 2);
+        b.Property(x => x.NetAmount).HasPrecision(16, 2);
+        b.Property(x => x.Notes).HasMaxLength(1000);
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.InvestmentAssetId, x.Date, x.Id });
+        b.HasOne<InvestmentAsset>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.InvestmentAssetId }).OnDelete(DeleteBehavior.Restrict);
+        b.ToTable("InvestmentTransactions", t =>
+            t.HasCheckConstraint("CK_InvestmentTransactions_Amounts", "\"GrossAmount\" >= 0 AND \"Fees\" >= 0 AND \"Taxes\" >= 0 AND \"NetAmount\" = \"GrossAmount\" - \"Fees\" - \"Taxes\""));
+    }
+    public void Configure(EntityTypeBuilder<TargetPortfolioAllocation> b)
+    {
+        Aggregate(b, "TargetPortfolioAllocations");
+        b.Property(x => x.Key).HasMaxLength(120);
+        b.Property(x => x.AssetClass).HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.Weight).HasPrecision(9, 4);
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.Key }).IsUnique();
+        b.HasOne<InvestmentAsset>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.InvestmentAssetId }).OnDelete(DeleteBehavior.Restrict);
+        b.ToTable("TargetPortfolioAllocations", t =>
+            t.HasCheckConstraint("CK_TargetPortfolioAllocations_Weight", "\"Weight\" BETWEEN 0 AND 100"));
     }
     public void Configure(EntityTypeBuilder<LedgerEntry> b)
     {
