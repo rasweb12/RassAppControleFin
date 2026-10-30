@@ -15,6 +15,21 @@ producao em capturas, logs ou relatos.
 - Plano de rollback: interromper a distribuicao e preservar outbox/local DB;
   nao limpar dados como resposta a uma falha.
 
+## Assinatura Android
+
+O build `release` falha deliberadamente sem assinatura de distribuicao. Configure
+fora do Git um arquivo `android/key.properties` ou as variaveis de ambiente:
+
+```text
+RASS_ANDROID_STORE_FILE
+RASS_ANDROID_STORE_PASSWORD
+RASS_ANDROID_KEY_ALIAS
+RASS_ANDROID_KEY_PASSWORD
+```
+
+O arquivo e o keystore sao ignorados pelo Git. Nunca reutilizar a assinatura
+Debug para um APK/AAB entregue ao grupo Beta.
+
 ## Casos obrigatorios
 
 | ID | Caso | Resultado esperado |

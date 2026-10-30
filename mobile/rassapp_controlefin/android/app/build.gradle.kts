@@ -1,8 +1,30 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val signingProperties = Properties()
+val signingPropertiesFile = rootProject.file("key.properties")
+if (signingPropertiesFile.exists()) {
+    signingPropertiesFile.inputStream().use(signingProperties::load)
+}
+
+fun signingValue(name: String): String? =
+    System.getenv("RASS_ANDROID_$name") ?: signingProperties.getProperty(name)
+
+val releaseStoreFile = signingValue("STORE_FILE")
+val releaseStorePassword = signingValue("STORE_PASSWORD")
+val releaseKeyAlias = signingValue("KEY_ALIAS")
+val releaseKeyPassword = signingValue("KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.rassapp.rassapp_controlefin"
@@ -27,9 +49,26 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.maybeCreate("release").apply {
+                    storeFile = file(releaseStoreFile!!)
+                    storePassword = releaseStorePassword
+                    keyAlias = releaseKeyAlias
+                    keyPassword = releaseKeyPassword
+                }
+            }
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name.contains("Release", ignoreCase = true) && !hasReleaseSigning) {
+        doFirst {
+            throw GradleException(
+                "Release signing is required. Configure key.properties locally or " +
+                    "RASS_ANDROID_STORE_FILE, RASS_ANDROID_STORE_PASSWORD, " +
+                    "RASS_ANDROID_KEY_ALIAS and RASS_ANDROID_KEY_PASSWORD.",
+            )
         }
     }
 }
