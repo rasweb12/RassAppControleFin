@@ -12,13 +12,14 @@ if (signingPropertiesFile.exists()) {
     signingPropertiesFile.inputStream().use(signingProperties::load)
 }
 
-fun signingValue(name: String): String? =
-    System.getenv("RASS_ANDROID_$name") ?: signingProperties.getProperty(name)
+fun signingValue(environmentName: String, propertyName: String): String? =
+    System.getenv("RASS_ANDROID_$environmentName")
+        ?: signingProperties.getProperty(propertyName)
 
-val releaseStoreFile = signingValue("STORE_FILE")
-val releaseStorePassword = signingValue("STORE_PASSWORD")
-val releaseKeyAlias = signingValue("KEY_ALIAS")
-val releaseKeyPassword = signingValue("KEY_PASSWORD")
+val releaseStoreFile = signingValue("STORE_FILE", "storeFile")
+val releaseStorePassword = signingValue("STORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingValue("KEY_ALIAS", "keyAlias")
+val releaseKeyPassword = signingValue("KEY_PASSWORD", "keyPassword")
 val hasReleaseSigning = listOf(
     releaseStoreFile,
     releaseStorePassword,
