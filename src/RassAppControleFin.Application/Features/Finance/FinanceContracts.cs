@@ -7,10 +7,14 @@ namespace RassAppControleFin.Application.Features.Finance;
 public sealed record MutationReceipt(Guid ResourceId, Guid OperationId, long Version, long? SourceVersion = null,
     long? DestinationVersion = null, decimal? SourceBalance = null, decimal? DestinationBalance = null);
 public interface IFinanceMutation : IRequest<Result<MutationReceipt>> { Guid OperationId { get; } string Permission { get; } }
-public sealed record OpenAccountCommand(Guid OperationId, string Name, string Currency, decimal OpeningBalance, decimal OverdraftLimit = 0m) : IFinanceMutation
+public sealed record OpenAccountCommand(Guid OperationId, string Name, string Currency, decimal OpeningBalance, decimal OverdraftLimit = 0m,
+    string AccountType = "Bank", string? Subtype = null, string? Institution = null, bool IncludeInNetWorth = true) : IFinanceMutation
 { public string Permission => Permissions.AccountsWrite; }
 public sealed record MaintainResourceCommand(Guid OperationId, string Resource, Guid Id, long Version, string Name, bool Archive) : IFinanceMutation
 { public string Permission => Resource switch { "account" => Permissions.AccountsWrite, "category" => Permissions.CategoriesWrite, _ => Permissions.CreditCardsWrite }; }
+public sealed record UpdateAccountCommand(Guid OperationId, Guid Id, long Version, string Name, decimal OverdraftLimit,
+    string AccountType, string? Subtype, string? Institution, bool IncludeInNetWorth) : IFinanceMutation
+{ public string Permission => Permissions.AccountsWrite; }
 public sealed record CreateCategoryCommand(Guid OperationId, string Name, string Flow) : IFinanceMutation
 { public string Permission => Permissions.CategoriesWrite; }
 public sealed record CreateCardCommand(Guid OperationId, string Name, string Currency, decimal Limit, int ClosingDay, int DueDay) : IFinanceMutation
@@ -30,7 +34,8 @@ public sealed record CardMovementCommand(Guid OperationId, Guid CardId, long Car
     string Kind, Guid? AccountId, long? AccountVersion, Guid? CategoryId, DateTimeOffset OccurredAt, string Description) : IFinanceMutation
 { public string Permission => Permissions.CreditCardsWrite; }
 
-public sealed record AccountView(Guid Id, string Name, string Currency, decimal Balance, decimal OverdraftLimit, long Version, bool IsArchived);
+public sealed record AccountView(Guid Id, string Name, string Currency, decimal Balance, decimal OverdraftLimit, string AccountType,
+    string? Subtype, string? Institution, bool IncludeInNetWorth, long Version, bool IsArchived);
 public sealed record CategoryView(Guid Id, string Name, string Flow, long Version, bool IsArchived);
 public sealed record CardView(Guid Id, string Name, string Currency, decimal Limit, decimal Outstanding,
     int ClosingDay, int DueDay, long Version, bool IsArchived);

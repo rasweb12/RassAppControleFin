@@ -4,8 +4,6 @@ abstract final class AppConfig {
     defaultValue: 'https://rassappcontrolefin-1.onrender.com',
   );
 
-  static final Uri apiBaseUri = Uri.parse(
-    _apiBaseUrl,
-  );
+  static final Uri apiBaseUri = Uri.parse(_apiBaseUrl);
   static const requestTimeout = Duration(seconds: 20);
 }

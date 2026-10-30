@@ -81,6 +81,10 @@ class AccountSummary {
     required this.version,
     required this.archived,
     this.overdraftLimit = 0,
+    this.accountType = 'Bank',
+    this.subtype,
+    this.institution,
+    this.includeInNetWorth = true,
   });
   final String id;
   final String name;
@@ -89,6 +93,10 @@ class AccountSummary {
   final int version;
   final bool archived;
   final num overdraftLimit;
+  final String accountType;
+  final String? subtype;
+  final String? institution;
+  final bool includeInNetWorth;
 
   factory AccountSummary.fromJson(Map<String, dynamic> json) => AccountSummary(
     id: json['id'] as String,
@@ -98,6 +106,10 @@ class AccountSummary {
     version: json['version'] as int,
     archived: json['isArchived'] as bool,
     overdraftLimit: json['overdraftLimit'] as num? ?? 0,
+    accountType: json['accountType'] as String? ?? 'Bank',
+    subtype: json['subtype'] as String?,
+    institution: json['institution'] as String?,
+    includeInNetWorth: json['includeInNetWorth'] as bool? ?? true,
   );
 }
 
@@ -489,6 +501,10 @@ class FinanceRepository {
     required String currency,
     required num openingBalance,
     num overdraftLimit = 0,
+    String accountType = 'Bank',
+    String? subtype,
+    String? institution,
+    bool includeInNetWorth = true,
   }) async {
     final operationId = _newOperationId();
     final result = await _postOrQueue(
@@ -502,6 +518,10 @@ class FinanceRepository {
         'currency': currency,
         'openingBalance': openingBalance,
         'overdraftLimit': overdraftLimit,
+        'accountType': accountType,
+        'subtype': subtype,
+        'institution': institution,
+        'includeInNetWorth': includeInNetWorth,
       },
       localResource: {
         'id': 'local-$operationId',
@@ -509,6 +529,10 @@ class FinanceRepository {
         'currency': currency,
         'balance': openingBalance,
         'overdraftLimit': overdraftLimit,
+        'accountType': accountType,
+        'subtype': subtype,
+        'institution': institution,
+        'includeInNetWorth': includeInNetWorth,
         'version': 0,
         'isArchived': false,
       },
@@ -517,7 +541,7 @@ class FinanceRepository {
       await _applyPendingDashboard(
         tenantId,
         currency,
-        netWorthDelta: openingBalance,
+        netWorthDelta: includeInNetWorth ? openingBalance : 0,
       );
     }
     return result;
@@ -554,6 +578,26 @@ class FinanceRepository {
     'version': account.version,
     'name': name,
     'archive': archive,
+  }, tenantId: tenantId);
+
+  Future<void> updateAccount({
+    required String tenantId,
+    required AccountSummary account,
+    required String name,
+    required num overdraftLimit,
+    required String accountType,
+    required String? subtype,
+    required String? institution,
+    required bool includeInNetWorth,
+  }) => _auth.putAuthenticated('/api/v1/accounts/${account.id}', {
+    'operationId': _newOperationId(),
+    'version': account.version,
+    'name': name,
+    'overdraftLimit': overdraftLimit,
+    'accountType': accountType,
+    'subtype': subtype,
+    'institution': institution,
+    'includeInNetWorth': includeInNetWorth,
   }, tenantId: tenantId);
 
   Future<void> maintainCategory({

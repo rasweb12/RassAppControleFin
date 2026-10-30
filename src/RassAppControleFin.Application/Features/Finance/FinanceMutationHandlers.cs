@@ -14,6 +14,7 @@ namespace RassAppControleFin.Application.Features.Finance;
 
 public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserContext user, ITenantContext tenant) :
     IRequestHandler<OpenAccountCommand, Result<MutationReceipt>>,
+    IRequestHandler<UpdateAccountCommand, Result<MutationReceipt>>,
     IRequestHandler<MaintainResourceCommand, Result<MutationReceipt>>,
     IRequestHandler<CreateCategoryCommand, Result<MutationReceipt>>,
     IRequestHandler<CreateCardCommand, Result<MutationReceipt>>,
@@ -70,10 +71,29 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
 
     public Task<Result<MutationReceipt>> Handle(OpenAccountCommand c, CancellationToken ct) => Execute(c, unit =>
     {
-        var account = Account.Open(Guid.NewGuid(), TenantId, Subject, c.Name, Money.Create(c.OpeningBalance, c.Currency, true), DateTimeOffset.UtcNow, c.OverdraftLimit);
+        var account = Account.Open(Guid.NewGuid(), TenantId, Subject, c.Name, Money.Create(c.OpeningBalance, c.Currency, true), DateTimeOffset.UtcNow,
+            c.OverdraftLimit, Enum.Parse<AccountType>(c.AccountType), c.Subtype, c.Institution, c.IncludeInNetWorth);
         unit.Add(account);
         if (c.OpeningBalance != 0) unit.Ledger(account.Id, c.OpeningBalance, "Opening", account.Id);
         return Task.FromResult(Result<MutationReceipt>.Success(new(account.Id, c.OperationId, account.Version)));
+    }, ct);
+
+    public Task<Result<MutationReceipt>> Handle(UpdateAccountCommand c, CancellationToken ct) => Execute(c, async unit =>
+    {
+        var account = await unit.AccountAsync(c.Id, ct);
+        if (account is null) return Missing();
+        if (account.IsArchived) return Fail("ACCOUNT_ARCHIVED", "Conta arquivada.");
+        if (account.Version != c.Version) return Conflict();
+        try
+        {
+            account.UpdateDetails(c.Name, Enum.Parse<AccountType>(c.AccountType), c.Subtype, c.Institution,
+                c.IncludeInNetWorth, c.OverdraftLimit);
+        }
+        catch (ArgumentException)
+        {
+            return Fail("ACCOUNT_DETAILS_INVALID", "Os dados da conta nao sao validos.");
+        }
+        return Result<MutationReceipt>.Success(new(account.Id, c.OperationId, account.Version));
     }, ct);
 
     public Task<Result<MutationReceipt>> Handle(CreateCategoryCommand c, CancellationToken ct) => Execute(c, unit =>

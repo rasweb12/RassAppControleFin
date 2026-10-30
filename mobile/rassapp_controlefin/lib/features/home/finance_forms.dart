@@ -9,10 +9,18 @@ class AccountInput {
     required this.name,
     required this.openingBalance,
     required this.overdraftLimit,
+    required this.accountType,
+    this.subtype,
+    this.institution,
+    required this.includeInNetWorth,
   });
   final String name;
   final num openingBalance;
   final num overdraftLimit;
+  final String accountType;
+  final String? subtype;
+  final String? institution;
+  final bool includeInNetWorth;
 }
 
 class CategoryInput {
@@ -96,12 +104,14 @@ Future<FinanceAction?> showFinanceActionSheet(BuildContext context) =>
       ),
     );
 
-Future<AccountInput?> showAccountForm(BuildContext context) =>
-    showModalBottomSheet<AccountInput>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const _AccountForm(),
-    );
+Future<AccountInput?> showAccountForm(
+  BuildContext context, {
+  AccountSummary? initial,
+}) => showModalBottomSheet<AccountInput>(
+  context: context,
+  isScrollControlled: true,
+  builder: (_) => _AccountForm(initial: initial),
+);
 
 Future<CategoryInput?> showCategoryForm(
   BuildContext context, {
@@ -148,35 +158,106 @@ Future<TransferInput?> showTransferForm(
 );
 
 class _AccountForm extends StatefulWidget {
-  const _AccountForm();
+  const _AccountForm({this.initial});
+  final AccountSummary? initial;
   @override
   State<_AccountForm> createState() => _AccountFormState();
 }
 
 class _AccountFormState extends State<_AccountForm> {
   final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _balance = TextEditingController(text: '0');
-  final _overdraftLimit = TextEditingController(text: '0');
+  late final TextEditingController _name;
+  late final TextEditingController _balance;
+  late final TextEditingController _overdraftLimit;
+  late final TextEditingController _institution;
+  late String _accountType;
+  String? _subtype;
+  bool _includeInNetWorth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final account = widget.initial;
+    _name = TextEditingController(text: account?.name ?? '');
+    _balance = TextEditingController(
+      text: account?.balance.toStringAsFixed(2) ?? '0',
+    );
+    _overdraftLimit = TextEditingController(
+      text: account?.overdraftLimit.toStringAsFixed(2) ?? '0',
+    );
+    _institution = TextEditingController(text: account?.institution ?? '');
+    _accountType = account?.accountType ?? 'Bank';
+    _subtype = account?.subtype;
+    _includeInNetWorth = account?.includeInNetWorth ?? true;
+  }
 
   @override
   void dispose() {
     _name.dispose();
     _balance.dispose();
     _overdraftLimit.dispose();
+    _institution.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => _Sheet(
-    title: 'Nova conta',
+    title: widget.initial == null ? 'Nova conta' : 'Editar conta',
     formKey: _formKey,
     fields: [
+      const Text(
+        'TIPO DE CONTA',
+        style: TextStyle(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 8),
+      SegmentedButton<String>(
+        segments: const [
+          ButtonSegment(
+            value: 'Bank',
+            label: Text('Banco'),
+            icon: Icon(Icons.account_balance_outlined),
+          ),
+          ButtonSegment(
+            value: 'Wallet',
+            label: Text('Carteira'),
+            icon: Icon(Icons.account_balance_wallet_outlined),
+          ),
+          ButtonSegment(
+            value: 'Investment',
+            label: Text('Investimento'),
+            icon: Icon(Icons.trending_up_outlined),
+          ),
+        ],
+        selected: {_accountType},
+        onSelectionChanged: (value) => setState(() {
+          _accountType = value.first;
+          _subtype = null;
+        }),
+      ),
+      const SizedBox(height: 12),
       TextFormField(
         controller: _name,
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Nome da conta'),
         validator: _required,
+      ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        initialValue: _subtype,
+        decoration: const InputDecoration(labelText: 'Subtipo (opcional)'),
+        items: _subtypesFor(_accountType)
+            .map((value) => DropdownMenuItem(value: value, child: Text(value)))
+            .toList(growable: false),
+        onChanged: (value) => setState(() => _subtype = value),
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _institution,
+        textCapitalization: TextCapitalization.words,
+        decoration: const InputDecoration(labelText: 'Instituição (opcional)'),
+        validator: (value) => value != null && value.trim().length > 120
+            ? 'Informe no máximo 120 caracteres.'
+            : null,
       ),
       const SizedBox(height: 12),
       TextFormField(
@@ -193,9 +274,17 @@ class _AccountFormState extends State<_AccountForm> {
               : null;
         },
       ),
+      SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        value: _includeInNetWorth,
+        onChanged: (value) => setState(() => _includeInNetWorth = value),
+        title: const Text('Soma no patrimônio'),
+        subtitle: const Text('Considerar este saldo no total geral do app.'),
+      ),
       const SizedBox(height: 12),
       TextFormField(
         controller: _balance,
+        enabled: widget.initial == null,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         decoration: const InputDecoration(labelText: 'Saldo inicial (R\$)'),
         validator: (value) {
@@ -215,11 +304,24 @@ class _AccountFormState extends State<_AccountForm> {
           name: _name.text.trim(),
           openingBalance: _number(_balance.text)!,
           overdraftLimit: _number(_overdraftLimit.text)!,
+          accountType: _accountType,
+          subtype: _subtype,
+          institution: _institution.text.trim().isEmpty
+              ? null
+              : _institution.text.trim(),
+          includeInNetWorth: _includeInNetWorth,
         ),
       );
     },
   );
 }
+
+List<String> _subtypesFor(String accountType) => switch (accountType) {
+  'Bank' => const ['Corrente', 'Poupança', 'Pagamento'],
+  'Wallet' => const ['Dinheiro', 'Digital'],
+  'Investment' => const ['Reserva', 'Renda fixa', 'Renda variável'],
+  _ => const [],
+};
 
 class _CategoryForm extends StatefulWidget {
   const _CategoryForm({required this.initialFlow, required this.lockFlow});

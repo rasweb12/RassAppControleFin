@@ -126,7 +126,20 @@ class _FinancialAssistantPageState extends State<FinancialAssistantPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Assistente financeiro'),
+      title: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'RASSFIN INTELLIGENCE',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF2563EB),
+            ),
+          ),
+          Text('Assistente Financeiro IA'),
+        ],
+      ),
       actions: [
         if (_messages.isNotEmpty)
           IconButton(
@@ -232,7 +245,11 @@ class _ConsentPanel extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
-          FilledButton(onPressed: onAccept, child: const Text('Continuar')),
+          FilledButton.icon(
+            onPressed: onAccept,
+            icon: const Icon(Icons.lock_open_outlined),
+            label: const Text('Continuar'),
+          ),
         ],
       ),
     ),
@@ -245,7 +262,7 @@ class _WelcomePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(20),
+    padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
     children: [
       Text(
         'Como posso ajudar?',
@@ -254,14 +271,23 @@ class _WelcomePanel extends StatelessWidget {
         ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
       ),
       const SizedBox(height: 8),
-      const Text('As respostas explicam dados autorizados da sua conta.'),
+      const Text(
+        'As respostas explicam dados autorizados da sua conta com inteligência preditiva RassFin.',
+        style: TextStyle(color: Color(0xFF64748B)),
+      ),
       const SizedBox(height: 16),
       for (final suggestion in _FinancialAssistantPageState._suggestions)
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(58),
+            ),
             onPressed: () => onSuggestion(suggestion),
-            child: Text(suggestion),
+            child: Text(
+              suggestion,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         ),
     ],

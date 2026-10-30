@@ -43,7 +43,12 @@ internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>,
         b.Property(x => x.Name).HasMaxLength(120);
         b.Property(x => x.Balance).HasPrecision(16, 2);
         b.Property(x => x.OverdraftLimit).HasPrecision(16, 2).HasDefaultValue(0m);
+        b.Property(x => x.Type).HasConversion<string>().HasMaxLength(12).HasDefaultValue(AccountType.Bank);
+        b.Property(x => x.Subtype).HasMaxLength(50);
+        b.Property(x => x.Institution).HasMaxLength(120);
+        b.Property(x => x.IncludeInNetWorth).HasDefaultValue(true);
         b.ToTable("Accounts", t => t.HasCheckConstraint("CK_Accounts_Balance", "\"OverdraftLimit\" >= 0 AND \"Balance\" >= -\"OverdraftLimit\""));
+        b.ToTable("Accounts", t => t.HasCheckConstraint("CK_Accounts_Type", "\"Type\" IN ('Bank','Wallet','Investment')"));
         b.ToTable("Accounts", t => t.HasCheckConstraint("CK_Accounts_Name", "length(btrim(\"Name\")) BETWEEN 1 AND 120"));
     }
     public void Configure(EntityTypeBuilder<Category> b)

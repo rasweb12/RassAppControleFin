@@ -196,6 +196,10 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         currency: 'BRL',
         openingBalance: input.openingBalance,
         overdraftLimit: input.overdraftLimit,
+        accountType: input.accountType,
+        subtype: input.subtype,
+        institution: input.institution,
+        includeInNetWorth: input.includeInNetWorth,
       ),
     );
   }
@@ -520,21 +524,22 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
       context,
       title: account.name,
       archiveLabel: account.archived ? 'Reativar conta' : 'Arquivar conta',
+      renameLabel: 'Editar detalhes',
     );
     if (action == null || !mounted) return;
     if (action == _ResourceAction.rename) {
-      final name = await _showRenameForm(
-        context,
-        account.name,
-        'Renomear conta',
-      );
-      if (name == null || !mounted) return;
+      final input = await showAccountForm(context, initial: account);
+      if (input == null || !mounted) return;
       await _mutate(() async {
-        await _repository.maintainAccount(
+        await _repository.updateAccount(
           tenantId: tenant.id,
           account: account,
-          name: name,
-          archive: account.archived,
+          name: input.name,
+          overdraftLimit: input.overdraftLimit,
+          accountType: input.accountType,
+          subtype: input.subtype,
+          institution: input.institution,
+          includeInNetWorth: input.includeInNetWorth,
         );
         return FinanceWriteState.applied;
       });
@@ -1205,38 +1210,69 @@ class _Transactions extends StatelessWidget {
         itemBuilder: (context, index) {
           final item = items[index];
           final income = item.flow.toLowerCase() == 'income';
-          return ListTile(
-            leading: CircleAvatar(
-              child: Icon(income ? Icons.arrow_downward : Icons.arrow_upward),
-            ),
-            title: Text(
-              item.description.isEmpty ? 'Transação' : item.description,
-            ),
-            subtitle: Text('${_date(item.occurredAt)} · ${item.status}'),
-            trailing: Text(
-              '${income ? '+' : '-'}${_money(item.amount, item.currency)}',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: income
-                    ? const Color(0xFF087A36)
-                    : const Color(0xFFD92D20),
+          return Card(
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 6,
               ),
-            ),
-            onTap: () {
-              AccountSummary? account;
-              for (final candidate in accounts) {
-                if (candidate.id == item.accountId) {
-                  account = candidate;
-                  break;
+              leading: CircleAvatar(
+                backgroundColor: income
+                    ? const Color(0xFFDDF7E8)
+                    : const Color(0xFFFDE8E7),
+                child: Icon(
+                  income ? Icons.south_west : Icons.north_east,
+                  color: income
+                      ? const Color(0xFF00875A)
+                      : const Color(0xFFD92D20),
+                ),
+              ),
+              title: Text(
+                item.description.isEmpty ? 'Transação' : item.description,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text('${_date(item.occurredAt)} · ${item.status}'),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${income ? '+' : '-'}${_money(item.amount, item.currency)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: income
+                          ? const Color(0xFF087A36)
+                          : const Color(0xFFD92D20),
+                    ),
+                  ),
+                  Text(
+                    income ? 'RECEITA' : 'DESPESA',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: income
+                          ? const Color(0xFF087A36)
+                          : const Color(0xFFD92D20),
+                    ),
+                  ),
+                ],
+              ),
+              onTap: () {
+                AccountSummary? account;
+                for (final candidate in accounts) {
+                  if (candidate.id == item.accountId) {
+                    account = candidate;
+                    break;
+                  }
                 }
-              }
-              _showTransactionDetails(
-                context,
-                item,
-                account == null ? null : () => onCancel(item, account!),
-                account == null ? null : () => onEdit(item, account!),
-              );
-            },
+                _showTransactionDetails(
+                  context,
+                  item,
+                  account == null ? null : () => onCancel(item, account!),
+                  account == null ? null : () => onEdit(item, account!),
+                );
+              },
+            ),
           );
         },
       ),
@@ -1311,6 +1347,7 @@ Future<void> _showTransactionDetails(
                     ),
                   );
                   if (confirmed == true) {
+                    if (!context.mounted) return;
                     Navigator.pop(context);
                     await onCancel();
                   }
@@ -1381,8 +1418,8 @@ class _Accounts extends StatelessWidget {
                 item.archived
                     ? 'Conta arquivada'
                     : item.overdraftLimit > 0
-                    ? 'Cheque especial: ${_money(item.overdraftLimit, item.currency)}'
-                    : 'Conta ativa',
+                    ? '${_accountLabel(item)} · Cheque especial: ${_money(item.overdraftLimit, item.currency)}'
+                    : '${_accountLabel(item)}${item.includeInNetWorth ? '' : ' · Fora do patrimônio'}',
               ),
               trailing: Text(
                 _money(item.balance, item.currency),
@@ -1397,6 +1434,16 @@ class _Accounts extends StatelessWidget {
       ),
     );
   }
+}
+
+String _accountLabel(AccountSummary account) {
+  final type = switch (account.accountType) {
+    'Wallet' => 'Carteira',
+    'Investment' => 'Investimento',
+    _ => 'Banco',
+  };
+  final detail = account.institution ?? account.subtype;
+  return detail == null || detail.isEmpty ? type : '$type · $detail';
 }
 
 class _ExpenseReductionGoalsPage extends StatefulWidget {
@@ -1466,8 +1513,9 @@ class _ExpenseReductionGoalsPageState
                   to == null ||
                   from <= 0 ||
                   to < 0 ||
-                  to >= from)
+                  to >= from) {
                 return;
+              }
               Navigator.pop(context, (from, to));
             },
             child: const Text('Criar'),
@@ -1500,30 +1548,81 @@ class _ExpenseReductionGoalsPageState
       child: const Icon(Icons.add),
     ),
     body: _goals.isEmpty
-        ? const Center(child: Text('Nenhuma meta de redução criada.'))
+        ? _MessageState(
+            icon: Icons.trending_down_outlined,
+            title: 'Nenhuma meta de redução criada',
+            message: 'Crie uma meta para acompanhar sua economia mensal.',
+            action: 'Atualizar',
+            onAction: _refresh,
+          )
         : ListView.separated(
             padding: const EdgeInsets.all(16),
-            itemCount: _goals.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemCount: _goals.length + 1,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (_, index) {
-              final goal = _goals[index];
+              if (index == 0) {
+                final planned = _goals.fold<num>(
+                  0,
+                  (sum, item) => sum + item.targetAmount,
+                );
+                final actual = _goals.fold<num>(
+                  0,
+                  (sum, item) => sum + item.actualExpense,
+                );
+                return _DarkSummaryCard(
+                  eyebrow: 'REDUÇÃO DE DESPESAS',
+                  value: _money(planned, 'BRL'),
+                  detail: actual <= planned
+                      ? 'Dentro da meta planejada'
+                      : 'Acima da meta planejada',
+                  icon: Icons.trending_down_outlined,
+                );
+              }
+              final goal = _goals[index - 1];
+              final remaining = (goal.targetAmount - goal.actualExpense).clamp(
+                0,
+                goal.targetAmount,
+              );
               return Card(
-                child: ListTile(
-                  title: Text(
-                    'Meta: R\$ ${goal.targetAmount.toStringAsFixed(2)}',
-                  ),
-                  subtitle: Text(
-                    'Gasto atual: R\$ ${goal.actualExpense.toStringAsFixed(2)} de R\$ ${goal.referenceAmount.toStringAsFixed(2)}',
-                  ),
-                  trailing: SizedBox(
-                    width: 48,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('${(goal.progress * 100).round()}%'),
-                        LinearProgressIndicator(value: goal.progress),
-                      ],
-                    ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const CircleAvatar(
+                            child: Icon(Icons.savings_outlined),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Meta mensal de redução',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                          Text(
+                            '${(goal.progress * 100).round()}%',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF2563EB),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Gasto atual ${_money(goal.actualExpense, goal.currency)} de ${_money(goal.targetAmount, goal.currency)}',
+                      ),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(value: goal.progress),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Ainda disponível no limite: ${_money(remaining, goal.currency)}',
+                        style: const TextStyle(color: Color(0xFF64748B)),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -1564,29 +1663,39 @@ class _Menu extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(16),
     children: [
-      ListTile(
-        leading: const Icon(Icons.domain_outlined),
-        title: Text(tenant.name),
-        subtitle: Text('Perfil: ${tenant.role}'),
-        trailing: canSwitch ? const Icon(Icons.chevron_right) : null,
-        onTap: canSwitch ? onSwitch : null,
+      Card(
+        child: ListTile(
+          contentPadding: const EdgeInsets.all(16),
+          leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+          title: Text(
+            tenant.name,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          subtitle: const Text('Sessão ativa e protegida'),
+          trailing: canSwitch ? const Icon(Icons.chevron_right) : null,
+          onTap: canSwitch ? onSwitch : null,
+        ),
       ),
-      const Divider(),
-      ListTile(
+      const SizedBox(height: 18),
+      const Text(
+        'FINANÇAS & GESTÃO',
+        style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF718096)),
+      ),
+      _MenuItem(
         leading: const Icon(Icons.category_outlined),
         title: const Text('Categorias'),
         subtitle: const Text('Organize receitas e despesas.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onCategories,
       ),
-      ListTile(
+      _MenuItem(
         leading: const Icon(Icons.flag_outlined),
         title: const Text('Metas'),
         subtitle: const Text('Acompanhe objetivos financeiros.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onGoals,
       ),
-      ListTile(
+      _MenuItem(
         leading: const Icon(Icons.trending_down_outlined),
         title: const Text('Redução de despesas'),
         subtitle: const Text(
@@ -1595,21 +1704,21 @@ class _Menu extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right),
         onTap: onExpenseReductionGoals,
       ),
-      ListTile(
+      _MenuItem(
         leading: const Icon(Icons.auto_awesome_outlined),
         title: const Text('Assistente financeiro'),
         subtitle: const Text('Pergunte sobre dados autorizados.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onFinancialAssistant,
       ),
-      ListTile(
+      _MenuItem(
         leading: const Icon(Icons.notifications_outlined),
         title: const Text('Notificações'),
         subtitle: const Text('Alertas e avisos financeiros.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onNotifications,
       ),
-      ListTile(
+      _MenuItem(
         leading: const Icon(Icons.sync_outlined),
         title: const Text('Sincronização'),
         subtitle: const Text('Enviar lançamentos pendentes e atualizar dados.'),
@@ -1617,7 +1726,7 @@ class _Menu extends StatelessWidget {
         onTap: onSynchronize,
       ),
       if (conflictCount > 0)
-        ListTile(
+        _MenuItem(
           leading: const Icon(
             Icons.warning_amber_outlined,
             color: Color(0xFFD92D20),
@@ -1629,18 +1738,44 @@ class _Menu extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: onReviewConflicts,
         ),
-      const ListTile(
+      const _MenuItem(
         leading: Icon(Icons.security_outlined),
         title: Text('Segurança da conta'),
         subtitle: Text('Sua sessão é validada pelo Neon Auth.'),
       ),
-      const Divider(),
+      const SizedBox(height: 18),
       ListTile(
         leading: const Icon(Icons.logout, color: Color(0xFFD92D20)),
         title: const Text('Sair', style: TextStyle(color: Color(0xFFD92D20))),
         onTap: () async => onSignOut(),
       ),
     ],
+  );
+}
+
+class _MenuItem extends StatelessWidget {
+  const _MenuItem({
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    this.onTap,
+  });
+  final Widget leading;
+  final Widget title;
+  final Widget subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(top: 8),
+    child: ListTile(
+      leading: leading,
+      title: title,
+      subtitle: subtitle,
+      trailing: trailing ?? const Icon(Icons.chevron_right),
+      onTap: onTap,
+    ),
   );
 }
 
@@ -1823,10 +1958,27 @@ class _GoalsPageState extends State<_GoalsPage> {
               onRefresh: _refresh,
               child: ListView.separated(
                 padding: const EdgeInsets.all(16),
-                itemCount: active.length,
+                itemCount: active.length + 1,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
-                  final goal = active[index];
+                  if (index == 0) {
+                    final total = active.fold<num>(
+                      0,
+                      (sum, goal) => sum + goal.targetAmount,
+                    );
+                    final saved = active.fold<num>(
+                      0,
+                      (sum, goal) => sum + goal.currentAmount,
+                    );
+                    return _DarkSummaryCard(
+                      eyebrow: 'ECONOMIA CONSOLIDADA',
+                      value: _money(saved, active.first.currency),
+                      detail:
+                          'Objetivo total ${_money(total, active.first.currency)}',
+                      icon: Icons.flag_outlined,
+                    );
+                  }
+                  final goal = active[index - 1];
                   final localOnly = goal.id.startsWith('local-');
                   return Card(
                     child: Padding(
@@ -1884,27 +2036,58 @@ class _GoalsPageState extends State<_GoalsPage> {
   }
 }
 
-class _Metric extends StatelessWidget {
-  const _Metric({required this.title, required this.value});
-  final String title;
+class _DarkSummaryCard extends StatelessWidget {
+  const _DarkSummaryCard({
+    required this.eyebrow,
+    required this.value,
+    required this.detail,
+    required this.icon,
+  });
+  final String eyebrow;
   final String value;
+  final String detail;
+  final IconData icon;
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: const Color(0xFF111C42),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Row(
+      children: [
+        CircleAvatar(
+          backgroundColor: const Color(0xFF263761),
+          child: Icon(icon, color: const Color(0xFF8CB4FF)),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                eyebrow,
+                style: const TextStyle(
+                  color: Color(0xFFA5B4FC),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 26,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(detail, style: const TextStyle(color: Color(0xFFC7D2FE))),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 }
@@ -2024,15 +2207,17 @@ Future<_ResourceAction?> _showResourceActions(
   BuildContext context, {
   required String title,
   required String archiveLabel,
+  String renameLabel = 'Renomear',
 }) => showModalBottomSheet<_ResourceAction>(
   context: context,
+  useRootNavigator: true,
   builder: (context) => SafeArea(
     child: Wrap(
       children: [
         ListTile(title: Text(title)),
         ListTile(
           leading: const Icon(Icons.edit_outlined),
-          title: const Text('Renomear'),
+          title: Text(renameLabel),
           onTap: () => Navigator.pop(context, _ResourceAction.rename),
         ),
         ListTile(
@@ -2053,6 +2238,7 @@ Future<String?> _showRenameForm(
   final controller = TextEditingController(text: initialName);
   final result = await showDialog<String>(
     context: context,
+    useRootNavigator: true,
     builder: (dialogContext) => AlertDialog(
       title: Text(title),
       content: TextField(

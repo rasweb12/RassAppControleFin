@@ -9,15 +9,33 @@ public abstract class MutationValidator<T> : AbstractValidator<T> where T : IFin
 }
 public sealed class OpenAccountValidator : MutationValidator<OpenAccountCommand>
 {
-    public OpenAccountValidator() { RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
+    public OpenAccountValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
         RuleFor(x => x).Must(x => Money.IsValid(x.OpeningBalance, x.Currency, true)).WithMessage("Saldo/moeda invalidos.");
-        RuleFor(x => x).Must(x => Money.IsValid(x.OverdraftLimit, x.Currency, true)).WithMessage("Limite de cheque especial/moeda invalidos."); }
+        RuleFor(x => x).Must(x => Money.IsValid(x.OverdraftLimit, x.Currency, true)).WithMessage("Limite de cheque especial/moeda invalidos.");
+        RuleFor(x => x.AccountType).Must(x => x is "Bank" or "Wallet" or "Investment");
+        RuleFor(x => x.Subtype).MaximumLength(50);
+        RuleFor(x => x.Institution).MaximumLength(120);
+    }
 }
 public sealed class MaintainResourceValidator : MutationValidator<MaintainResourceCommand>
 {
     public MaintainResourceValidator() { RuleFor(x => x.Id).NotEmpty(); RuleFor(x => x.Version).GreaterThan(0);
         RuleFor(x => x.Resource).Must(x => x is "account" or "category" or "card");
         RuleFor(x => x.Name).NotEmpty().MaximumLength(120).When(x => !x.Archive); }
+}
+public sealed class UpdateAccountValidator : MutationValidator<UpdateAccountCommand>
+{
+    public UpdateAccountValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty(); RuleFor(x => x.Version).GreaterThan(0);
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
+        RuleFor(x => x.AccountType).Must(x => x is "Bank" or "Wallet" or "Investment");
+        RuleFor(x => x.Subtype).MaximumLength(50); RuleFor(x => x.Institution).MaximumLength(120);
+        RuleFor(x => x.OverdraftLimit).Must(value => decimal.Round(value, 2) == value)
+            .WithMessage("Limite de cheque especial deve ter no maximo duas casas decimais.");
+    }
 }
 public sealed class CategoryValidator : MutationValidator<CreateCategoryCommand>
 {

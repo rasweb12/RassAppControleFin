@@ -13,10 +13,15 @@ public static class FinanceEndpoints
     {
         var finance = app.MapGroup("/api/v1").RequireAuthorization().RequireRateLimiting("public-api");
         finance.MapPost("/accounts", (OpenAccountRequest r, ISender s, HttpContext h, CancellationToken ct)
-            => Send(s, new OpenAccountCommand(r.OperationId, r.Name, r.Currency, r.OpeningBalance, r.OverdraftLimit), h, ct))
+            => Send(s, new OpenAccountCommand(r.OperationId, r.Name, r.Currency, r.OpeningBalance, r.OverdraftLimit,
+                r.AccountType, r.Subtype, r.Institution, r.IncludeInNetWorth), h, ct))
             .RequireAuthorization(Permissions.AccountsWrite);
         finance.MapPatch("/accounts/{id:guid}", (Guid id, MaintainResourceRequest r, ISender s, HttpContext h, CancellationToken ct)
             => Send(s, new MaintainResourceCommand(r.OperationId, "account", id, r.Version, r.Name, r.Archive), h, ct))
+            .RequireAuthorization(Permissions.AccountsWrite);
+        finance.MapPut("/accounts/{id:guid}", (Guid id, UpdateAccountRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new UpdateAccountCommand(r.OperationId, id, r.Version, r.Name, r.OverdraftLimit,
+                r.AccountType, r.Subtype, r.Institution, r.IncludeInNetWorth), h, ct))
             .RequireAuthorization(Permissions.AccountsWrite);
         finance.MapGet("/accounts", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => Query(s, new ListAccountsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.AccountsRead);

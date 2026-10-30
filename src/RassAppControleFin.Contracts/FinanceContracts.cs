@@ -1,7 +1,10 @@
 namespace RassAppControleFin.Contracts;
 
-public sealed record OpenAccountRequest(Guid OperationId, string Name, string Currency, decimal OpeningBalance, decimal OverdraftLimit = 0m);
+public sealed record OpenAccountRequest(Guid OperationId, string Name, string Currency, decimal OpeningBalance, decimal OverdraftLimit = 0m,
+    string AccountType = "Bank", string? Subtype = null, string? Institution = null, bool IncludeInNetWorth = true);
 public sealed record MaintainResourceRequest(Guid OperationId, long Version, string Name, bool Archive);
+public sealed record UpdateAccountRequest(Guid OperationId, long Version, string Name, decimal OverdraftLimit,
+    string AccountType, string? Subtype, string? Institution, bool IncludeInNetWorth);
 public sealed record CreateCategoryRequest(Guid OperationId, string Name, string Flow);
 public sealed record CreateCardRequest(Guid OperationId, string Name, string Currency, decimal Limit, int ClosingDay, int DueDay);
 public sealed record CreateTransactionRequest(Guid OperationId, Guid AccountId, Guid CategoryId, decimal Amount,
@@ -16,7 +19,8 @@ public sealed record CreateCardMovementRequest(Guid OperationId, Guid CardId, lo
 
 public sealed record MutationReceiptDto(Guid ResourceId, Guid OperationId, long Version, long? SourceVersion,
     long? DestinationVersion, decimal? SourceBalance, decimal? DestinationBalance);
-public sealed record AccountDto(Guid Id, string Name, string Currency, decimal Balance, decimal OverdraftLimit, long Version, bool IsArchived);
+public sealed record AccountDto(Guid Id, string Name, string Currency, decimal Balance, decimal OverdraftLimit, string AccountType,
+    string? Subtype, string? Institution, bool IncludeInNetWorth, long Version, bool IsArchived);
 public sealed record CategoryDto(Guid Id, string Name, string Flow, long Version, bool IsArchived);
 public sealed record CardDto(Guid Id, string Name, string Currency, decimal Limit, decimal Outstanding,
     int ClosingDay, int DueDay, long Version, bool IsArchived);

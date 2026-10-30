@@ -47,6 +47,15 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<bool>("IncludeInNetWorth")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Institution")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
@@ -61,6 +70,17 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(16,2)")
                         .HasDefaultValue(0m);
 
+                    b.Property<string>("Subtype")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasDefaultValue("Bank");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -74,6 +94,8 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Accounts_Currency", "\"Currency\" IN ('BRL','USD','EUR')");
 
                             t.HasCheckConstraint("CK_Accounts_Name", "length(btrim(\"Name\")) BETWEEN 1 AND 120");
+
+                            t.HasCheckConstraint("CK_Accounts_Type", "\"Type\" IN ('Bank','Wallet','Investment')");
 
                             t.HasCheckConstraint("CK_Accounts_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
 

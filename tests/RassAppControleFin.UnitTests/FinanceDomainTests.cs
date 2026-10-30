@@ -29,6 +29,35 @@ public sealed class FinanceDomainTests
     }
 
     [Fact]
+    public void Account_updates_classification_without_changing_its_balance()
+    {
+        var account = Account.Open(Guid.NewGuid(), Guid.NewGuid(), "user", "Conta", Money.Create(150m, "BRL", true),
+            DateTimeOffset.UtcNow);
+
+        account.UpdateDetails("Carteira diária", AccountType.Wallet, "Digital", "RassPay", false, 0m);
+
+        Assert.Equal("Carteira diária", account.Name);
+        Assert.Equal(AccountType.Wallet, account.Type);
+        Assert.Equal("Digital", account.Subtype);
+        Assert.Equal("RassPay", account.Institution);
+        Assert.False(account.IncludeInNetWorth);
+        Assert.Equal(150m, account.Balance);
+        Assert.Equal(2, account.Version);
+    }
+
+    [Fact]
+    public void Account_rejects_reducing_overdraft_below_existing_negative_balance()
+    {
+        var account = Account.Open(Guid.NewGuid(), Guid.NewGuid(), "user", "Conta", Money.Create(0m, "BRL", true),
+            DateTimeOffset.UtcNow, overdraftLimit: 200m);
+        Assert.True(account.TryApply(-150m));
+
+        Assert.Throws<ArgumentException>(() => account.UpdateDetails("Conta", AccountType.Bank, null, null, true, 100m));
+        Assert.Equal(-150m, account.Balance);
+        Assert.Equal(2, account.Version);
+    }
+
+    [Fact]
     public void Credit_card_has_no_cardholder_data_and_enforces_limit()
     {
         var card = CreditCard.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Cartao", Money.Create(100m, "BRL"), 10, 20, DateTimeOffset.UtcNow);
