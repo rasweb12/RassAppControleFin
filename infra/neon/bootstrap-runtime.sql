@@ -23,7 +23,8 @@ GRANT SELECT ON app."__EFMigrationsHistory" TO rass_app_runtime;
 GRANT SELECT, INSERT ON app."TenantMemberships", app."AuditEntries" TO rass_app_runtime;
 GRANT SELECT, INSERT, UPDATE ON app."UserSessions" TO rass_app_runtime;
 GRANT SELECT, INSERT, UPDATE ON app."Accounts", app."Categories", app."CreditCards",
-    app."Transactions", app."Budgets", app."Goals" TO rass_app_runtime;
+    app."Transactions", app."Budgets", app."Goals", app."ExpenseReductionGoals",
+    app."FinancialNotifications" TO rass_app_runtime;
 GRANT SELECT, INSERT ON app."Transfers", app."LedgerEntries", app."CardMovements",
     app."SyncOperations", app."FinancialOutbox" TO rass_app_runtime;
 GRANT EXECUTE ON FUNCTION app.assert_transfer_ledger() TO rass_app_runtime;

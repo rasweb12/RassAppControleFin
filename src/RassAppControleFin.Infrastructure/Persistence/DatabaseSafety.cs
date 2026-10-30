@@ -4,7 +4,9 @@ namespace RassAppControleFin.Infrastructure.Persistence;
 
 internal static class DatabaseSafety
 {
-    internal const string ExpectedMigration = "PlanningAndDashboard";
+    // The API maps the account classification fields introduced by this migration.
+    // Accepting an older schema postpones the failure until a financial query runs.
+    internal const string ExpectedMigration = "AccountClassification";
 
     internal static async Task<bool> VerifyAsync(AppDbContext db, string runtimeRole,
         CancellationToken cancellationToken)

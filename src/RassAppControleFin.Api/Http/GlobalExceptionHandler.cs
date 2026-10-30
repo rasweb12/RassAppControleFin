@@ -17,13 +17,15 @@ public sealed class GlobalExceptionHandler(
         // Do not include exception messages or payloads in responses or logs.
         if (exception is PostgresException postgres)
         {
-            logger.LogError("Request failed. ExceptionType={ExceptionType} SqlState={SqlState} CorrelationId={CorrelationId}",
-                exception.GetType().Name, postgres.SqlState, context.TraceIdentifier);
+            logger.LogError("Request failed. Endpoint={Endpoint} Operation={Operation} ExceptionType={ExceptionType} " +
+                "SqlState={SqlState} Table={Table} Column={Column} Constraint={Constraint} CorrelationId={CorrelationId}",
+                context.Request.Path.Value, Operation(context), exception.GetType().Name, postgres.SqlState,
+                postgres.TableName, postgres.ColumnName, postgres.ConstraintName, context.TraceIdentifier);
         }
         else
         {
-            logger.LogError("Request failed. ExceptionType={ExceptionType} CorrelationId={CorrelationId}",
-                exception.GetType().Name, context.TraceIdentifier);
+            logger.LogError("Request failed. Endpoint={Endpoint} Operation={Operation} ExceptionType={ExceptionType} CorrelationId={CorrelationId}",
+                context.Request.Path.Value, Operation(context), exception.GetType().Name, context.TraceIdentifier);
         }
 
         context.Response.StatusCode = status;
@@ -38,4 +40,7 @@ public sealed class GlobalExceptionHandler(
             }
         });
     }
+
+    private static string Operation(HttpContext context)
+        => context.Request.Path.StartsWithSegments("/api/v1/sync") ? "finance.sync" : "http.request";
 }
