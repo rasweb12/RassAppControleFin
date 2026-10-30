@@ -409,8 +409,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   Future<void> _createTransaction(String flow) async {
     final tenant = _tenant;
     if (tenant == null) return;
-    final accounts = await _activeAccounts(tenant.id);
-    if (!mounted) return;
+    final accounts = await _accountsForNewFinancialOperation(tenant.id);
+    if (!mounted || accounts == null) return;
     if (accounts.isEmpty) {
       _notice('Cadastre uma conta antes de registrar um lançamento.');
       return;
@@ -445,8 +445,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   Future<void> _createTransfer() async {
     final tenant = _tenant;
     if (tenant == null) return;
-    final accounts = await _activeAccounts(tenant.id);
-    if (!mounted) return;
+    final accounts = await _accountsForNewFinancialOperation(tenant.id);
+    if (!mounted || accounts == null) return;
     if (accounts.length < 2) {
       _notice('Cadastre ao menos duas contas ativas para transferir valores.');
       return;
@@ -495,6 +495,38 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
           .where((item) => !item.archived && !item.id.startsWith('local-'))
           .toList(growable: false);
     }
+  }
+
+  Future<List<AccountSummary>?> _accountsForNewFinancialOperation(
+    String tenantId,
+  ) async {
+    var accounts = await _activeAccounts(tenantId);
+    if (!mounted || accounts.isNotEmpty) return accounts;
+
+    final hasPendingAccount = _accounts.any(
+      (item) => !item.archived && item.id.startsWith('local-'),
+    );
+    if (!hasPendingAccount) return accounts;
+
+    final result = await _repository.synchronize(tenantId);
+    if (!mounted) return null;
+    if (result == FinanceSyncResult.synchronized) {
+      accounts = await _activeAccounts(tenantId);
+      if (!mounted) return null;
+      if (accounts.isNotEmpty) return accounts;
+    }
+
+    _notice(switch (result) {
+      FinanceSyncResult.offline =>
+        'Sua conta está salva neste dispositivo e aguarda conexão para sincronizar.',
+      FinanceSyncResult.blocked =>
+        'Sua conta aguarda uma operação anterior que precisa de revisão na sincronização.',
+      FinanceSyncResult.failed =>
+        'A sincronização já está em andamento. Aguarde alguns instantes e tente novamente.',
+      FinanceSyncResult.synchronized =>
+        'A conta foi sincronizada, mas não ficou disponível neste espaço financeiro. Atualize e tente novamente.',
+    });
+    return null;
   }
 
   Future<void> _editTransaction(
