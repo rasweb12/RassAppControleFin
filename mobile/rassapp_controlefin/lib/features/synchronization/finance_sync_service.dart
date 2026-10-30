@@ -2,7 +2,7 @@ import '../../core/network/api_client.dart';
 import '../../core/storage/offline_finance_store.dart';
 import '../auth/auth_controller.dart';
 
-enum FinanceSyncResult { synchronized, offline, blocked, failed }
+enum FinanceSyncResult { synchronized, offline, unavailable, blocked, failed }
 
 class FinanceSyncService {
   FinanceSyncService(this._auth, this._store);
@@ -50,7 +50,7 @@ class FinanceSyncService {
               safeError: _safeError(error.failure),
               retryable: true,
             );
-            return FinanceSyncResult.offline;
+            return _retryResult(error.failure);
           }
           blocked = true;
           await _store.defer(
@@ -63,7 +63,7 @@ class FinanceSyncService {
       try {
         await _pullChanges(tenantId);
       } on ApiException catch (error) {
-        if (_isRetryable(error.failure)) return FinanceSyncResult.offline;
+        if (_isRetryable(error.failure)) return _retryResult(error.failure);
         rethrow;
       }
       return blocked
@@ -80,6 +80,13 @@ class FinanceSyncService {
     ApiFailure.unavailable ||
     ApiFailure.rateLimited => true,
     _ => false,
+  };
+
+  FinanceSyncResult _retryResult(ApiFailure failure) => switch (failure) {
+    ApiFailure.offline || ApiFailure.timeout => FinanceSyncResult.offline,
+    ApiFailure.unavailable ||
+    ApiFailure.rateLimited => FinanceSyncResult.unavailable,
+    _ => FinanceSyncResult.failed,
   };
 
   String _safeError(ApiFailure failure) => switch (failure) {

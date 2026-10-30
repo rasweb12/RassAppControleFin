@@ -519,6 +519,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     _notice(switch (result) {
       FinanceSyncResult.offline =>
         'Sua conta está salva neste dispositivo e aguarda conexão para sincronizar.',
+      FinanceSyncResult.unavailable =>
+        'O servidor financeiro está indisponível no momento. Sua conta permanece protegida neste dispositivo.',
       FinanceSyncResult.blocked =>
         'Sua conta aguarda uma operação anterior que precisa de revisão na sincronização.',
       FinanceSyncResult.failed =>
@@ -655,6 +657,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
             FinanceSyncResult.synchronized => 'Dados sincronizados.',
             FinanceSyncResult.offline =>
               'Não foi possível alcançar o servidor. Seus lançamentos pendentes permanecem protegidos neste dispositivo.',
+            FinanceSyncResult.unavailable =>
+              'O servidor financeiro está indisponível no momento. Seus lançamentos pendentes permanecem protegidos neste dispositivo.',
             FinanceSyncResult.blocked =>
               'Há uma operação que precisa de revisão antes de sincronizar.',
             FinanceSyncResult.failed => 'A sincronização já está em andamento.',

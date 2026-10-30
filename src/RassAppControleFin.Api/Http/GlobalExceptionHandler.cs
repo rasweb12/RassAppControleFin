@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Npgsql;
 
 namespace RassAppControleFin.Api.Http;
 
@@ -14,8 +15,16 @@ public sealed class GlobalExceptionHandler(
         var status = exception is ValidationException ? 400 : 500;
 
         // Do not include exception messages or payloads in responses or logs.
-        logger.LogError("Request failed. ExceptionType={ExceptionType} CorrelationId={CorrelationId}",
-            exception.GetType().Name, context.TraceIdentifier);
+        if (exception is PostgresException postgres)
+        {
+            logger.LogError("Request failed. ExceptionType={ExceptionType} SqlState={SqlState} CorrelationId={CorrelationId}",
+                exception.GetType().Name, postgres.SqlState, context.TraceIdentifier);
+        }
+        else
+        {
+            logger.LogError("Request failed. ExceptionType={ExceptionType} CorrelationId={CorrelationId}",
+                exception.GetType().Name, context.TraceIdentifier);
+        }
 
         context.Response.StatusCode = status;
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
