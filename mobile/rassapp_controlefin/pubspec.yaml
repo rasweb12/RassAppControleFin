@@ -55,6 +55,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   build_runner: ^2.10.4
   drift_dev: ^2.35.0
+  flutter_launcher_icons: ^0.14.4
 
 hooks:
   user_defines:
@@ -104,3 +105,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/branding/rass_app_icon.png
+  min_sdk_android: 21
