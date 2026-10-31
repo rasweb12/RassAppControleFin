@@ -37,6 +37,7 @@ public sealed record TransactionPageDto(PageDto<TransactionDto> Page, IReadOnlyL
 public sealed record CreateBudgetRequest(Guid OperationId, Guid? CategoryId, decimal Amount, string Currency,
     DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd);
 public sealed record VersionedOperationRequest(Guid OperationId, long Version);
+public sealed record ArchiveResourceRequest(Guid OperationId, long Version, bool Archive = true);
 public sealed record CreateGoalRequest(Guid OperationId, string Name, decimal TargetAmount, string Currency, DateTimeOffset? TargetDate);
 public sealed record AddGoalProgressRequest(Guid OperationId, long Version, decimal Amount, string Currency);
 public sealed record BudgetDto(Guid Id, Guid? CategoryId, decimal Amount, decimal Spent, string Currency,

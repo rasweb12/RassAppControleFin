@@ -38,4 +38,8 @@ public sealed class ExpenseReductionGoal : FinancialAggregate
     {
         if (!IsArchived) { IsArchived = true; Version = checked(Version + 1); }
     }
+    public void Reactivate()
+    {
+        if (IsArchived) { IsArchived = false; Version = checked(Version + 1); }
+    }
 }

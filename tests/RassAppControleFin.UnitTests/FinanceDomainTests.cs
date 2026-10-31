@@ -100,6 +100,20 @@ public sealed class FinanceDomainTests
     }
 
     [Fact]
+    public void Archived_goal_can_be_reactivated_without_losing_progress()
+    {
+        var goal = Goal.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Reserva",
+            Money.Create(100m, "BRL"), null, DateTimeOffset.UtcNow);
+        Assert.True(goal.AddProgress(Money.Create(25m, "BRL")));
+
+        goal.Archive();
+        goal.Reactivate();
+
+        Assert.Equal("Active", goal.Status);
+        Assert.Equal(25m, goal.CurrentAmount);
+    }
+
+    [Fact]
     public void Expense_reduction_goal_requires_a_lower_target_and_valid_period()
     {
         var now = DateTimeOffset.UtcNow;
@@ -108,6 +122,19 @@ public sealed class FinanceDomainTests
         Assert.Equal(200m, goal.ReferenceAmount - goal.TargetAmount);
         Assert.Throws<ArgumentException>(() => ExpenseReductionGoal.Create(Guid.NewGuid(), Guid.NewGuid(), "user", null,
             Money.Create(900m, "BRL"), Money.Create(900m, "BRL"), now, now.AddMonths(1), now));
+    }
+
+    [Fact]
+    public void Archived_expense_reduction_goal_can_be_reactivated()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var goal = ExpenseReductionGoal.Create(Guid.NewGuid(), Guid.NewGuid(), "user", null,
+            Money.Create(900m, "BRL"), Money.Create(700m, "BRL"), now, now.AddMonths(1), now);
+
+        goal.Archive();
+        goal.Reactivate();
+
+        Assert.False(goal.IsArchived);
     }
 
     [Fact]

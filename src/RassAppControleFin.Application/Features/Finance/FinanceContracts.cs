@@ -88,12 +88,12 @@ public sealed record CreateGoalCommand(Guid OperationId, string Name, decimal Ta
 { public string Permission => Permissions.TransactionsWrite; }
 public sealed record AddGoalProgressCommand(Guid OperationId, Guid Id, long Version, decimal Amount, string Currency) : IFinanceMutation
 { public string Permission => Permissions.TransactionsWrite; }
-public sealed record ArchiveGoalCommand(Guid OperationId, Guid Id, long Version) : IFinanceMutation
+public sealed record ArchiveGoalCommand(Guid OperationId, Guid Id, long Version, bool Archive = true) : IFinanceMutation
 { public string Permission => Permissions.TransactionsWrite; }
 public sealed record CreateExpenseReductionGoalCommand(Guid OperationId, Guid? CategoryId, decimal ReferenceAmount,
     decimal TargetAmount, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd) : IFinanceMutation
 { public string Permission => Permissions.TransactionsWrite; }
-public sealed record ArchiveExpenseReductionGoalCommand(Guid OperationId, Guid Id, long Version) : IFinanceMutation
+public sealed record ArchiveExpenseReductionGoalCommand(Guid OperationId, Guid Id, long Version, bool Archive = true) : IFinanceMutation
 { public string Permission => Permissions.TransactionsWrite; }
 public sealed record MarkNotificationReadCommand(Guid OperationId, Guid Id, long Version) : IFinanceMutation
 { public string Permission => Permissions.TransactionsRead; }

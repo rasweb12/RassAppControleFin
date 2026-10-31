@@ -317,7 +317,7 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
         var goal = await unit.GoalAsync(c.Id, ct);
         if (goal is null) return Missing();
         if (goal.Version != c.Version) return Conflict();
-        goal.Archive();
+        if (c.Archive) goal.Archive(); else goal.Reactivate();
         return Result<MutationReceipt>.Success(new(goal.Id, c.OperationId, goal.Version));
     }, ct);
 
@@ -342,7 +342,7 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
         var goal = await unit.ExpenseReductionGoalAsync(c.Id, ct);
         if (goal is null) return Missing();
         if (goal.Version != c.Version) return Conflict();
-        goal.Archive();
+        if (c.Archive) goal.Archive(); else goal.Reactivate();
         return Result<MutationReceipt>.Success(new(goal.Id, c.OperationId, goal.Version));
     }, ct);
 

@@ -730,6 +730,7 @@ class FinanceRepository {
   Future<FinanceWriteState> archiveGoal({
     required String tenantId,
     required GoalSummary goal,
+    bool archive = true,
   }) {
     final operationId = _newOperationId();
     return _postOrQueue(
@@ -737,13 +738,18 @@ class FinanceRepository {
       endpoint: '/api/v1/goals/${goal.id}/archive',
       entityType: 'goal',
       entityId: goal.id,
-      payload: {'operationId': operationId, 'version': goal.version},
+      payload: {
+        'operationId': operationId,
+        'version': goal.version,
+        'archive': archive,
+      },
     );
   }
 
   Future<FinanceWriteState> archiveExpenseReductionGoal({
     required String tenantId,
     required ExpenseReductionGoalSummary goal,
+    bool archive = true,
   }) {
     final operationId = _newOperationId();
     return _postOrQueue(
@@ -751,7 +757,11 @@ class FinanceRepository {
       endpoint: '/api/v1/expense-reduction-goals/${goal.id}/archive',
       entityType: 'expenseReductionGoal',
       entityId: goal.id,
-      payload: {'operationId': operationId, 'version': goal.version},
+      payload: {
+        'operationId': operationId,
+        'version': goal.version,
+        'archive': archive,
+      },
     );
   }
 

@@ -370,6 +370,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     final controller = TextEditingController();
     final amount = await showDialog<num>(
       context: context,
+      useRootNavigator: true,
       builder: (dialogContext) => AlertDialog(
         title: Text('Adicionar à meta ${goal.name}'),
         content: TextField(
@@ -380,14 +381,15 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
+            onPressed: () =>
+                Navigator.of(dialogContext, rootNavigator: true).pop(),
             child: const Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () {
               final value = _parseAmount(controller.text);
               if (value == null || value <= 0) return;
-              Navigator.pop(dialogContext, value);
+              Navigator.of(dialogContext, rootNavigator: true).pop(value);
             },
             child: const Text('Adicionar'),
           ),
@@ -409,7 +411,11 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     final tenant = _tenant;
     if (tenant == null || goal.id.startsWith('local-')) return;
     await _mutate(
-      () => _repository.archiveGoal(tenantId: tenant.id, goal: goal),
+      () => _repository.archiveGoal(
+        tenantId: tenant.id,
+        goal: goal,
+        archive: goal.status != 'Archived',
+      ),
     );
   }
 
@@ -422,6 +428,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
       () => _repository.archiveExpenseReductionGoal(
         tenantId: tenant.id,
         goal: goal,
+        archive: !goal.archived,
       ),
     );
   }
@@ -1390,7 +1397,7 @@ class _Transactions extends StatelessWidget {
                   ),
                 ],
               ),
-              onTap: () {
+              onTap: () async {
                 AccountSummary? account;
                 for (final candidate in accounts) {
                   if (candidate.id == item.accountId) {
@@ -1398,18 +1405,22 @@ class _Transactions extends StatelessWidget {
                     break;
                   }
                 }
-                _showTransactionDetails(
+                final action = await _showTransactionDetails(
                   context,
                   item,
-                  transfer || account == null
-                      ? null
-                      : () => onCancel(item, account!),
-                  transfer || account == null
-                      ? null
-                      : () => onEdit(item, account!),
+                  canModify: !transfer && account != null,
                   sourceName,
                   destinationName,
                 );
+                if (!context.mounted || account == null) return;
+                switch (action) {
+                  case _TransactionDetailAction.edit:
+                    await onEdit(item, account);
+                  case _TransactionDetailAction.cancel:
+                    await onCancel(item, account);
+                  case null:
+                    break;
+                }
               },
             ),
           );
@@ -1419,15 +1430,17 @@ class _Transactions extends StatelessWidget {
   }
 }
 
-Future<void> _showTransactionDetails(
+enum _TransactionDetailAction { edit, cancel }
+
+Future<_TransactionDetailAction?> _showTransactionDetails(
   BuildContext context,
   TransactionSummary transaction,
-  Future<void> Function()? onCancel,
-  Future<void> Function()? onEdit,
+  {required bool canModify,
   String? sourceName,
-  String? destinationName,
+  String? destinationName,}
 ) => showModalBottomSheet<void>(
   context: context,
+  useRootNavigator: true,
   builder: (context) {
     final income = transaction.flow.toLowerCase() == 'income';
     final transfer = transaction.isTransfer;
@@ -1476,8 +1489,10 @@ Future<void> _showTransactionDetails(
               const SizedBox(height: 12),
               FilledButton.tonalIcon(
                 onPressed: () async {
-                  Navigator.pop(context);
-                  await onEdit();
+                  final edit = onEdit;
+                  Navigator.of(context, rootNavigator: true).pop();
+                  await Future<void>.delayed(const Duration(milliseconds: 250));
+                  await edit();
                 },
                 icon: const Icon(Icons.edit_outlined),
                 label: const Text('Editar valor e descrição'),
@@ -1508,8 +1523,12 @@ Future<void> _showTransactionDetails(
                   );
                   if (confirmed == true) {
                     if (!context.mounted) return;
-                    Navigator.pop(context);
-                    await onCancel();
+                    final cancel = onCancel;
+                    Navigator.of(context, rootNavigator: true).pop();
+                    await Future<void>.delayed(
+                      const Duration(milliseconds: 250),
+                    );
+                    await cancel();
                   }
                 },
                 icon: const Icon(Icons.cancel_outlined),
@@ -1659,6 +1678,7 @@ class _ExpenseReductionGoalsPage extends StatefulWidget {
 class _ExpenseReductionGoalsPageState
     extends State<_ExpenseReductionGoalsPage> {
   late List<ExpenseReductionGoalSummary> _goals = widget.goals;
+  bool _showArchived = false;
 
   Future<void> _refresh() async {
     final goals = await widget.onRefresh();
@@ -1670,6 +1690,7 @@ class _ExpenseReductionGoalsPageState
     final target = TextEditingController();
     final values = await showDialog<(num, num)>(
       context: context,
+      useRootNavigator: true,
       builder: (context) => AlertDialog(
         title: const Text('Meta de redução mensal'),
         content: Column(
@@ -1697,7 +1718,7 @@ class _ExpenseReductionGoalsPageState
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
             child: const Text('Cancelar'),
           ),
           FilledButton(
@@ -1711,7 +1732,7 @@ class _ExpenseReductionGoalsPageState
                   to >= from) {
                 return;
               }
-              Navigator.pop(context, (from, to));
+              Navigator.of(context, rootNavigator: true).pop((from, to));
             },
             child: const Text('Criar'),
           ),
@@ -1726,19 +1747,29 @@ class _ExpenseReductionGoalsPageState
   }
 
   Future<void> _archive(ExpenseReductionGoalSummary goal) async {
+    final restoring = goal.archived;
     final confirmed = await showDialog<bool>(
       context: context,
+      useRootNavigator: true,
       builder: (context) => AlertDialog(
-        title: const Text('Cancelar meta de redução?'),
-        content: const Text('A meta será arquivada e não será apagada.'),
+        title: Text(
+          restoring ? 'Reativar meta de redução?' : 'Cancelar meta de redução?',
+        ),
+        content: Text(
+          restoring
+              ? 'A meta voltará a participar do acompanhamento mensal.'
+              : 'A meta será arquivada e não será apagada.',
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () =>
+                Navigator.of(context, rootNavigator: true).pop(false),
             child: const Text('Voltar'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Cancelar meta'),
+            onPressed: () =>
+                Navigator.of(context, rootNavigator: true).pop(true),
+            child: Text(restoring ? 'Reativar meta' : 'Cancelar meta'),
           ),
         ],
       ),
@@ -1749,111 +1780,127 @@ class _ExpenseReductionGoalsPageState
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Redução de despesas'),
-      actions: [
-        IconButton(
-          onPressed: _refresh,
-          tooltip: 'Atualizar',
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
-    floatingActionButton: FloatingActionButton(
-      onPressed: _create,
-      tooltip: 'Criar meta de redução',
-      child: const Icon(Icons.add),
-    ),
-    body: _goals.isEmpty
-        ? _MessageState(
-            icon: Icons.trending_down_outlined,
-            title: 'Nenhuma meta de redução criada',
-            message: 'Crie uma meta para acompanhar sua economia mensal.',
-            action: 'Atualizar',
-            onAction: _refresh,
-          )
-        : ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: _goals.length + 1,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (_, index) {
-              if (index == 0) {
-                final planned = _goals.fold<num>(
-                  0,
-                  (sum, item) => sum + item.targetAmount,
-                );
-                final actual = _goals.fold<num>(
-                  0,
-                  (sum, item) => sum + item.actualExpense,
-                );
-                return _DarkSummaryCard(
-                  eyebrow: 'REDUÇÃO DE DESPESAS',
-                  value: _money(planned, 'BRL'),
-                  detail: actual <= planned
-                      ? 'Dentro da meta planejada'
-                      : 'Acima da meta planejada',
-                  icon: Icons.trending_down_outlined,
-                );
-              }
-              final goal = _goals[index - 1];
-              final remaining = (goal.targetAmount - goal.actualExpense).clamp(
-                0,
-                goal.targetAmount,
-              );
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const CircleAvatar(
-                            child: Icon(Icons.savings_outlined),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Meta mensal de redução',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Cancelar meta de redução',
-                            onPressed: goal.id.startsWith('local-')
-                                ? null
-                                : () => _archive(goal),
-                            icon: const Icon(Icons.archive_outlined),
-                          ),
-                          Text(
-                            '${(goal.progress * 100).round()}%',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF2563EB),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        'Gasto atual ${_money(goal.actualExpense, goal.currency)} de ${_money(goal.targetAmount, goal.currency)}',
-                      ),
-                      const SizedBox(height: 8),
-                      LinearProgressIndicator(value: goal.progress),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Ainda disponível no limite: ${_money(remaining, goal.currency)}',
-                        style: const TextStyle(color: Color(0xFF64748B)),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+  Widget build(BuildContext context) {
+    final visible = _goals
+        .where((goal) => _showArchived || !goal.archived)
+        .toList(growable: false);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Redução de despesas'),
+        actions: [
+          IconButton(
+            tooltip: _showArchived ? 'Ocultar arquivadas' : 'Exibir arquivadas',
+            onPressed: () => setState(() => _showArchived = !_showArchived),
+            icon: Icon(
+              _showArchived ? Icons.inventory_2 : Icons.inventory_2_outlined,
+            ),
           ),
-  );
+          IconButton(
+            onPressed: _refresh,
+            tooltip: 'Atualizar',
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _create,
+        tooltip: 'Criar meta de redução',
+        child: const Icon(Icons.add),
+      ),
+      body: visible.isEmpty
+          ? _MessageState(
+              icon: Icons.trending_down_outlined,
+              title: 'Nenhuma meta de redução criada',
+              message: 'Crie uma meta para acompanhar sua economia mensal.',
+              action: 'Atualizar',
+              onAction: _refresh,
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: visible.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (_, index) {
+                if (index == 0) {
+                  final planned = visible.fold<num>(
+                    0,
+                    (sum, item) => sum + item.targetAmount,
+                  );
+                  final actual = visible.fold<num>(
+                    0,
+                    (sum, item) => sum + item.actualExpense,
+                  );
+                  return _DarkSummaryCard(
+                    eyebrow: 'REDUÇÃO DE DESPESAS',
+                    value: _money(planned, 'BRL'),
+                    detail: actual <= planned
+                        ? 'Dentro da meta planejada'
+                        : 'Acima da meta planejada',
+                    icon: Icons.trending_down_outlined,
+                  );
+                }
+                final goal = visible[index - 1];
+                final remaining = (goal.targetAmount - goal.actualExpense)
+                    .clamp(0, goal.targetAmount);
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const CircleAvatar(
+                              child: Icon(Icons.savings_outlined),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Meta mensal de redução',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: goal.archived
+                                  ? 'Reativar meta de redução'
+                                  : 'Cancelar meta de redução',
+                              onPressed: goal.id.startsWith('local-')
+                                  ? null
+                                  : () => _archive(goal),
+                              icon: Icon(
+                                goal.archived
+                                    ? Icons.unarchive_outlined
+                                    : Icons.archive_outlined,
+                              ),
+                            ),
+                            Text(
+                              '${(goal.progress * 100).round()}%',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Gasto atual ${_money(goal.actualExpense, goal.currency)} de ${_money(goal.targetAmount, goal.currency)}',
+                        ),
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(value: goal.progress),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Ainda disponível no limite: ${_money(remaining, goal.currency)}',
+                          style: const TextStyle(color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
 }
 
 class _Menu extends StatelessWidget {
@@ -2144,6 +2191,7 @@ class _GoalsPage extends StatefulWidget {
 class _GoalsPageState extends State<_GoalsPage> {
   late List<GoalSummary> _goals = widget.goals;
   bool _loading = false;
+  bool _showArchived = false;
 
   Future<void> _refresh() async {
     setState(() => _loading = true);
@@ -2166,21 +2214,27 @@ class _GoalsPageState extends State<_GoalsPage> {
   }
 
   Future<void> _archive(GoalSummary goal) async {
+    final restoring = goal.status == 'Archived';
     final confirmed = await showDialog<bool>(
       context: context,
+      useRootNavigator: true,
       builder: (context) => AlertDialog(
-        title: const Text('Cancelar meta?'),
-        content: const Text(
-          'A meta será arquivada e seu histórico será preservado.',
+        title: Text(restoring ? 'Reativar meta?' : 'Cancelar meta?'),
+        content: Text(
+          restoring
+              ? 'A meta voltará a participar do acompanhamento.'
+              : 'A meta será arquivada e seu histórico será preservado.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () =>
+                Navigator.of(context, rootNavigator: true).pop(false),
             child: const Text('Voltar'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Cancelar meta'),
+            onPressed: () =>
+                Navigator.of(context, rootNavigator: true).pop(true),
+            child: Text(restoring ? 'Reativar meta' : 'Cancelar meta'),
           ),
         ],
       ),
@@ -2193,8 +2247,21 @@ class _GoalsPageState extends State<_GoalsPage> {
   @override
   Widget build(BuildContext context) {
     final active = _goals.where((goal) => goal.status == 'Active').toList();
+    final visible = _showArchived ? _goals : active;
+    final summary = active.isEmpty ? visible : active;
     return Scaffold(
-      appBar: AppBar(title: const Text('Metas')),
+      appBar: AppBar(
+        title: const Text('Metas'),
+        actions: [
+          IconButton(
+            tooltip: _showArchived ? 'Ocultar arquivadas' : 'Exibir arquivadas',
+            onPressed: () => setState(() => _showArchived = !_showArchived),
+            icon: Icon(
+              _showArchived ? Icons.inventory_2 : Icons.inventory_2_outlined,
+            ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _loading ? null : _create,
         tooltip: 'Nova meta',
@@ -2202,7 +2269,7 @@ class _GoalsPageState extends State<_GoalsPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : active.isEmpty
+          : visible.isEmpty
           ? _MessageState(
               icon: Icons.flag_outlined,
               title: 'Nenhuma meta ativa',
@@ -2214,27 +2281,27 @@ class _GoalsPageState extends State<_GoalsPage> {
               onRefresh: _refresh,
               child: ListView.separated(
                 padding: const EdgeInsets.all(16),
-                itemCount: active.length + 1,
+                itemCount: visible.length + 1,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   if (index == 0) {
-                    final total = active.fold<num>(
+                    final total = summary.fold<num>(
                       0,
                       (sum, goal) => sum + goal.targetAmount,
                     );
-                    final saved = active.fold<num>(
+                    final saved = summary.fold<num>(
                       0,
                       (sum, goal) => sum + goal.currentAmount,
                     );
                     return _DarkSummaryCard(
                       eyebrow: 'ECONOMIA CONSOLIDADA',
-                      value: _money(saved, active.first.currency),
+                      value: _money(saved, summary.first.currency),
                       detail:
-                          'Objetivo total ${_money(total, active.first.currency)}',
+                          'Objetivo total ${_money(total, summary.first.currency)}',
                       icon: Icons.flag_outlined,
                     );
                   }
-                  final goal = active[index - 1];
+                  final goal = visible[index - 1];
                   final localOnly = goal.id.startsWith('local-');
                   return Card(
                     child: Padding(
@@ -2258,9 +2325,15 @@ class _GoalsPageState extends State<_GoalsPage> {
                                 )
                               else
                                 IconButton(
-                                  tooltip: 'Cancelar meta',
+                                  tooltip: goal.status == 'Archived'
+                                      ? 'Reativar meta'
+                                      : 'Cancelar meta',
                                   onPressed: () => _archive(goal),
-                                  icon: const Icon(Icons.archive_outlined),
+                                  icon: Icon(
+                                    goal.status == 'Archived'
+                                        ? Icons.unarchive_outlined
+                                        : Icons.archive_outlined,
+                                  ),
                                 ),
                             ],
                           ),
@@ -2280,7 +2353,7 @@ class _GoalsPageState extends State<_GoalsPage> {
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
-                              onPressed: localOnly
+                              onPressed: localOnly || goal.status == 'Archived'
                                   ? null
                                   : () => _addProgress(goal),
                               icon: const Icon(Icons.add),
@@ -2419,6 +2492,7 @@ Future<_TransactionEditInput?> _showTransactionEditForm(
   final description = TextEditingController(text: transaction.description);
   final result = await showDialog<_TransactionEditInput>(
     context: context,
+    useRootNavigator: true,
     builder: (dialogContext) => AlertDialog(
       title: const Text('Editar lançamento'),
       content: Column(
@@ -2480,12 +2554,18 @@ Future<_ResourceAction?> _showResourceActions(
         ListTile(
           leading: const Icon(Icons.edit_outlined),
           title: Text(renameLabel),
-          onTap: () => Navigator.pop(context, _ResourceAction.rename),
+          onTap: () => Navigator.of(
+            context,
+            rootNavigator: true,
+          ).pop(_ResourceAction.rename),
         ),
         ListTile(
           leading: const Icon(Icons.archive_outlined),
           title: Text(archiveLabel),
-          onTap: () => Navigator.pop(context, _ResourceAction.archive),
+          onTap: () => Navigator.of(
+            context,
+            rootNavigator: true,
+          ).pop(_ResourceAction.archive),
         ),
       ],
     ),

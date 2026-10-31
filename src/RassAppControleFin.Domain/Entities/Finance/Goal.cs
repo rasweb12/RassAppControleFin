@@ -26,4 +26,10 @@ public sealed class Goal : FinancialAggregate
         Version = checked(Version + 1); return true;
     }
     public void Archive() { if (Status != "Archived") { Status = "Archived"; Version = checked(Version + 1); } }
+    public void Reactivate()
+    {
+        if (Status != "Archived") return;
+        Status = CurrentAmount == TargetAmount ? "Completed" : "Active";
+        Version = checked(Version + 1);
+    }
 }

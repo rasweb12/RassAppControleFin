@@ -120,15 +120,15 @@ public static class FinanceEndpoints
         finance.MapPost("/goals/{id:guid}/progress", (Guid id, AddGoalProgressRequest r, ISender s, HttpContext h, CancellationToken ct)
             => Send(s, new AddGoalProgressCommand(r.OperationId, id, r.Version, r.Amount, r.Currency), h, ct))
             .RequireAuthorization(Permissions.TransactionsWrite);
-        finance.MapPost("/goals/{id:guid}/archive", (Guid id, VersionedOperationRequest r, ISender s, HttpContext h, CancellationToken ct)
-            => Send(s, new ArchiveGoalCommand(r.OperationId, id, r.Version), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapPost("/goals/{id:guid}/archive", (Guid id, ArchiveResourceRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new ArchiveGoalCommand(r.OperationId, id, r.Version, r.Archive), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
         finance.MapGet("/goals", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => Goals(s, new ListGoalsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
         finance.MapPost("/expense-reduction-goals", (CreateExpenseReductionGoalRequest r, ISender s, HttpContext h, CancellationToken ct)
             => Send(s, new CreateExpenseReductionGoalCommand(r.OperationId, r.CategoryId, r.ReferenceAmount, r.TargetAmount,
                 r.Currency, r.PeriodStart, r.PeriodEnd), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
-        finance.MapPost("/expense-reduction-goals/{id:guid}/archive", (Guid id, VersionedOperationRequest r, ISender s, HttpContext h, CancellationToken ct)
-            => Send(s, new ArchiveExpenseReductionGoalCommand(r.OperationId, id, r.Version), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapPost("/expense-reduction-goals/{id:guid}/archive", (Guid id, ArchiveResourceRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new ArchiveExpenseReductionGoalCommand(r.OperationId, id, r.Version, r.Archive), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
         finance.MapGet("/expense-reduction-goals", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => ExpenseReductionGoals(s, new ListExpenseReductionGoalsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
         finance.MapGet("/notifications", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
