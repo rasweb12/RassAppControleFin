@@ -470,14 +470,13 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   ) async {
     final tenant = _tenant;
     if (tenant == null || transaction.id.startsWith('local-')) return;
-    await _mutate(() async {
-      await _repository.cancelTransaction(
+    await _mutate(
+      () => _repository.cancelTransaction(
         tenantId: tenant.id,
         transaction: transaction,
         account: account,
-      );
-      return FinanceWriteState.applied;
-    });
+      ),
+    );
   }
 
   Future<List<AccountSummary>> _activeAccounts(String tenantId) async {
@@ -539,16 +538,15 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     if (tenant == null || transaction.id.startsWith('local-')) return;
     final input = await _showTransactionEditForm(context, transaction);
     if (input == null || !mounted) return;
-    await _mutate(() async {
-      await _repository.editTransaction(
+    await _mutate(
+      () => _repository.editTransaction(
         tenantId: tenant.id,
         transaction: transaction,
         account: account,
         amount: input.amount,
         description: input.description,
-      );
-      return FinanceWriteState.applied;
-    });
+      ),
+    );
   }
 
   Future<void> _maintainAccount(AccountSummary account) async {
@@ -1245,7 +1243,18 @@ class _Transactions extends StatelessWidget {
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final item = items[index];
+          final transfer = item.isTransfer;
           final income = item.flow.toLowerCase() == 'income';
+          String? sourceName;
+          String? destinationName;
+          for (final account in accounts) {
+            if (account.id == (item.sourceAccountId ?? item.accountId)) {
+              sourceName = account.name;
+            }
+            if (account.id == item.destinationAccountId) {
+              destinationName = account.name;
+            }
+          }
           return Card(
             child: ListTile(
               contentPadding: const EdgeInsets.symmetric(
@@ -1253,12 +1262,20 @@ class _Transactions extends StatelessWidget {
                 vertical: 6,
               ),
               leading: CircleAvatar(
-                backgroundColor: income
+                backgroundColor: transfer
+                    ? const Color(0xFFE7F0FF)
+                    : income
                     ? const Color(0xFFDDF7E8)
                     : const Color(0xFFFDE8E7),
                 child: Icon(
-                  income ? Icons.south_west : Icons.north_east,
-                  color: income
+                  transfer
+                      ? Icons.swap_horiz
+                      : income
+                      ? Icons.south_west
+                      : Icons.north_east,
+                  color: transfer
+                      ? AppTheme.blue
+                      : income
                       ? const Color(0xFF00875A)
                       : const Color(0xFFD92D20),
                 ),
@@ -1267,26 +1284,42 @@ class _Transactions extends StatelessWidget {
                 item.description.isEmpty ? 'Transação' : item.description,
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
-              subtitle: Text('${_date(item.occurredAt)} · ${item.status}'),
+              subtitle: Text(
+                transfer && destinationName != null
+                    ? '${sourceName ?? 'Origem'} -> $destinationName · ${_date(item.occurredAt)} · ${item.status}'
+                    : '${_date(item.occurredAt)} · ${item.status}',
+              ),
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${income ? '+' : '-'}${_money(item.amount, item.currency)}',
+                    '${transfer
+                        ? ''
+                        : income
+                        ? '+'
+                        : '-'}${_money(item.amount, item.currency)}',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: income
+                      color: transfer
+                          ? AppTheme.blue
+                          : income
                           ? const Color(0xFF087A36)
                           : const Color(0xFFD92D20),
                     ),
                   ),
                   Text(
-                    income ? 'RECEITA' : 'DESPESA',
+                    transfer
+                        ? 'TRANSFERÊNCIA'
+                        : income
+                        ? 'RECEITA'
+                        : 'DESPESA',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
-                      color: income
+                      color: transfer
+                          ? AppTheme.blue
+                          : income
                           ? const Color(0xFF087A36)
                           : const Color(0xFFD92D20),
                     ),
@@ -1304,8 +1337,14 @@ class _Transactions extends StatelessWidget {
                 _showTransactionDetails(
                   context,
                   item,
-                  account == null ? null : () => onCancel(item, account!),
-                  account == null ? null : () => onEdit(item, account!),
+                  transfer || account == null
+                      ? null
+                      : () => onCancel(item, account!),
+                  transfer || account == null
+                      ? null
+                      : () => onEdit(item, account!),
+                  sourceName,
+                  destinationName,
                 );
               },
             ),
@@ -1321,10 +1360,13 @@ Future<void> _showTransactionDetails(
   TransactionSummary transaction,
   Future<void> Function()? onCancel,
   Future<void> Function()? onEdit,
+  String? sourceName,
+  String? destinationName,
 ) => showModalBottomSheet<void>(
   context: context,
   builder: (context) {
     final income = transaction.flow.toLowerCase() == 'income';
+    final transfer = transaction.isTransfer;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
@@ -1342,10 +1384,28 @@ Future<void> _showTransactionDetails(
             ),
             const SizedBox(height: 16),
             _DetailRow(
-              label: income ? 'Receita' : 'Despesa',
+              label: transfer
+                  ? 'Transferência'
+                  : income
+                  ? 'Receita'
+                  : 'Despesa',
               value:
-                  '${income ? '+' : '-'}${_money(transaction.amount, transaction.currency)}',
+                  '${transfer
+                      ? ''
+                      : income
+                      ? '+'
+                      : '-'}${_money(transaction.amount, transaction.currency)}',
             ),
+            if (transfer) ...[
+              _DetailRow(
+                label: 'Origem',
+                value: sourceName ?? 'Conta de origem',
+              ),
+              _DetailRow(
+                label: 'Destino',
+                value: destinationName ?? 'Conta de destino',
+              ),
+            ],
             _DetailRow(label: 'Data', value: _date(transaction.occurredAt)),
             _DetailRow(label: 'Status', value: transaction.status),
             if (onEdit != null && transaction.status != 'Cancelled') ...[

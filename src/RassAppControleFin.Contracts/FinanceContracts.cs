@@ -25,7 +25,8 @@ public sealed record CategoryDto(Guid Id, string Name, string Flow, long Version
 public sealed record CardDto(Guid Id, string Name, string Currency, decimal Limit, decimal Outstanding,
     int ClosingDay, int DueDay, long Version, bool IsArchived);
 public sealed record TransactionDto(Guid Id, Guid AccountId, Guid CategoryId, decimal Amount, string Currency,
-    string Flow, string Status, DateTimeOffset OccurredAt, string Description, long Version);
+    string Flow, string Status, DateTimeOffset OccurredAt, string Description, long Version,
+    string EntryType = "Transaction", Guid? SourceAccountId = null, Guid? DestinationAccountId = null);
 public sealed record TransferDto(Guid Id, Guid SourceAccountId, Guid DestinationAccountId, decimal Amount,
     string Currency, DateTimeOffset OccurredAt, string Description, string Status);
 public sealed record CardMovementDto(Guid Id, Guid CardId, Guid? AccountId, Guid? CategoryId, decimal Amount,

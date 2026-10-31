@@ -38,16 +38,49 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
     public Task<Result<TransactionPage>> TransactionsAsync(ListTransactionsQuery q, CancellationToken ct) => Read(async () =>
     {
         var rows = db.Transactions.AsNoTracking();
-        if (!string.IsNullOrWhiteSpace(q.Search)) rows = rows.Where(x => x.Description.Contains(q.Search.Trim()));
-        if (q.AccountId is { } account) rows = rows.Where(x => x.AccountId == account);
-        if (q.CategoryId is { } category) rows = rows.Where(x => x.CategoryId == category);
-        if (q.Flow is { } flow) { var value = Enum.Parse<FinancialFlow>(flow); rows = rows.Where(x => x.Flow == value); }
-        if (q.Status is { } status) { var value = Enum.Parse<TransactionStatus>(status); rows = rows.Where(x => x.Status == value); }
-        if (q.From is { } from) rows = rows.Where(x => x.OccurredAt >= from);
-        if (q.To is { } to) rows = rows.Where(x => x.OccurredAt < to);
-        var page = await PageAsync(rows.OrderByDescending(x => x.OccurredAt).ThenBy(x => x.Id)
-            .Select(x => new TransactionView(x.Id, x.AccountId, x.CategoryId, x.Amount, x.Currency, x.Flow.ToString(),
-                x.Status.ToString(), x.OccurredAt, x.Description, x.Version)), q.Page, q.PageSize, ct);
+        var transfers = db.Transfers.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(q.Search))
+        {
+            var search = q.Search.Trim();
+            rows = rows.Where(x => x.Description.Contains(search));
+            transfers = transfers.Where(x => x.Description.Contains(search));
+        }
+        if (q.AccountId is { } account)
+        {
+            rows = rows.Where(x => x.AccountId == account);
+            transfers = transfers.Where(x => x.SourceAccountId == account || x.DestinationAccountId == account);
+        }
+        if (q.CategoryId is { } category)
+        {
+            rows = rows.Where(x => x.CategoryId == category);
+            transfers = transfers.Where(_ => false);
+        }
+        var includeTransfers = string.IsNullOrWhiteSpace(q.Flow) || string.Equals(q.Flow, "Transfer", StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(q.Flow) && !includeTransfers)
+        {
+            if (!Enum.TryParse<FinancialFlow>(q.Flow, true, out var flow))
+                return new TransactionPage(new Page<TransactionView>(Array.Empty<TransactionView>(), 0, q.Page, q.PageSize), Array.Empty<TransactionSummary>());
+            rows = rows.Where(x => x.Flow == flow);
+            transfers = transfers.Where(_ => false);
+        }
+        if (q.Status is { } status)
+        {
+            if (!Enum.TryParse<TransactionStatus>(status, true, out var transactionStatus))
+                return new TransactionPage(new Page<TransactionView>(Array.Empty<TransactionView>(), 0, q.Page, q.PageSize), Array.Empty<TransactionSummary>());
+            rows = rows.Where(x => x.Status == transactionStatus);
+            transfers = transfers.Where(x => x.Status == status);
+        }
+        if (q.From is { } from) { rows = rows.Where(x => x.OccurredAt >= from); transfers = transfers.Where(x => x.OccurredAt >= from); }
+        if (q.To is { } to) { rows = rows.Where(x => x.OccurredAt < to); transfers = transfers.Where(x => x.OccurredAt < to); }
+
+        var financialEntries = await rows.Select(x => new TransactionView(x.Id, x.AccountId, x.CategoryId, x.Amount, x.Currency,
+            x.Flow.ToString(), x.Status.ToString(), x.OccurredAt, x.Description, x.Version)).ToListAsync(ct);
+        var transferEntries = includeTransfers
+            ? await transfers.Select(x => new TransactionView(x.Id, x.SourceAccountId, Guid.Empty, x.Amount, x.Currency,
+                "Transfer", x.Status, x.OccurredAt, x.Description, x.Version, "Transfer", x.SourceAccountId, x.DestinationAccountId)).ToListAsync(ct)
+            : [];
+        var ordered = financialEntries.Concat(transferEntries).OrderByDescending(x => x.OccurredAt).ThenBy(x => x.Id).ToArray();
+        var page = new Page<TransactionView>(ordered.Skip((q.Page - 1) * q.PageSize).Take(q.PageSize).ToArray(), ordered.Length, q.Page, q.PageSize);
         var summary = await rows.Where(x => x.Status == TransactionStatus.Posted).GroupBy(x => x.Currency)
             .Select(g => new TransactionSummary(g.Key, g.Sum(x => x.Flow == FinancialFlow.Income ? x.Amount : 0),
                 g.Sum(x => x.Flow == FinancialFlow.Expense ? x.Amount : 0))).OrderBy(x => x.Currency).ToListAsync(ct);

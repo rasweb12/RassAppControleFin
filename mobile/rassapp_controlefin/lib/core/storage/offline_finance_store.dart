@@ -104,7 +104,6 @@ class OfflineFinanceStore {
               (row) =>
                   row.subject.equals(subject) &
                   row.tenantId.equals(tenantId) &
-                  row.entityType.equals(entityType) &
                   (row.status.equals('pending') |
                       row.status.equals('conflict')),
             ))

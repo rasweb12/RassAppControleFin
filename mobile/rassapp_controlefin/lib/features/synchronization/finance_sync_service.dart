@@ -43,11 +43,19 @@ class FinanceSyncService {
       var blocked = false;
       for (final operation in await _store.pending(tenantId)) {
         try {
-          await _auth.postAuthenticated(
-            operation.endpoint,
-            operation.payload,
-            tenantId: operation.tenantId,
-          );
+          if (operation.operationType == 'put') {
+            await _auth.putAuthenticated(
+              operation.endpoint,
+              operation.payload,
+              tenantId: operation.tenantId,
+            );
+          } else {
+            await _auth.postAuthenticated(
+              operation.endpoint,
+              operation.payload,
+              tenantId: operation.tenantId,
+            );
+          }
           await _store.acknowledge(operation.operationId);
         } on ApiException catch (error) {
           if (_isRetryable(error.failure)) {
@@ -189,7 +197,10 @@ class FinanceSyncService {
       '/api/v1/expense-reduction-goals',
       tenantId,
     );
-    final investmentAssets = await _loadPaged('/api/v1/investment-assets', tenantId);
+    final investmentAssets = await _loadPaged(
+      '/api/v1/investment-assets',
+      tenantId,
+    );
     final investmentTransactions = await _loadPaged(
       '/api/v1/investment-transactions',
       tenantId,

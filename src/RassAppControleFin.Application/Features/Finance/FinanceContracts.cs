@@ -40,7 +40,8 @@ public sealed record CategoryView(Guid Id, string Name, string Flow, long Versio
 public sealed record CardView(Guid Id, string Name, string Currency, decimal Limit, decimal Outstanding,
     int ClosingDay, int DueDay, long Version, bool IsArchived);
 public sealed record TransactionView(Guid Id, Guid AccountId, Guid CategoryId, decimal Amount, string Currency,
-    string Flow, string Status, DateTimeOffset OccurredAt, string Description, long Version);
+    string Flow, string Status, DateTimeOffset OccurredAt, string Description, long Version,
+    string EntryType = "Transaction", Guid? SourceAccountId = null, Guid? DestinationAccountId = null);
 public sealed record TransferView(Guid Id, Guid SourceAccountId, Guid DestinationAccountId, decimal Amount,
     string Currency, DateTimeOffset OccurredAt, string Description, string Status);
 public sealed record CardMovementView(Guid Id, Guid CardId, Guid? AccountId, Guid? CategoryId, decimal Amount,

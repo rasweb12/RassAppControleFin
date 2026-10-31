@@ -101,7 +101,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
                 _ => false
             };
             if (!matches) throw new InvalidOperationException("Write outside the authorized scope.");
-            if (entry.State != EntityState.Added && entry.Entity is IAppendOnlyFinancialRecord or Transfer)
+            // Ledger rows and transfers are immutable. A financial transaction keeps
+            // its current lifecycle state/version; its monetary changes are recorded
+            // separately as immutable adjustment or reversal ledger rows.
+            if (entry.State != EntityState.Added &&
+                (entry.Entity is Transfer ||
+                 entry.Entity is IAppendOnlyFinancialRecord && entry.Entity is not FinancialTransaction))
                 throw new InvalidOperationException("Financial history is append-only.");
         }
     }

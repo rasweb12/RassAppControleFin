@@ -114,6 +114,26 @@ public sealed class FinanceDomainTests
         Assert.Equal(2, notification.Version);
     }
 
+    [Fact]
+    public void Posted_transaction_can_be_edited_then_cancelled_without_erasing_its_identity()
+    {
+        var transaction = FinancialTransaction.Create(Guid.NewGuid(), Guid.NewGuid(), "user", Guid.NewGuid(), Guid.NewGuid(),
+            Money.Create(100m, "BRL"), FinancialFlow.Expense, TransactionStatus.Posted, DateTimeOffset.UtcNow,
+            "Conta inicial", DateTimeOffset.UtcNow);
+
+        transaction.Edit(Guid.NewGuid(), Money.Create(125m, "BRL"), TransactionStatus.Posted, DateTimeOffset.UtcNow,
+            "Conta corrigida");
+        transaction.Cancel();
+
+        Assert.Equal(125m, transaction.Amount);
+        Assert.Equal("Conta corrigida", transaction.Description);
+        Assert.Equal(TransactionStatus.Cancelled, transaction.Status);
+        Assert.Equal(0m, transaction.PostedDelta);
+        Assert.Equal(3, transaction.Version);
+        Assert.Throws<InvalidOperationException>(() => transaction.Edit(Guid.NewGuid(), Money.Create(1m, "BRL"),
+            TransactionStatus.Posted, DateTimeOffset.UtcNow, "Não permitido"));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

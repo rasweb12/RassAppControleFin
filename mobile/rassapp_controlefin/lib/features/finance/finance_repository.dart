@@ -265,6 +265,9 @@ class TransactionSummary {
     required this.occurredAt,
     required this.description,
     required this.version,
+    this.entryType = 'Transaction',
+    this.sourceAccountId,
+    this.destinationAccountId,
   });
   final String id;
   final String accountId;
@@ -276,6 +279,12 @@ class TransactionSummary {
   final DateTime occurredAt;
   final String description;
   final int version;
+  final String entryType;
+  final String? sourceAccountId;
+  final String? destinationAccountId;
+
+  bool get isTransfer =>
+      entryType.toLowerCase() == 'transfer' || flow.toLowerCase() == 'transfer';
 
   factory TransactionSummary.fromJson(Map<String, dynamic> json) =>
       TransactionSummary(
@@ -291,6 +300,9 @@ class TransactionSummary {
         occurredAt: DateTime.parse(json['occurredAt'] as String).toLocal(),
         description: json['description'] as String,
         version: (json['version'] as num?)?.toInt() ?? 0,
+        entryType: json['entryType'] as String? ?? 'Transaction',
+        sourceAccountId: json['sourceAccountId'] as String?,
+        destinationAccountId: json['destinationAccountId'] as String?,
       );
 }
 
@@ -495,7 +507,7 @@ class FinanceRepository {
     required String currency,
     required DateTime periodStart,
     required DateTime periodEnd,
-  }) {
+  }) async {
     final operationId = _newOperationId();
     return _postOrQueue(
       tenantId: tenantId,
@@ -781,6 +793,7 @@ class FinanceRepository {
     required String description,
   }) async {
     final operationId = _newOperationId();
+    final occurredAt = DateTime.now().toUtc().toIso8601String();
     final result = await _postOrQueue(
       tenantId: tenantId,
       endpoint: '/api/v1/transfers',
@@ -792,7 +805,7 @@ class FinanceRepository {
         'destinationAccountId': destination.id,
         'amount': amount,
         'currency': source.currency,
-        'occurredAt': DateTime.now().toUtc().toIso8601String(),
+        'occurredAt': occurredAt,
         'description': description,
         'sourceVersion': source.version,
         'destinationVersion': destination.version,
@@ -801,38 +814,118 @@ class FinanceRepository {
     if (result == FinanceWriteState.pending) {
       await _adjustCachedAccount(tenantId, source, -amount);
       await _adjustCachedAccount(tenantId, destination, amount);
+      await (await _store).cacheOne(tenantId, 'transaction', {
+        'id': 'local-$operationId',
+        'accountId': source.id,
+        'categoryId': '',
+        'sourceAccountId': source.id,
+        'destinationAccountId': destination.id,
+        'entryType': 'Transfer',
+        'amount': amount,
+        'currency': source.currency,
+        'flow': 'Transfer',
+        'status': 'Posted',
+        'occurredAt': occurredAt,
+        'description': description,
+        'version': 0,
+      });
     }
     return result;
   }
 
-  Future<void> cancelTransaction({
+  Future<FinanceWriteState> cancelTransaction({
     required String tenantId,
     required TransactionSummary transaction,
     required AccountSummary account,
-  }) =>
-      _auth.postAuthenticated('/api/v1/transactions/${transaction.id}/cancel', {
-        'operationId': _newOperationId(),
+  }) async {
+    final operationId = _newOperationId();
+    final result = await _writeOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/transactions/${transaction.id}/cancel',
+      entityType: 'transaction',
+      entityId: transaction.id,
+      operationType: 'cancel',
+      payload: {
+        'operationId': operationId,
         'version': transaction.version,
         'accountVersion': account.version,
-      }, tenantId: tenantId);
+      },
+      request: (payload) => _auth.postAuthenticated(
+        '/api/v1/transactions/${transaction.id}/cancel',
+        payload,
+        tenantId: tenantId,
+      ),
+    );
+    if (result == FinanceWriteState.pending) {
+      await _cacheTransactionChange(tenantId, transaction, {
+        'status': 'Cancelled',
+      });
+      final delta = transaction.flow == 'Income'
+          ? -transaction.amount
+          : transaction.amount;
+      await _adjustCachedAccount(tenantId, account, delta);
+      await _applyPendingDashboard(
+        tenantId,
+        transaction.currency,
+        netWorthDelta: delta,
+        incomeDelta: transaction.flow == 'Income' ? -transaction.amount : 0,
+        expenseDelta: transaction.flow == 'Expense' ? -transaction.amount : 0,
+      );
+    }
+    return result;
+  }
 
-  Future<void> editTransaction({
+  Future<FinanceWriteState> editTransaction({
     required String tenantId,
     required TransactionSummary transaction,
     required AccountSummary account,
     required num amount,
     required String description,
-  }) => _auth.putAuthenticated('/api/v1/transactions/${transaction.id}', {
-    'operationId': _newOperationId(),
-    'version': transaction.version,
-    'categoryId': transaction.categoryId,
-    'amount': amount,
-    'currency': transaction.currency,
-    'status': transaction.status,
-    'occurredAt': transaction.occurredAt.toUtc().toIso8601String(),
-    'description': description,
-    'accountVersion': account.version,
-  }, tenantId: tenantId);
+  }) async {
+    final operationId = _newOperationId();
+    final result = await _writeOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/transactions/${transaction.id}',
+      entityType: 'transaction',
+      entityId: transaction.id,
+      operationType: 'put',
+      payload: {
+        'operationId': operationId,
+        'version': transaction.version,
+        'categoryId': transaction.categoryId,
+        'amount': amount,
+        'currency': transaction.currency,
+        'status': transaction.status,
+        'occurredAt': transaction.occurredAt.toUtc().toIso8601String(),
+        'description': description,
+        'accountVersion': account.version,
+      },
+      request: (payload) => _auth.putAuthenticated(
+        '/api/v1/transactions/${transaction.id}',
+        payload,
+        tenantId: tenantId,
+      ),
+    );
+    if (result == FinanceWriteState.pending) {
+      await _cacheTransactionChange(tenantId, transaction, {
+        'amount': amount,
+        'description': description,
+      });
+      final difference = amount - transaction.amount;
+      final balanceDelta = transaction.flow == 'Income'
+          ? difference
+          : -difference;
+      await _adjustCachedAccount(tenantId, account, balanceDelta);
+      await _applyPendingDashboard(
+        tenantId,
+        transaction.currency,
+        netWorthDelta: balanceDelta,
+        incomeDelta: transaction.flow == 'Income' ? difference : 0,
+        expenseDelta: transaction.flow == 'Expense' ? difference : 0,
+      );
+    }
+    return result;
+  }
 
   Future<FinanceSyncResult> synchronize(String tenantId) async =>
       (await _syncService).synchronize(tenantId);
@@ -955,6 +1048,54 @@ class FinanceRepository {
       }
       return FinanceWriteState.pending;
     }
+  }
+
+  Future<FinanceWriteState> _writeOrQueue({
+    required String tenantId,
+    required String endpoint,
+    required String entityType,
+    required String entityId,
+    required String operationType,
+    required Map<String, dynamic> payload,
+    required Future<Object?> Function(Map<String, dynamic>) request,
+  }) async {
+    try {
+      await request(payload);
+      return FinanceWriteState.applied;
+    } on ApiException catch (error) {
+      if (!_canQueueOffline(error)) rethrow;
+      await (await _store).enqueue(
+        tenantId: tenantId,
+        endpoint: endpoint,
+        payload: payload,
+        entityType: entityType,
+        entityId: entityId,
+        operationType: operationType,
+      );
+      return FinanceWriteState.pending;
+    }
+  }
+
+  Future<void> _cacheTransactionChange(
+    String tenantId,
+    TransactionSummary transaction,
+    Map<String, dynamic> changes,
+  ) async {
+    final store = await _store;
+    final resources = await store.cached(tenantId, 'transaction');
+    Map<String, dynamic>? resource;
+    for (final item in resources) {
+      if (item['id'] == transaction.id) {
+        resource = item;
+        break;
+      }
+    }
+    if (resource == null) return;
+    await store.cacheOne(tenantId, 'transaction', {
+      ...resource,
+      ...changes,
+      'version': transaction.version + 1,
+    });
   }
 
   bool _canReadOffline(ApiException error) =>
