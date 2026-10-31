@@ -56,7 +56,12 @@ public sealed class Account : FinancialAggregate
     }
     public bool Archive()
     {
-        if (Balance != 0 || IsArchived) return false;
+        if (IsArchived) return false;
         IsArchived = true; Version = checked(Version + 1); return true;
+    }
+    public bool Reactivate()
+    {
+        if (!IsArchived) return false;
+        IsArchived = false; Version = checked(Version + 1); return true;
     }
 }

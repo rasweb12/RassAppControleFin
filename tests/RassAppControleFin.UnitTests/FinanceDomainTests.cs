@@ -58,6 +58,20 @@ public sealed class FinanceDomainTests
     }
 
     [Fact]
+    public void Account_with_history_can_be_archived_and_reactivated_without_losing_balance()
+    {
+        var account = Account.Open(Guid.NewGuid(), Guid.NewGuid(), "user", "Conta", Money.Create(120m, "BRL", true),
+            DateTimeOffset.UtcNow);
+
+        Assert.True(account.Archive());
+        Assert.True(account.IsArchived);
+        Assert.Equal(120m, account.Balance);
+        Assert.True(account.Reactivate());
+        Assert.False(account.IsArchived);
+        Assert.Equal(120m, account.Balance);
+    }
+
+    [Fact]
     public void Credit_card_has_no_cardholder_data_and_enforces_limit()
     {
         var card = CreditCard.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Cartao", Money.Create(100m, "BRL"), 10, 20, DateTimeOffset.UtcNow);

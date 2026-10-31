@@ -727,6 +727,34 @@ class FinanceRepository {
     return result;
   }
 
+  Future<FinanceWriteState> archiveGoal({
+    required String tenantId,
+    required GoalSummary goal,
+  }) {
+    final operationId = _newOperationId();
+    return _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/goals/${goal.id}/archive',
+      entityType: 'goal',
+      entityId: goal.id,
+      payload: {'operationId': operationId, 'version': goal.version},
+    );
+  }
+
+  Future<FinanceWriteState> archiveExpenseReductionGoal({
+    required String tenantId,
+    required ExpenseReductionGoalSummary goal,
+  }) {
+    final operationId = _newOperationId();
+    return _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/expense-reduction-goals/${goal.id}/archive',
+      entityType: 'expenseReductionGoal',
+      entityId: goal.id,
+      payload: {'operationId': operationId, 'version': goal.version},
+    );
+  }
+
   Future<FinanceWriteState> createTransaction({
     required String tenantId,
     required AccountSummary account,

@@ -245,6 +245,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
             return _goals;
           },
           onAddProgress: _addGoalProgress,
+          onArchive: _archiveGoal,
         ),
       ),
     );
@@ -274,6 +275,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               ),
             ),
           ),
+          onArchive: _archiveExpenseReductionGoal,
         ),
       ),
     );
@@ -301,6 +303,46 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         builder: (_) => FinancialNotificationsPage(
           repository: _repository,
           tenantId: tenant.id,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAccountSecurity() async {
+    final session = widget.authController.session;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Segurança da conta',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 16),
+              const Text('Sua sessão está autenticada pelo Neon Auth.'),
+              const SizedBox(height: 8),
+              Text(
+                'Identificador da sessão: ${session.subject}',
+                style: const TextStyle(color: AppTheme.muted),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _returnToLogin();
+                },
+                icon: const Icon(Icons.logout),
+                label: const Text('Encerrar esta sessão'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -359,6 +401,27 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         tenantId: tenant.id,
         goal: goal,
         amount: amount,
+      ),
+    );
+  }
+
+  Future<void> _archiveGoal(GoalSummary goal) async {
+    final tenant = _tenant;
+    if (tenant == null || goal.id.startsWith('local-')) return;
+    await _mutate(
+      () => _repository.archiveGoal(tenantId: tenant.id, goal: goal),
+    );
+  }
+
+  Future<void> _archiveExpenseReductionGoal(
+    ExpenseReductionGoalSummary goal,
+  ) async {
+    final tenant = _tenant;
+    if (tenant == null || goal.id.startsWith('local-')) return;
+    await _mutate(
+      () => _repository.archiveExpenseReductionGoal(
+        tenantId: tenant.id,
+        goal: goal,
       ),
     );
   }
@@ -835,6 +898,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               onExpenseReductionGoals: _openExpenseReductionGoals,
               onNotifications: _openNotifications,
               onFinancialAssistant: _openFinancialAssistant,
+              onSecurity: _openAccountSecurity,
             ),
           };
     return Scaffold(
@@ -1476,7 +1540,7 @@ class _DetailRow extends StatelessWidget {
   );
 }
 
-class _Accounts extends StatelessWidget {
+class _Accounts extends StatefulWidget {
   const _Accounts({
     required this.items,
     required this.onRefresh,
@@ -1487,25 +1551,58 @@ class _Accounts extends StatelessWidget {
   final Future<void> Function(AccountSummary) onMaintain;
 
   @override
+  State<_Accounts> createState() => _AccountsState();
+}
+
+class _AccountsState extends State<_Accounts> {
+  bool _showArchived = false;
+
+  @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
+    final visible = widget.items
+        .where((item) => _showArchived || !item.archived)
+        .toList(growable: false);
+    final archivedCount = widget.items.where((item) => item.archived).length;
+    if (visible.isEmpty && archivedCount == 0) {
       return _MessageState(
         icon: Icons.account_balance_wallet_outlined,
         title: 'Você ainda não tem contas',
         message:
             'Cadastre uma conta para começar a organizar sua vida financeira.',
         action: 'Atualizar',
-        onAction: onRefresh,
+        onAction: widget.onRefresh,
       );
     }
     return RefreshIndicator(
-      onRefresh: onRefresh,
+      onRefresh: widget.onRefresh,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: items.length,
+        itemCount: visible.length + 1,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          final item = items[index];
+          if (index == 0) {
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                _showArchived ? Icons.inventory_2 : Icons.inventory_2_outlined,
+              ),
+              title: Text(
+                _showArchived
+                    ? 'Ocultar contas arquivadas'
+                    : 'Mostrar contas arquivadas',
+              ),
+              subtitle: Text(
+                '$archivedCount ${archivedCount == 1 ? 'conta arquivada' : 'contas arquivadas'}',
+              ),
+              trailing: Icon(
+                _showArchived
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+              ),
+              onTap: () => setState(() => _showArchived = !_showArchived),
+            );
+          }
+          final item = visible[index - 1];
           return Card(
             child: ListTile(
               leading: const Icon(Icons.account_balance_outlined),
@@ -1523,7 +1620,7 @@ class _Accounts extends StatelessWidget {
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
-              onTap: () => onMaintain(item),
+              onTap: () => widget.onMaintain(item),
             ),
           );
         },
@@ -1547,10 +1644,12 @@ class _ExpenseReductionGoalsPage extends StatefulWidget {
     required this.goals,
     required this.onRefresh,
     required this.onCreate,
+    required this.onArchive,
   });
   final List<ExpenseReductionGoalSummary> goals;
   final Future<List<ExpenseReductionGoalSummary>> Function() onRefresh;
   final Future<void> Function(num reference, num target) onCreate;
+  final Future<void> Function(ExpenseReductionGoalSummary goal) onArchive;
 
   @override
   State<_ExpenseReductionGoalsPage> createState() =>
@@ -1626,6 +1725,29 @@ class _ExpenseReductionGoalsPageState
     await _refresh();
   }
 
+  Future<void> _archive(ExpenseReductionGoalSummary goal) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancelar meta de redução?'),
+        content: const Text('A meta será arquivada e não será apagada.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancelar meta'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await widget.onArchive(goal);
+    await _refresh();
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -1698,6 +1820,13 @@ class _ExpenseReductionGoalsPageState
                                   ?.copyWith(fontWeight: FontWeight.w800),
                             ),
                           ),
+                          IconButton(
+                            tooltip: 'Cancelar meta de redução',
+                            onPressed: goal.id.startsWith('local-')
+                                ? null
+                                : () => _archive(goal),
+                            icon: const Icon(Icons.archive_outlined),
+                          ),
                           Text(
                             '${(goal.progress * 100).round()}%',
                             style: const TextStyle(
@@ -1741,6 +1870,7 @@ class _Menu extends StatelessWidget {
     required this.onExpenseReductionGoals,
     required this.onNotifications,
     required this.onFinancialAssistant,
+    required this.onSecurity,
   });
   final TenantSummary tenant;
   final bool canSwitch;
@@ -1754,6 +1884,7 @@ class _Menu extends StatelessWidget {
   final Future<void> Function() onExpenseReductionGoals;
   final Future<void> Function() onNotifications;
   final Future<void> Function() onFinancialAssistant;
+  final Future<void> Function() onSecurity;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -1834,10 +1965,12 @@ class _Menu extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: onReviewConflicts,
         ),
-      const _MenuItem(
-        leading: Icon(Icons.security_outlined),
-        title: Text('Segurança da conta'),
-        subtitle: Text('Sua sessão é validada pelo Neon Auth.'),
+      _MenuItem(
+        leading: const Icon(Icons.security_outlined),
+        title: const Text('Segurança da conta'),
+        subtitle: const Text('Sessão, autenticação e encerramento.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onSecurity,
       ),
       const SizedBox(height: 18),
       ListTile(
@@ -1995,12 +2128,14 @@ class _GoalsPage extends StatefulWidget {
     required this.onCreate,
     required this.onRefresh,
     required this.onAddProgress,
+    required this.onArchive,
   });
 
   final List<GoalSummary> goals;
   final Future<void> Function() onCreate;
   final Future<List<GoalSummary>> Function() onRefresh;
   final Future<void> Function(GoalSummary goal) onAddProgress;
+  final Future<void> Function(GoalSummary goal) onArchive;
 
   @override
   State<_GoalsPage> createState() => _GoalsPageState();
@@ -2027,6 +2162,31 @@ class _GoalsPageState extends State<_GoalsPage> {
 
   Future<void> _addProgress(GoalSummary goal) async {
     await widget.onAddProgress(goal);
+    await _refresh();
+  }
+
+  Future<void> _archive(GoalSummary goal) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancelar meta?'),
+        content: const Text(
+          'A meta será arquivada e seu histórico será preservado.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancelar meta'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await widget.onArchive(goal);
     await _refresh();
   }
 
@@ -2095,6 +2255,12 @@ class _GoalsPageState extends State<_GoalsPage> {
                                 const Icon(
                                   Icons.cloud_upload_outlined,
                                   semanticLabel: 'Aguardando sincronização',
+                                )
+                              else
+                                IconButton(
+                                  tooltip: 'Cancelar meta',
+                                  onPressed: () => _archive(goal),
+                                  icon: const Icon(Icons.archive_outlined),
                                 ),
                             ],
                           ),

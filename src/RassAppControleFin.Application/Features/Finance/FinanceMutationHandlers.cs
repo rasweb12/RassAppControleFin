@@ -124,8 +124,15 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
         switch (resource)
         {
             case Account account:
-                if (account.IsArchived || (c.Archive && !account.Archive())) return Fail("ACCOUNT_STATE_INVALID", "Conta arquivada ou com saldo.");
-                if (!c.Archive) account.Rename(c.Name);
+                if (c.Archive)
+                {
+                    if (!account.Archive()) return Fail("ACCOUNT_STATE_INVALID", "Conta já está arquivada.");
+                }
+                else if (account.IsArchived)
+                {
+                    if (!account.Reactivate()) return Fail("ACCOUNT_STATE_INVALID", "Conta não pode ser reativada.");
+                }
+                else account.Rename(c.Name);
                 break;
             case Category category:
                 if (category.IsArchived) return Fail("CATEGORY_ARCHIVED", "Categoria arquivada.");
