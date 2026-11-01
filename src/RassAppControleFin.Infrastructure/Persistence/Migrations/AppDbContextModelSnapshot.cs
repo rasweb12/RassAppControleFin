@@ -1226,6 +1226,62 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.PlatformRoleAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("GrantedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GrantedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RevokedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Role", "IsActive");
+
+                    b.HasIndex("UserId", "Role")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\"");
+
+                    b.ToTable("PlatformRoleAssignments", "app");
+                });
+
             modelBuilder.Entity("RassAppControleFin.Domain.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")

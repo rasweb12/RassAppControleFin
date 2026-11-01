@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using RassAppControleFin.Domain.Entities;
@@ -221,12 +222,19 @@ public sealed class TenantTransactionTests(PostgresFixture fixture)
     public async Task Api_readiness_connects_to_real_postgres_without_auth_or_identity()
     {
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
                     ["Database:ConnectionString"] = fixture.RuntimeConnection,
                     ["Database:RuntimeRole"] = "rass_app_runtime_v2"
-                })));
+                }));
+            builder.ConfigureServices(services => services.PostConfigure<DatabaseOptions>(options =>
+            {
+                options.ConnectionString = fixture.RuntimeConnection;
+                options.RuntimeRole = "rass_app_runtime_v2";
+            }));
+        });
         using var client = factory.CreateClient();
         using var response = await client.GetAsync("/health/ready");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

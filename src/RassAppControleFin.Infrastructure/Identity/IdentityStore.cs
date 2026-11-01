@@ -155,6 +155,15 @@ public sealed class IdentityStore(AppDbContext db, IOptions<DatabaseOptions> opt
             """).SingleOrDefaultAsync(ct);
     }
 
+    public async Task<IReadOnlyList<string>> GetActivePlatformRolesAsync(string subject, CancellationToken ct)
+    {
+        await using var tx = await Scope(subject, null, ct);
+        return await db.Database.SqlQuery<string>($"""
+            SELECT "Role" AS "Value" FROM app."PlatformRoleAssignments"
+            WHERE "UserId"={subject} AND "IsActive"
+            """).ToListAsync(ct);
+    }
+
     public async Task<Result> AddMemberAsync(string subject, Guid tenantId, string memberSubject, string role, CancellationToken ct)
     {
         if (!Enum.TryParse<MembershipRole>(role, out var parsed) || !Enum.IsDefined(parsed))

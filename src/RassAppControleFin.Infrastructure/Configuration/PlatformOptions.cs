@@ -5,11 +5,11 @@ namespace RassAppControleFin.Infrastructure.Configuration;
 public sealed class DatabaseOptions
 {
     public const string SectionName = "Database";
-    public string ConnectionString { get; init; } = "";
-    public string RuntimeRole { get; init; } = "rass_app_runtime_v2";
-    [Range(1, 100)] public int MaxPoolSize { get; init; } = 10;
-    [Range(1, 30)] public int ConnectionTimeoutSeconds { get; init; } = 10;
-    [Range(1, 120)] public int CommandTimeoutSeconds { get; init; } = 30;
+    public string ConnectionString { get; set; } = "";
+    public string RuntimeRole { get; set; } = "rass_app_runtime_v2";
+    [Range(1, 100)] public int MaxPoolSize { get; set; } = 10;
+    [Range(1, 30)] public int ConnectionTimeoutSeconds { get; set; } = 10;
+    [Range(1, 120)] public int CommandTimeoutSeconds { get; set; } = 30;
 }
 
 public sealed class NeonOptions

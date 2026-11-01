@@ -8,6 +8,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 {
     private Guid? _tenantId;
     private string? _userId;
+    private string? _platformActor;
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
@@ -29,6 +30,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<InvestmentAsset> InvestmentAssets => Set<InvestmentAsset>();
     public DbSet<InvestmentTransaction> InvestmentTransactions => Set<InvestmentTransaction>();
     public DbSet<TargetPortfolioAllocation> TargetPortfolioAllocations => Set<TargetPortfolioAllocation>();
+    public DbSet<PlatformRoleAssignment> PlatformRoleAssignments => Set<PlatformRoleAssignment>();
 
     internal void Authorize(Guid tenantId, string userId)
     {
@@ -41,7 +43,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         ChangeTracker.Clear();
         _tenantId = null;
         _userId = null;
+        _platformActor = null;
     }
+
+    internal void AuthorizePlatform(string actor) => _platformActor = actor;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -93,7 +98,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     private void ValidateWrites()
     {
-        if (_tenantId is null || _userId is null || Database.CurrentTransaction is null)
+        if ((_tenantId is null || _userId is null) && _platformActor is null || Database.CurrentTransaction is null)
             throw new InvalidOperationException("An authorized tenant transaction is required.");
 
         foreach (var entry in ChangeTracker.Entries().Where(entry =>
@@ -103,6 +108,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             {
                 Tenant tenant => tenant.Id == _tenantId,
                 UserProfile profile => profile.TenantId == _tenantId && profile.UserId == _userId,
+                PlatformRoleAssignment assignment => _platformActor is not null && assignment.GrantedBy == _platformActor,
                 IFinancialResource resource => resource.TenantId == _tenantId && resource.UserId == _userId,
                 _ => false
             };

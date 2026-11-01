@@ -21,6 +21,7 @@ GRANT USAGE ON SCHEMA app TO rass_app_runtime_v2;
 GRANT SELECT, INSERT, UPDATE, DELETE ON app."Tenants", app."UserProfiles" TO rass_app_runtime_v2;
 GRANT SELECT ON app."__EFMigrationsHistory" TO rass_app_runtime_v2;
 GRANT SELECT, INSERT ON app."TenantMemberships", app."AuditEntries" TO rass_app_runtime_v2;
+GRANT SELECT, INSERT, UPDATE ON app."PlatformRoleAssignments" TO rass_app_runtime_v2;
 GRANT SELECT, INSERT, UPDATE ON app."UserSessions" TO rass_app_runtime_v2;
 GRANT SELECT, INSERT, UPDATE ON app."Accounts", app."Categories", app."CreditCards",
     app."Transactions", app."Budgets", app."Goals", app."ExpenseReductionGoals",

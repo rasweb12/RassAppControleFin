@@ -27,6 +27,7 @@ public interface IIdentityStore
     Task<Result<TenantInfo>> EnsurePersonalTenantAsync(string subject, CancellationToken cancellationToken);
     Task<IReadOnlyList<TenantInfo>> ListTenantsAsync(string subject, CancellationToken cancellationToken);
     Task<string?> GetMembershipRoleAsync(string subject, Guid tenantId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<string>> GetActivePlatformRolesAsync(string subject, CancellationToken cancellationToken);
     Task<Result> AddMemberAsync(string subject, Guid tenantId, string memberSubject, string role,
         CancellationToken cancellationToken);
     Task<Result<ProfileInfo>> GetProfileAsync(string subject, Guid tenantId, CancellationToken cancellationToken);

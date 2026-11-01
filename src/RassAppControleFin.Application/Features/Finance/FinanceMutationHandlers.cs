@@ -169,9 +169,12 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
             if (!account.TryApply(transaction.PostedDelta)) return Fail("BALANCE_INVALID", "Saldo insuficiente ou limite excedido.");
             unit.Ledger(account.Id, transaction.PostedDelta, "Transaction", transaction.Id);
         }
-        unit.Add(transaction);
+        // Evaluate the persisted spending before adding this transaction. The pending amount is
+        // supplied separately to BudgetAlertsAsync, preventing the current expense from being
+        // counted twice by an EF query that observes tracked additions.
         if (flow == FinancialFlow.Expense && transaction.Status == TransactionStatus.Posted)
             await CreateBudgetNotificationsAsync(unit, transaction, ct);
+        unit.Add(transaction);
         return Result<MutationReceipt>.Success(new(transaction.Id, c.OperationId, transaction.Version, account.Version, SourceBalance: account.Balance));
     }, ct, Permissions.AccountsWrite);
 

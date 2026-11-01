@@ -166,7 +166,9 @@ public sealed class CoreFinanceTests(PostgresFixture fixture)
         var now = DateTimeOffset.UtcNow;
         var account = await handler.Handle(new OpenAccountCommand(Guid.NewGuid(), "Alerta Orcamento", "BRL", 1000m), default);
         var category = await handler.Handle(new CreateCategoryCommand(Guid.NewGuid(), "Alimentacao alerta", "Expense"), default);
-        var budget = await handler.Handle(new CreateBudgetCommand(Guid.NewGuid(), null, 400m, "BRL",
+        // Scope this regression budget to its unique category: the isolated database is durable
+        // across test runs, so a global budget would intentionally aggregate prior test expenses.
+        var budget = await handler.Handle(new CreateBudgetCommand(Guid.NewGuid(), category.Value.ResourceId, 400m, "BRL",
             new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero), new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero).AddMonths(1)), default);
         Assert.True(account.IsSuccess && category.IsSuccess && budget.IsSuccess);
 
@@ -174,13 +176,23 @@ public sealed class CoreFinanceTests(PostgresFixture fixture)
             category.Value.ResourceId, 320m, "BRL", "Expense", "Posted", now, "Alerta 80", account.Value.Version), default);
         Assert.True(first.IsSuccess, first.Error?.Code);
         var prefix = $"budget.{budget.Value.ResourceId:N}.";
-        Assert.Single(await db.FinancialNotifications.Where(x => x.Type == prefix + "80").ToListAsync());
+        {
+            var assertionScope = await TransactionFactory(db, alice).BeginAsync(default);
+            Assert.True(assertionScope.IsSuccess, assertionScope.Error?.Code);
+            await using var assertion = assertionScope.Value;
+            Assert.Single(await db.FinancialNotifications.Where(x => x.Type == prefix + "80").ToListAsync());
+        }
 
         var second = await handler.Handle(new CreateTransactionCommand(Guid.NewGuid(), account.Value.ResourceId,
             category.Value.ResourceId, 100m, "BRL", "Expense", "Posted", now, "Alerta 100", first.Value.SourceVersion!.Value), default);
         Assert.True(second.IsSuccess, second.Error?.Code);
-        Assert.Single(await db.FinancialNotifications.Where(x => x.Type == prefix + "80").ToListAsync());
-        Assert.Single(await db.FinancialNotifications.Where(x => x.Type == prefix + "100").ToListAsync());
+        {
+            var assertionScope = await TransactionFactory(db, alice).BeginAsync(default);
+            Assert.True(assertionScope.IsSuccess, assertionScope.Error?.Code);
+            await using var assertion = assertionScope.Value;
+            Assert.Single(await db.FinancialNotifications.Where(x => x.Type == prefix + "80").ToListAsync());
+            Assert.Single(await db.FinancialNotifications.Where(x => x.Type == prefix + "100").ToListAsync());
+        }
     }
 
     [Fact]

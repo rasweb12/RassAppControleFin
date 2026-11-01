@@ -165,7 +165,10 @@
         "type": "Project"
       },
       "rassappcontrolefin.security": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "RassAppControleFin.SharedKernel": "[1.0.0-alpha.1, )"
+        }
       },
       "rassappcontrolefin.sharedkernel": {
         "type": "Project"

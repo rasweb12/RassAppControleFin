@@ -24,6 +24,7 @@ using RassAppControleFin.MultiTenancy;
 using RassAppControleFin.Api.Finance;
 using RassAppControleFin.Api.AI;
 using RassAppControleFin.Api.Synchronization;
+using RassAppControleFin.Api.Platform;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 65536);
@@ -85,6 +86,10 @@ foreach (var permission in typeof(Permissions).GetFields().Select(f => (string)f
     builder.Services.AddAuthorizationBuilder().AddPolicy(permission, policy => policy.RequireAuthenticatedUser()
         .RequireAssertion(ctx => ctx.Resource is HttpContext http
             && http.RequestServices.GetRequiredService<IUserContext>().Permissions.Contains(permission)));
+foreach (var permission in typeof(PlatformPermissions).GetFields().Select(f => (string)f.GetRawConstantValue()!))
+    builder.Services.AddAuthorizationBuilder().AddPolicy(permission, policy => policy.RequireAuthenticatedUser()
+        .RequireAssertion(ctx => ctx.Resource is HttpContext http
+            && http.RequestServices.GetRequiredService<IUserContext>().Permissions.Contains(permission)));
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -143,6 +148,7 @@ app.MapIdentity();
 app.MapFinance();
 app.MapSync();
 app.MapAi();
+app.MapPlatform();
 
 app.MapHealthChecks("/health", new HealthCheckOptions()).AllowAnonymous();
 app.MapHealthChecks("/health/live", new HealthCheckOptions

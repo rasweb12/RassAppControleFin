@@ -66,6 +66,8 @@ public static class DependencyInjection
         services.AddSingleton<NeonTokenValidator>();
         services.AddScoped<INeonAuthService, NeonAuthService>();
         services.AddScoped<IIdentityStore, IdentityStore>();
+        services.AddScoped<IPlatformAuthorizationService, PlatformAuthorizationService>();
+        services.AddScoped<IPlatformAdministrationService, PlatformAdministrationService>();
         services.AddHttpClient("gemini", client => client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/"))
             .RemoveAllLoggers().AddStandardResilienceHandler(options =>
             {

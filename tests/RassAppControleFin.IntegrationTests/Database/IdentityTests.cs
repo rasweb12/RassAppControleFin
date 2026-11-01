@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using RassAppControleFin.Contracts;
 using RassAppControleFin.Infrastructure.Configuration;
 using RassAppControleFin.Infrastructure.Identity;
@@ -37,15 +38,26 @@ public sealed class IdentityTests(PostgresFixture fixture)
 
     private WebApplicationFactory<Program> Factory(bool realAuth = false)
     {
+        var database = new NpgsqlConnectionStringBuilder(fixture.RuntimeConnection);
+        var authHost = (database.Host ?? throw new InvalidOperationException("Test database host required."))
+            .Replace(".c-2.", ".neonauth.c-2.", StringComparison.Ordinal);
+        var authOrigin = $"https://{authHost}";
+        var authBase = $"{authOrigin}/neondb/auth";
         var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Database:ConnectionString"] = fixture.RuntimeConnection,
-                ["Neon:AuthBaseUrl"] = "https://ep-quiet-tree-b67qr9k6.neonauth.c-2.sa-east-1.aws.neon.tech/neondb/auth",
-                ["Neon:JwksUrl"] = "https://ep-quiet-tree-b67qr9k6.neonauth.c-2.sa-east-1.aws.neon.tech/neondb/auth/.well-known/jwks.json",
-                ["Neon:ExpectedIssuer"] = realAuth ? "https://ep-quiet-tree-b67qr9k6.neonauth.c-2.sa-east-1.aws.neon.tech" : Issuer,
-                ["Neon:ExpectedAudience"] = realAuth ? "https://ep-quiet-tree-b67qr9k6.neonauth.c-2.sa-east-1.aws.neon.tech" : Issuer
+                ["Database:RuntimeRole"] = "rass_app_runtime_v2",
+                ["Neon:AuthBaseUrl"] = authBase,
+                ["Neon:JwksUrl"] = $"{authBase}/.well-known/jwks.json",
+                ["Neon:ExpectedIssuer"] = realAuth ? authOrigin : Issuer,
+                ["Neon:ExpectedAudience"] = realAuth ? authOrigin : Issuer
+            }));
+            builder.ConfigureServices(services => services.PostConfigure<DatabaseOptions>(options =>
+            {
+                options.ConnectionString = fixture.RuntimeConnection;
+                options.RuntimeRole = "rass_app_runtime_v2";
             }));
             if (!realAuth) builder.ConfigureServices(services => services.PostConfigure<JwtBearerOptions>(
                 JwtBearerDefaults.AuthenticationScheme, options =>
@@ -124,12 +136,11 @@ public sealed class IdentityTests(PostgresFixture fixture)
     [Fact, Trait("Category", "LiveAuth")]
     public async Task Live_Neon_signin_renew_tenant_selection_logout_and_replay()
     {
-        var secrets = new ConfigurationBuilder().AddUserSecrets("RassAppControleFin-Auth-Development").Build();
-        var email = secrets["RASS_AUTH_TEST_EMAIL"] ?? throw new InvalidOperationException("Configure synthetic Neon Auth test credentials.");
-        var password = secrets["RASS_AUTH_TEST_PASSWORD"]!;
+        var email = $"integration-{Guid.NewGuid():N}@example.test";
+        var password = $"Test!{Guid.NewGuid():N}aA1";
         await using var factory = Factory(realAuth: true);
         using var client = factory.CreateClient();
-        using var login = await client.PostAsJsonAsync("/api/v1/auth/sign-in", new SignInRequest(email, password));
+        using var login = await client.PostAsJsonAsync("/api/v1/auth/sign-up", new SignUpRequest("Integration Test", email, password));
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         var signed = (await login.Content.ReadFromJsonAsync<ApiResponse<AuthSessionDto>>())!.Data!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", signed.AccessToken);
