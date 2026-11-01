@@ -35,11 +35,13 @@ class TransactionInput {
     required this.category,
     required this.amount,
     required this.description,
+    required this.occurredAt,
   });
   final AccountSummary account;
   final CategorySummary category;
   final num amount;
   final String description;
+  final DateTime occurredAt;
 }
 
 class TransferInput {
@@ -48,11 +50,13 @@ class TransferInput {
     required this.destination,
     required this.amount,
     required this.description,
+    required this.occurredAt,
   });
   final AccountSummary source;
   final AccountSummary destination;
   final num amount;
   final String description;
+  final DateTime occurredAt;
 }
 
 class GoalInput {
@@ -405,6 +409,17 @@ class _TransactionFormState extends State<_TransactionForm> {
   String? _categoryId;
   late List<CategorySummary> _categories = List.of(widget.categories);
   bool _creatingCategory = false;
+  DateTime _occurredAt = DateTime.now();
+
+  Future<void> _chooseOccurredAt() async {
+    final chosen = await showDatePicker(
+      context: context,
+      initialDate: _occurredAt,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(DateTime.now().year + 30),
+    );
+    if (chosen != null && mounted) setState(() => _occurredAt = chosen);
+  }
 
   @override
   void dispose() {
@@ -477,6 +492,12 @@ class _TransactionFormState extends State<_TransactionForm> {
         validator: _positive,
       ),
       const SizedBox(height: 12),
+      OutlinedButton.icon(
+        onPressed: _chooseOccurredAt,
+        icon: const Icon(Icons.calendar_today_outlined),
+        label: Text('Data da transação: ${_dateLabel(_occurredAt)}'),
+      ),
+      const SizedBox(height: 12),
       TextFormField(
         controller: _description,
         maxLength: 500,
@@ -497,6 +518,7 @@ class _TransactionFormState extends State<_TransactionForm> {
           category: category,
           amount: _number(_amount.text)!,
           description: _description.text.trim(),
+          occurredAt: _occurredAt,
         ),
       );
     },
@@ -591,6 +613,17 @@ class _TransferFormState extends State<_TransferForm> {
   final _description = TextEditingController();
   String? _sourceId;
   String? _destinationId;
+  DateTime _occurredAt = DateTime.now();
+
+  Future<void> _chooseOccurredAt() async {
+    final chosen = await showDatePicker(
+      context: context,
+      initialDate: _occurredAt,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(DateTime.now().year + 30),
+    );
+    if (chosen != null && mounted) setState(() => _occurredAt = chosen);
+  }
 
   @override
   void dispose() {
@@ -641,6 +674,12 @@ class _TransferFormState extends State<_TransferForm> {
         validator: _positive,
       ),
       const SizedBox(height: 12),
+      OutlinedButton.icon(
+        onPressed: _chooseOccurredAt,
+        icon: const Icon(Icons.calendar_today_outlined),
+        label: Text('Data da transferência: ${_dateLabel(_occurredAt)}'),
+      ),
+      const SizedBox(height: 12),
       TextFormField(
         controller: _description,
         maxLength: 500,
@@ -667,6 +706,7 @@ class _TransferFormState extends State<_TransferForm> {
           destination: destination,
           amount: _number(_amount.text)!,
           description: _description.text.trim(),
+          occurredAt: _occurredAt,
         ),
       );
     },
@@ -720,6 +760,10 @@ class _Sheet extends StatelessWidget {
 
 String? _required(String? value) =>
     value == null || value.trim().isEmpty ? 'Preencha este campo.' : null;
+
+String _dateLabel(DateTime value) =>
+    '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+
 num? _number(String? value) {
   var normalized = (value ?? '').trim();
   if (normalized.contains(',') && normalized.contains('.')) {

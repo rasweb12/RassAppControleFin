@@ -525,6 +525,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         category: input.category,
         amount: input.amount,
         description: input.description,
+        occurredAt: input.occurredAt,
       ),
     );
   }
@@ -547,6 +548,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         destination: input.destination,
         amount: input.amount,
         description: input.description,
+        occurredAt: input.occurredAt,
       ),
     );
   }
@@ -632,6 +634,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         account: account,
         amount: input.amount,
         description: input.description,
+        occurredAt: input.occurredAt,
       ),
     );
   }
@@ -1299,7 +1302,7 @@ class _InsightCard extends StatelessWidget {
   );
 }
 
-class _Transactions extends StatelessWidget {
+class _Transactions extends StatefulWidget {
   const _Transactions({
     required this.items,
     required this.accounts,
@@ -1314,29 +1317,99 @@ class _Transactions extends StatelessWidget {
   final Future<void> Function(TransactionSummary, AccountSummary) onEdit;
 
   @override
+  State<_Transactions> createState() => _TransactionsState();
+}
+
+class _TransactionsState extends State<_Transactions> {
+  late DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  String _flow = 'All';
+  String _search = '';
+  bool _ascending = false;
+
+  @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
+    final visible = widget.items.where((item) {
+      final sameMonth = item.occurredAt.year == _month.year && item.occurredAt.month == _month.month;
+      final matchesFlow = _flow == 'All' || (_flow == 'Transfer'
+          ? item.isTransfer
+          : item.flow.toLowerCase() == _flow.toLowerCase());
+      final matchesSearch = _search.isEmpty || item.description.toLowerCase().contains(_search.toLowerCase());
+      return sameMonth && matchesFlow && matchesSearch;
+    }).toList()
+      ..sort((a, b) {
+        final byDate = a.occurredAt.compareTo(b.occurredAt);
+        final stable = byDate == 0 ? a.id.compareTo(b.id) : byDate;
+        return _ascending ? stable : -stable;
+      });
+    final income = visible.where((item) => item.flow == 'Income' && item.status == 'Posted').fold<num>(0, (sum, item) => sum + item.amount);
+    final expense = visible.where((item) => item.flow == 'Expense' && item.status == 'Posted').fold<num>(0, (sum, item) => sum + item.amount);
+
+    if (widget.items.isEmpty) {
       return _MessageState(
         icon: Icons.receipt_long_outlined,
         title: 'Nenhuma transação encontrada',
         message: 'As transações lançadas aparecerão aqui.',
         action: 'Atualizar',
-        onAction: onRefresh,
+        onAction: widget.onRefresh,
       );
     }
     return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView.separated(
+      onRefresh: widget.onRefresh,
+      child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemCount: visible.length + 1,
         itemBuilder: (context, index) {
-          final item = items[index];
+          if (index == 0) return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                IconButton(onPressed: () => setState(() => _month = DateTime(_month.year, _month.month - 1)), icon: const Icon(Icons.chevron_left)),
+                Expanded(child: Text(_monthLabel(_month), textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
+                IconButton(onPressed: () => setState(() => _month = DateTime(_month.year, _month.month + 1)), icon: const Icon(Icons.chevron_right)),
+                IconButton(tooltip: _ascending ? 'Mais recentes primeiro' : 'Mais antigas primeiro', onPressed: () => setState(() => _ascending = !_ascending), icon: Icon(_ascending ? Icons.arrow_upward : Icons.arrow_downward)),
+              ]),
+              _TransactionMonthSummary(income: income, expense: expense),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (value) => setState(() => _search = value.trim()),
+                decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Buscar por descrição...'),
+              ),
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  for (final filter in const [('All', 'Todas'), ('Income', 'Receitas'), ('Expense', 'Despesas'), ('Transfer', 'Transferências')])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(label: Text(filter.$2), selected: _flow == filter.$1, onSelected: (_) => setState(() => _flow = filter.$1)),
+                    ),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              if (visible.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 44), child: Center(child: Text('Nenhuma movimentação neste período.'))),
+            ],
+          );
+          final item = visible[index - 1];
+          final previous = index > 1 ? visible[index - 2] : null;
+          final newDay = previous == null || !_sameFinancialDay(previous.occurredAt, item.occurredAt);
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (newDay) Padding(
+              padding: const EdgeInsets.fromLTRB(2, 14, 2, 8),
+              child: Text(_dayLabel(item.occurredAt), style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.muted)),
+            ),
+            _transactionTile(context, item),
+          ]);
+        },
+      ),
+    );
+  }
+
+  Widget _transactionTile(BuildContext context, TransactionSummary item) {
           final transfer = item.isTransfer;
           final income = item.flow.toLowerCase() == 'income';
           String? sourceName;
           String? destinationName;
-          for (final account in accounts) {
+          for (final account in widget.accounts) {
             if (account.id == (item.sourceAccountId ?? item.accountId)) {
               sourceName = account.name;
             }
@@ -1417,7 +1490,7 @@ class _Transactions extends StatelessWidget {
               ),
               onTap: () async {
                 AccountSummary? account;
-                for (final candidate in accounts) {
+                for (final candidate in widget.accounts) {
                   if (candidate.id == item.accountId) {
                     account = candidate;
                     break;
@@ -1433,19 +1506,50 @@ class _Transactions extends StatelessWidget {
                 if (!context.mounted || account == null) return;
                 switch (action) {
                   case _TransactionDetailAction.edit:
-                    await onEdit(item, account);
+                    await widget.onEdit(item, account);
                   case _TransactionDetailAction.cancel:
-                    await onCancel(item, account);
+                    await widget.onCancel(item, account);
                   case null:
                     break;
                 }
               },
             ),
           );
-        },
-      ),
+  }
+}
+
+class _TransactionMonthSummary extends StatelessWidget {
+  const _TransactionMonthSummary({required this.income, required this.expense});
+  final num income;
+  final num expense;
+
+  @override
+  Widget build(BuildContext context) {
+    final net = income - expense;
+    return Container(
+      margin: const EdgeInsets.only(top: 8), padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: const Color(0xFF111C42), borderRadius: BorderRadius.circular(22)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('SALDO DO MÊS', style: TextStyle(color: Color(0xFFB7C4E0), fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4), Text(_money(net, 'BRL'), style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800)),
+        const Divider(color: Color(0xFF405070), height: 28),
+        Row(children: [
+          Expanded(child: _SummaryValue(label: 'ENTRADAS', value: income, color: const Color(0xFF39D7A5))),
+          Expanded(child: _SummaryValue(label: 'SAÍDAS', value: expense, color: const Color(0xFFFF7185))),
+        ]),
+      ]),
     );
   }
+}
+
+class _SummaryValue extends StatelessWidget {
+  const _SummaryValue({required this.label, required this.value, required this.color});
+  final String label; final num value; final Color color;
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(label, style: const TextStyle(color: Color(0xFFB7C4E0), fontWeight: FontWeight.w700, fontSize: 12)),
+    const SizedBox(height: 4), Text(_money(value, 'BRL'), style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+  ]);
 }
 
 enum _TransactionDetailAction { edit, cancel }
@@ -2508,9 +2612,11 @@ class _TransactionEditInput {
   const _TransactionEditInput({
     required this.amount,
     required this.description,
+    required this.occurredAt,
   });
   final num amount;
   final String description;
+  final DateTime occurredAt;
 }
 
 Future<_TransactionEditInput?> _showTransactionEditForm(
@@ -2521,12 +2627,14 @@ Future<_TransactionEditInput?> _showTransactionEditForm(
     text: transaction.amount.toStringAsFixed(2).replaceAll('.', ','),
   );
   final description = TextEditingController(text: transaction.description);
+  var occurredAt = transaction.occurredAt;
   final result = await showDialog<_TransactionEditInput>(
     context: context,
     useRootNavigator: true,
     builder: (dialogContext) => AlertDialog(
       title: const Text('Editar lançamento'),
-      content: Column(
+      content: StatefulBuilder(
+        builder: (context, setState) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
@@ -2541,7 +2649,22 @@ Future<_TransactionEditInput?> _showTransactionEditForm(
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(labelText: 'Descrição'),
           ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final chosen = await showDatePicker(
+                context: dialogContext,
+                initialDate: occurredAt,
+                firstDate: DateTime(2000),
+                lastDate: DateTime(DateTime.now().year + 30),
+              );
+              if (chosen != null) setState(() => occurredAt = chosen);
+            },
+            icon: const Icon(Icons.calendar_today_outlined),
+            label: Text('Data da transação: ${_dateFull(occurredAt)}'),
+          ),
         ],
+      ),
       ),
       actions: [
         TextButton(
@@ -2557,6 +2680,7 @@ Future<_TransactionEditInput?> _showTransactionEditForm(
               _TransactionEditInput(
                 amount: parsedAmount,
                 description: description.text.trim(),
+                occurredAt: occurredAt,
               ),
             );
           },
@@ -2647,6 +2771,23 @@ String _money(num value, String currency) {
 
 String _date(DateTime value) =>
     '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}';
+
+String _dateFull(DateTime value) =>
+    '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+
+bool _sameFinancialDay(DateTime left, DateTime right) =>
+    left.year == right.year && left.month == right.month && left.day == right.day;
+
+String _dayLabel(DateTime value) =>
+    '${_dateFull(value)}${_sameFinancialDay(value, DateTime.now()) ? ' · HOJE' : ''}';
+
+String _monthLabel(DateTime value) {
+  const months = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+  ];
+  return '${months[value.month - 1]} ${value.year}';
+}
 
 num? _parseAmount(String value) {
   var normalized = value.trim();

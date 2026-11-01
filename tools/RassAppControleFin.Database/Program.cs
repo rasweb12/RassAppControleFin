@@ -5,9 +5,9 @@ using RassAppControleFin.Infrastructure.Configuration;
 using RassAppControleFin.Infrastructure.Persistence;
 using RassAppControleFin.Infrastructure.Persistence.Seed;
 
-if (args.Length == 0 || args[0] is not ("migrate" or "bootstrap" or "seed-development" or "probe" or "probe-tests" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated"))
+if (args.Length == 0 || args[0] is not ("migrate" or "bootstrap" or "seed-development" or "probe" or "probe-tests" or "probe-platform-admin-isolated" or "probe-platform-grant-isolated" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated"))
 {
-    Console.Error.WriteLine("Commands: probe | probe-tests | migrate-isolated-tests --confirm-isolated-tests | provision-platform-admin-isolated --confirm-isolated-tests | grant-platform-executor-schema-create-isolated --confirm-isolated-tests | grant-platform-executor-to-migration-owner-isolated --confirm-isolated-tests | migrate | bootstrap | seed-development --confirm-development");
+    Console.Error.WriteLine("Commands: probe | probe-tests | probe-platform-admin-isolated | probe-platform-grant-isolated | migrate-isolated-tests --confirm-isolated-tests | provision-platform-admin-isolated --confirm-isolated-tests | grant-platform-executor-schema-create-isolated --confirm-isolated-tests | grant-platform-executor-to-migration-owner-isolated --confirm-isolated-tests | migrate | bootstrap | seed-development --confirm-development");
     return 2;
 }
 if (args[0] == "seed-development" && !args.Contains("--confirm-development", StringComparer.Ordinal))
@@ -22,7 +22,7 @@ try
         .AddUserSecrets("RassAppControleFin-Database-Development")
         .AddEnvironmentVariables().Build();
     string? isolatedAdminConnection = null;
-    if (args[0] is "probe-tests" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated")
+    if (args[0] is "probe-tests" or "probe-platform-admin-isolated" or "probe-platform-grant-isolated" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated")
     {
         var adminConnection = configuration["RASS_DB_TEST_ADMIN"];
         var runtimeConnection = configuration["RASS_DB_TEST_RUNTIME"];
@@ -77,6 +77,79 @@ try
         Console.WriteLine($"Isolated admin: database '{adminIdentity.Database}', role '{adminIdentity.Role}', migration schema privilege: {adminIdentity.CanCreateSchema}.");
         Console.WriteLine($"Isolated runtime: database '{runtimeIdentity.Database}', role '{runtimeIdentity.Role}', safe configuration: {safe}.");
         if (args[0] == "probe-tests") return 0;
+        if (args[0] is "probe-platform-admin-isolated" or "probe-platform-grant-isolated")
+        {
+            var platformConnection = configuration["RASS_DB_TEST_PLATFORM_ADMIN"];
+            if (string.IsNullOrWhiteSpace(platformConnection))
+            {
+                Console.Error.WriteLine("Isolated platform administration credential is not configured.");
+                return 2;
+            }
+
+            var platform = new NpgsqlConnectionStringBuilder(platformConnection);
+            if (platform.Database != admin.Database
+                || platform.Host?.Replace("-pooler", "", StringComparison.Ordinal) != admin.Host?.Replace("-pooler", "", StringComparison.Ordinal)
+                || platform.Host?.Contains("-pooler", StringComparison.Ordinal) == true
+                || platform.Username != "rass_platform_admin_v1"
+                || platform.SslMode != SslMode.VerifyFull)
+            {
+                Console.Error.WriteLine("Platform administration credential does not target the isolated direct VerifyFull endpoint.");
+                return 2;
+            }
+
+            await using var platformProbe = new NpgsqlConnection(platform.ConnectionString);
+            await platformProbe.OpenAsync();
+            await using (var identity = new NpgsqlCommand("SELECT current_database(), current_user, has_function_privilege(current_user, 'app.platform_dashboard()', 'EXECUTE')", platformProbe))
+            await using (var reader = await identity.ExecuteReaderAsync())
+            {
+                await reader.ReadAsync();
+                if (reader.GetString(0) != "rass_sprint1_tests" || reader.GetString(1) != "rass_platform_admin_v1" || !reader.GetBoolean(2))
+                {
+                    Console.Error.WriteLine("Platform administration role validation failed.");
+                    return 2;
+                }
+            }
+            await using (var dashboard = new NpgsqlCommand("SELECT * FROM app.platform_dashboard()", platformProbe))
+            await using (var reader = await dashboard.ExecuteReaderAsync())
+                if (!await reader.ReadAsync())
+                {
+                    Console.Error.WriteLine("Platform dashboard function returned no row.");
+                    return 2;
+                }
+
+            if (args[0] == "probe-platform-admin-isolated")
+            {
+                Console.WriteLine("Isolated platform administration role and read-only function access validated.");
+                return 0;
+            }
+
+            await using var transaction = await platformProbe.BeginTransactionAsync();
+            try
+            {
+                await using var grant = new NpgsqlCommand("SELECT * FROM app.platform_grant_superadmin(@id, @audit, @actor, @target, @reason, @correlation)", platformProbe, transaction);
+                grant.Parameters.AddWithValue("id", Guid.NewGuid());
+                grant.Parameters.AddWithValue("audit", Guid.NewGuid());
+                grant.Parameters.AddWithValue("actor", "checkpoint11-probe-actor");
+                grant.Parameters.AddWithValue("target", "checkpoint11-probe-target-" + Guid.NewGuid().ToString("N"));
+                grant.Parameters.AddWithValue("reason", "isolated transaction rollback probe");
+                grant.Parameters.AddWithValue("correlation", Guid.NewGuid().ToString());
+                await using (var reader = await grant.ExecuteReaderAsync())
+                    if (!await reader.ReadAsync())
+                    {
+                        Console.Error.WriteLine("Platform grant function returned no row.");
+                        return 1;
+                    }
+                await transaction.RollbackAsync();
+                Console.WriteLine("Isolated platform grant function validated and rolled back.");
+                return 0;
+            }
+            catch (PostgresException exception)
+            {
+                await transaction.RollbackAsync();
+                Console.Error.WriteLine($"Platform grant probe failed (SQLSTATE {exception.SqlState}); details withheld.");
+                return 1;
+            }
+        }
         if (!args.Contains("--confirm-isolated-tests", StringComparer.Ordinal))
         {
             Console.Error.WriteLine("Isolated migration requires --confirm-isolated-tests.");

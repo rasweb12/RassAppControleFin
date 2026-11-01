@@ -1020,9 +1020,11 @@ class FinanceRepository {
     required CategorySummary category,
     required num amount,
     required String description,
+    required DateTime occurredAt,
   }) async {
     final operationId = _newOperationId();
-    final occurredAt = DateTime.now().toUtc().toIso8601String();
+    final occurredAtValue = _financialDayToUtc(occurredAt);
+    final occurredAtJson = occurredAtValue.toIso8601String();
     final result = await _postOrQueue(
       tenantId: tenantId,
       endpoint: '/api/v1/transactions',
@@ -1036,7 +1038,7 @@ class FinanceRepository {
         'currency': account.currency,
         'flow': category.flow,
         'status': 'Posted',
-        'occurredAt': occurredAt,
+        'occurredAt': occurredAtJson,
         'description': description,
         'accountVersion': account.version,
       },
@@ -1048,7 +1050,7 @@ class FinanceRepository {
         'currency': account.currency,
         'flow': category.flow,
         'status': 'Posted',
-        'occurredAt': occurredAt,
+        'occurredAt': occurredAtJson,
         'description': description,
         'version': 0,
       },
@@ -1078,9 +1080,11 @@ class FinanceRepository {
     required AccountSummary destination,
     required num amount,
     required String description,
+    required DateTime occurredAt,
   }) async {
     final operationId = _newOperationId();
-    final occurredAt = DateTime.now().toUtc().toIso8601String();
+    final occurredAtValue = _financialDayToUtc(occurredAt);
+    final occurredAtJson = occurredAtValue.toIso8601String();
     final result = await _postOrQueue(
       tenantId: tenantId,
       endpoint: '/api/v1/transfers',
@@ -1092,7 +1096,7 @@ class FinanceRepository {
         'destinationAccountId': destination.id,
         'amount': amount,
         'currency': source.currency,
-        'occurredAt': occurredAt,
+        'occurredAt': occurredAtJson,
         'description': description,
         'sourceVersion': source.version,
         'destinationVersion': destination.version,
@@ -1112,7 +1116,7 @@ class FinanceRepository {
         'currency': source.currency,
         'flow': 'Transfer',
         'status': 'Posted',
-        'occurredAt': occurredAt,
+        'occurredAt': occurredAtJson,
         'description': description,
         'version': 0,
       });
@@ -1168,6 +1172,7 @@ class FinanceRepository {
     required AccountSummary account,
     required num amount,
     required String description,
+    required DateTime occurredAt,
   }) async {
     final operationId = _newOperationId();
     final result = await _writeOrQueue(
@@ -1183,7 +1188,7 @@ class FinanceRepository {
         'amount': amount,
         'currency': transaction.currency,
         'status': transaction.status,
-        'occurredAt': transaction.occurredAt.toUtc().toIso8601String(),
+        'occurredAt': _financialDayToUtc(occurredAt).toIso8601String(),
         'description': description,
         'accountVersion': account.version,
       },
@@ -1197,6 +1202,7 @@ class FinanceRepository {
       await _cacheTransactionChange(tenantId, transaction, {
         'amount': amount,
         'description': description,
+        'occurredAt': _financialDayToUtc(occurredAt).toIso8601String(),
       });
       final difference = amount - transaction.amount;
       final balanceDelta = transaction.flow == 'Income'
@@ -1453,3 +1459,8 @@ String _newOperationId() {
       .join();
   return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }
+
+/// Financial dates are civil days. Noon UTC avoids changing the selected date
+/// when a record is rendered in the supported Brazilian local time zones.
+DateTime _financialDayToUtc(DateTime value) =>
+    DateTime.utc(value.year, value.month, value.day, 12);

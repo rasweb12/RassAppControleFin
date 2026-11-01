@@ -56,10 +56,14 @@ Não reverter para grants de escrita da runtime. Se ocorrer falha no executor, m
 
 ## Estado
 
-- Código local: preparado; regressão completa ainda depende de credencial local
-  da role administrativa isolada.
+- Código local: validado contra a role administrativa isolada.
 - Migration: aplicada exclusivamente no banco isolado.
 - Neon/Render/Production: Production, Render e GitHub não foram alterados.
-- Testes negativos PostgreSQL: INSERT, UPDATE, GUCs e EXECUTE pela runtime
-  foram rejeitados. Falta executar os testes de API/RBAC usando uma credencial
-  local válida de `rass_platform_admin_v1`.
+- Testes negativos PostgreSQL: `INSERT`, `UPDATE`, GUCs forjadas e `EXECUTE`
+  pela runtime foram rejeitados com `42501`.
+- Conexão administrativa: validada diretamente como `rass_platform_admin_v1`,
+  com TLS `VerifyFull`; dashboard administrativo em leitura e concessão em
+  transação revertida foram executados com êxito.
+- Regressão: 47/47 testes unitários, 10/10 testes RBAC/API e 116/116 testes de
+  integração passaram no ambiente isolado. As integrações não aplicam
+  migrations: falham antes da execução caso exista migration pendente.

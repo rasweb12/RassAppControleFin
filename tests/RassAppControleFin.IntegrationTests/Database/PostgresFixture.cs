@@ -17,6 +17,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 {
     public string RuntimeConnection { get; private set; } = "";
     public string AdminConnection { get; private set; } = "";
+    public string PlatformAdministrationConnection { get; private set; } = "";
     public NpgsqlDataSource DataSource { get; private set; } = null!;
 
     public async Task InitializeAsync()
@@ -28,6 +29,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             ?? throw new InvalidOperationException("Real database tests require RASS_DB_TEST_ADMIN.");
         RuntimeConnection = configuration["RASS_DB_TEST_RUNTIME"]
             ?? throw new InvalidOperationException("Real database tests require RASS_DB_TEST_RUNTIME.");
+        PlatformAdministrationConnection = configuration["RASS_DB_TEST_PLATFORM_ADMIN"] ?? "";
         var admin = new NpgsqlConnectionStringBuilder(AdminConnection);
         var runtime = new NpgsqlConnectionStringBuilder(RuntimeConnection);
         if (admin.Database != "rass_sprint1_tests" || runtime.Database != admin.Database
@@ -36,6 +38,17 @@ public sealed class PostgresFixture : IAsyncLifetime
             || admin.Host?.Contains("-pooler", StringComparison.Ordinal) == true
             || runtime.Username != "rass_app_runtime_v2")
             throw new InvalidOperationException("Database tests require the dedicated rass_sprint1_tests database.");
+
+        if (!string.IsNullOrWhiteSpace(PlatformAdministrationConnection))
+        {
+            var platformAdmin = new NpgsqlConnectionStringBuilder(PlatformAdministrationConnection);
+            if (platformAdmin.Database != admin.Database
+                || platformAdmin.Host?.Replace("-pooler", "", StringComparison.Ordinal) != admin.Host?.Replace("-pooler", "", StringComparison.Ordinal)
+                || platformAdmin.Host?.Contains("-pooler", StringComparison.Ordinal) == true
+                || platformAdmin.Username != "rass_platform_admin_v1"
+                || platformAdmin.SslMode != SslMode.VerifyFull)
+                throw new InvalidOperationException("Platform administration tests require the isolated direct VerifyFull connection.");
+        }
 
         await using (var connection = new NpgsqlConnection(AdminConnection))
         {
@@ -55,8 +68,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         }
         await using (var db = CreateAdminContext())
         {
-            await db.Database.MigrateAsync();
-            await RuntimeRoleBootstrap.ApplyAsync(db, CancellationToken.None);
+            var pending = await db.Database.GetPendingMigrationsAsync();
+            if (pending.Any())
+                throw new InvalidOperationException("The isolated database has pending migrations; integration tests will not apply migrations.");
             await DevelopmentSeed.ApplyAsync(db, CancellationToken.None);
             await DevelopmentSeed.ApplyAsync(db, CancellationToken.None);
         }

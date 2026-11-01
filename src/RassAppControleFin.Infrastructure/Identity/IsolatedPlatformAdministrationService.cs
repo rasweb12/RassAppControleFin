@@ -51,9 +51,16 @@ public sealed class IsolatedPlatformAdministrationService(
         await using var command = new NpgsqlCommand("SELECT * FROM app.platform_grant_superadmin(@id,@auditId,@actor,@userId,@reason,@correlation)", scope.Connection, scope.Transaction);
         command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("userId", targetUserId); command.Parameters.AddWithValue("actor", actor);
         command.Parameters.AddWithValue("auditId", Guid.NewGuid()); command.Parameters.AddWithValue("reason", reason.Trim()); command.Parameters.AddWithValue("correlation", Guid.NewGuid().ToString());
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return Result<PlatformRoleView>.Failure(Conflict);
-        now = reader.GetFieldValue<DateTimeOffset>(1);
+        try
+        {
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return Result<PlatformRoleView>.Failure(Conflict);
+            now = reader.GetFieldValue<DateTimeOffset>(1);
+        }
+        catch (PostgresException exception) when (exception.SqlState is "P0001" or "23505")
+        {
+            return Result<PlatformRoleView>.Failure(Conflict);
+        }
         await scope.Transaction.CommitAsync(ct);
         return Result<PlatformRoleView>.Success(new(id, targetUserId, "SuperAdmin", true, actor, now, null, null, reason.Trim()));
     }

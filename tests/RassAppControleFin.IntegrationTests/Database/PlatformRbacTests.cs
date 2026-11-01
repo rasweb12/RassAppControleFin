@@ -126,6 +126,50 @@ public sealed class PlatformRbacTests(PostgresFixture fixture)
         await AssertAuditAsync(actor, "platform.role.revoked");
     }
 
+    [Fact]
+    public async Task Concurrent_revocations_are_serialized_and_audited_once()
+    {
+        var actor = "platform-concurrent-revoke-actor-" + Guid.NewGuid().ToString("N");
+        var target = "platform-concurrent-revoke-target-" + Guid.NewGuid().ToString("N");
+        await SeedSuperAdminAsync(actor);
+        await SeedSuperAdminAsync(target);
+        var assignment = await GetActiveAssignmentIdAsync(target);
+        using var firstClient = await CreateAuthenticatedClientAsync(actor, "User");
+        using var secondClient = await CreateAuthenticatedClientAsync(actor, "User");
+
+        var responses = await Task.WhenAll(
+            RevokeAsync(firstClient, target, assignment),
+            RevokeAsync(secondClient, target, assignment));
+
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
+        Assert.False(await IsActiveAsync(target));
+        await AssertAuditAsync(actor, "platform.role.revoked");
+    }
+
+    [Fact]
+    public async Task Runtime_cannot_escalate_with_forged_platform_gucs_or_execute_functions()
+    {
+        await using var connection = new NpgsqlConnection(fixture.RuntimeConnection);
+        await connection.OpenAsync();
+        await using (var transaction = await connection.BeginTransactionAsync())
+        {
+            await using var update = new NpgsqlCommand("""
+                WITH attempted_guc AS (
+                  SELECT set_config('app.platform_authorized', 'true', true),
+                         set_config('app.user_id', 'synthetic-runtime-test', true))
+                UPDATE app."PlatformRoleAssignments" SET "UpdatedAt" = "UpdatedAt" WHERE false
+                """, connection, transaction);
+            var write = await Assert.ThrowsAsync<PostgresException>(() => update.ExecuteNonQueryAsync());
+            Assert.Equal("42501", write.SqlState);
+            await transaction.RollbackAsync();
+        }
+
+        await using var execute = new NpgsqlCommand("SELECT app.platform_dashboard()", connection);
+        var function = await Assert.ThrowsAsync<PostgresException>(() => execute.ExecuteScalarAsync());
+        Assert.Equal("42501", function.SqlState);
+    }
+
     private async Task<HttpClient> CreateAuthenticatedClientAsync(string subject, string clientRole)
     {
         var token = CreateToken(subject, clientRole);
@@ -140,12 +184,20 @@ public sealed class PlatformRbacTests(PostgresFixture fixture)
         return client;
     }
 
+    private static Task<HttpResponseMessage> RevokeAsync(HttpClient client, string userId, Guid assignmentId)
+        => client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/platform/users/{userId}/roles/{assignmentId}")
+        {
+            Content = JsonContent.Create(new { Reason = "revogacao concorrente de teste", Confirmed = true })
+        });
+
     private WebApplicationFactory<Program> Factory() => new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
     {
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Database:ConnectionString"] = fixture.RuntimeConnection,
             ["Database:RuntimeRole"] = "rass_app_runtime_v2",
+            ["PlatformAdministration:ConnectionString"] = fixture.PlatformAdministrationConnection,
+            ["PlatformAdministration:Role"] = "rass_platform_admin_v1",
             ["Neon:ExpectedIssuer"] = Issuer,
             ["Neon:ExpectedAudience"] = Issuer
         }));
@@ -155,6 +207,11 @@ public sealed class PlatformRbacTests(PostgresFixture fixture)
             {
                 options.ConnectionString = fixture.RuntimeConnection;
                 options.RuntimeRole = "rass_app_runtime_v2";
+            });
+            services.PostConfigure<PlatformAdministrationOptions>(options =>
+            {
+                options.ConnectionString = fixture.PlatformAdministrationConnection;
+                options.Role = "rass_platform_admin_v1";
             });
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
@@ -175,9 +232,7 @@ public sealed class PlatformRbacTests(PostgresFixture fixture)
         await using var connection = new NpgsqlConnection(fixture.AdminConnection);
         await connection.OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
-        await using var scope = new NpgsqlCommand("SELECT set_config('app.user_id', @subject, true), set_config('app.platform_authorized', 'true', true)", connection, transaction);
-        scope.Parameters.AddWithValue("subject", subject);
-        await scope.ExecuteNonQueryAsync();
+        await UseExecutorAsync(connection, transaction);
         await using var insert = new NpgsqlCommand("""
             INSERT INTO app."PlatformRoleAssignments" ("Id","UserId","Role","IsActive","GrantedBy","GrantedAt","Reason","CreatedAt","UpdatedAt")
             VALUES (@id,@subject,'SuperAdmin',true,@subject,now(),'identidade sintetica de teste',now(),now())
@@ -194,9 +249,7 @@ public sealed class PlatformRbacTests(PostgresFixture fixture)
         await using var connection = new NpgsqlConnection(fixture.AdminConnection);
         await connection.OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
-        await using var scope = new NpgsqlCommand("SELECT set_config('app.user_id', @subject, true), set_config('app.platform_authorized', 'true', true)", connection, transaction);
-        scope.Parameters.AddWithValue("subject", subject);
-        await scope.ExecuteNonQueryAsync();
+        await UseExecutorAsync(connection, transaction);
         await using var query = new NpgsqlCommand("SELECT \"Id\" FROM app.\"PlatformRoleAssignments\" WHERE \"UserId\"=@subject AND \"IsActive\"", connection, transaction);
         query.Parameters.AddWithValue("subject", subject);
         var id = (Guid)(await query.ExecuteScalarAsync())!;
@@ -209,9 +262,7 @@ public sealed class PlatformRbacTests(PostgresFixture fixture)
         await using var connection = new NpgsqlConnection(fixture.AdminConnection);
         await connection.OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
-        await using var scope = new NpgsqlCommand("SELECT set_config('app.user_id', @subject, true), set_config('app.platform_authorized', 'true', true)", connection, transaction);
-        scope.Parameters.AddWithValue("subject", subject);
-        await scope.ExecuteNonQueryAsync();
+        await UseExecutorAsync(connection, transaction);
         await using var query = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM app.\"PlatformRoleAssignments\" WHERE \"UserId\"=@subject AND \"IsActive\")", connection, transaction);
         query.Parameters.AddWithValue("subject", subject);
         var active = (bool)(await query.ExecuteScalarAsync())!;
@@ -230,5 +281,11 @@ public sealed class PlatformRbacTests(PostgresFixture fixture)
         query.Parameters.AddWithValue("action", action);
         Assert.True((bool)(await query.ExecuteScalarAsync())!);
         await transaction.CommitAsync();
+    }
+
+    private static async Task UseExecutorAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
+    {
+        await using var command = new NpgsqlCommand("SET LOCAL ROLE rass_platform_executor_owner_v1", connection, transaction);
+        await command.ExecuteNonQueryAsync();
     }
 }
