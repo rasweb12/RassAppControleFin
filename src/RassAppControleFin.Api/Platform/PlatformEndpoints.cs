@@ -25,7 +25,7 @@ public static class PlatformEndpoints
         group.MapDelete("/users/{userId}/roles/{assignmentId:guid}", async (string userId, Guid assignmentId, [FromBody] PlatformRevokeRequest request, IPlatformAdministrationService service, IUserContext user, HttpContext http, CancellationToken ct) =>
         {
             if (!request.Confirmed) return Result.Failure(new("PLATFORM_CONFIRMATION_REQUIRED", "Confirmacao explicita obrigatoria.", ErrorType.Validation)).ToHttp(http);
-            return (await service.RevokeSuperAdminAsync(user.Subject!, assignmentId, request.Reason, ct)).ToHttp(http);
+            return (await service.RevokeSuperAdminAsync(user.Subject!, userId, assignmentId, request.Reason, ct)).ToHttp(http);
         }).RequireAuthorization(PlatformPermissions.RolesManage);
     }
 }

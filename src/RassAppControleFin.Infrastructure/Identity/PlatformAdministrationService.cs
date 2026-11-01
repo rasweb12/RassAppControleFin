@@ -47,7 +47,7 @@ public sealed class PlatformAdministrationService(AppDbContext db) : IPlatformAd
         return Result<PlatformRoleView>.Success(View(assignment));
     }
 
-    public async Task<Result> RevokeSuperAdminAsync(string actor, Guid assignmentId, string reason, CancellationToken ct)
+    public async Task<Result> RevokeSuperAdminAsync(string actor, string targetUserId, Guid assignmentId, string reason, CancellationToken ct)
     {
         await using var tx = await AuthorizeAsync(actor, ct);
         if (tx is null) return Result.Failure(Forbidden);
@@ -55,7 +55,7 @@ public sealed class PlatformAdministrationService(AppDbContext db) : IPlatformAd
         // The application context is intentionally NoTracking by default. Revocation
         // changes lifecycle state, therefore this specific aggregate must be tracked.
         var assignment = await db.PlatformRoleAssignments.AsTracking().SingleOrDefaultAsync(x => x.Id == assignmentId, ct);
-        if (assignment is null || !assignment.IsActive || assignment.UserId == actor
+        if (assignment is null || assignment.UserId != targetUserId || !assignment.IsActive || assignment.UserId == actor
             || await db.PlatformRoleAssignments.CountAsync(x => x.IsActive && x.Role == PlatformRole.SuperAdmin, ct) <= 1)
             return Result.Failure(Conflict);
         assignment.Revoke(actor, reason, DateTimeOffset.UtcNow);

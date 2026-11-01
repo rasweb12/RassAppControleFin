@@ -5,9 +5,9 @@ using RassAppControleFin.Infrastructure.Configuration;
 using RassAppControleFin.Infrastructure.Persistence;
 using RassAppControleFin.Infrastructure.Persistence.Seed;
 
-if (args.Length == 0 || args[0] is not ("migrate" or "bootstrap" or "seed-development" or "probe" or "probe-tests" or "migrate-isolated-tests"))
+if (args.Length == 0 || args[0] is not ("migrate" or "bootstrap" or "seed-development" or "probe" or "probe-tests" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated"))
 {
-    Console.Error.WriteLine("Commands: probe | probe-tests | migrate-isolated-tests --confirm-isolated-tests | migrate | bootstrap | seed-development --confirm-development");
+    Console.Error.WriteLine("Commands: probe | probe-tests | migrate-isolated-tests --confirm-isolated-tests | provision-platform-admin-isolated --confirm-isolated-tests | grant-platform-executor-schema-create-isolated --confirm-isolated-tests | grant-platform-executor-to-migration-owner-isolated --confirm-isolated-tests | migrate | bootstrap | seed-development --confirm-development");
     return 2;
 }
 if (args[0] == "seed-development" && !args.Contains("--confirm-development", StringComparer.Ordinal))
@@ -22,7 +22,7 @@ try
         .AddUserSecrets("RassAppControleFin-Database-Development")
         .AddEnvironmentVariables().Build();
     string? isolatedAdminConnection = null;
-    if (args[0] is "probe-tests" or "migrate-isolated-tests")
+    if (args[0] is "probe-tests" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated")
     {
         var adminConnection = configuration["RASS_DB_TEST_ADMIN"];
         var runtimeConnection = configuration["RASS_DB_TEST_RUNTIME"];
@@ -98,6 +98,39 @@ try
     }
     connection.IncludeErrorDetail = false;
     connection.LogParameters = false;
+    if (args[0] == "provision-platform-admin-isolated")
+    {
+        await using var provision = new NpgsqlConnection(connection.ConnectionString);
+        await provision.OpenAsync();
+        await using var command = new NpgsqlCommand("""
+            REVOKE neon_superuser FROM rass_platform_executor_owner_v1;
+            REVOKE neon_superuser FROM rass_platform_admin_v1;
+            ALTER ROLE rass_platform_executor_owner_v1 NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+            ALTER ROLE rass_platform_admin_v1 LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+            GRANT CREATE ON SCHEMA app TO rass_platform_executor_owner_v1;
+            """, provision);
+        await command.ExecuteNonQueryAsync();
+        Console.WriteLine("Isolated platform administration roles provisioned.");
+        return 0;
+    }
+    if (args[0] == "grant-platform-executor-schema-create-isolated")
+    {
+        await using var provision = new NpgsqlConnection(connection.ConnectionString);
+        await provision.OpenAsync();
+        await using var command = new NpgsqlCommand("GRANT CREATE ON SCHEMA app TO rass_platform_executor_owner_v1", provision);
+        await command.ExecuteNonQueryAsync();
+        Console.WriteLine("Isolated executor schema privilege granted.");
+        return 0;
+    }
+    if (args[0] == "grant-platform-executor-to-migration-owner-isolated")
+    {
+        await using var provision = new NpgsqlConnection(connection.ConnectionString);
+        await provision.OpenAsync();
+        await using var command = new NpgsqlCommand("GRANT rass_platform_executor_owner_v1 TO neondb_owner", provision);
+        await command.ExecuteNonQueryAsync();
+        Console.WriteLine("Isolated migration-owner membership granted.");
+        return 0;
+    }
     if (args[0] == "probe")
     {
         await using var probe = new NpgsqlConnection(connection.ConnectionString);
@@ -118,12 +151,18 @@ try
     await using var db = new AppDbContext(options);
     switch (args[0])
     {
-        case "migrate": await db.Database.MigrateAsync(); break;
+        case "migrate":
+        case "migrate-isolated-tests": await db.Database.MigrateAsync(); break;
         case "bootstrap": await RuntimeRoleBootstrap.ApplyAsync(db, CancellationToken.None); break;
         case "seed-development": await DevelopmentSeed.ApplyAsync(db, CancellationToken.None); break;
     }
     Console.WriteLine("Database command completed.");
     return 0;
+}
+catch (PostgresException exception)
+{
+    Console.Error.WriteLine($"Database command failed (PostgresException, SQLSTATE {exception.SqlState}); details withheld.");
+    return 1;
 }
 catch (Exception exception)
 {

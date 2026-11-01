@@ -14,7 +14,7 @@ public interface IPlatformAdministrationService
     Task<SharedKernel.Results.Result<PlatformDashboard>> DashboardAsync(string actor, CancellationToken cancellationToken);
     Task<SharedKernel.Results.Result<IReadOnlyList<PlatformRoleView>>> RolesAsync(string actor, string userId, CancellationToken cancellationToken);
     Task<SharedKernel.Results.Result<PlatformRoleView>> GrantSuperAdminAsync(string actor, string targetUserId, string reason, CancellationToken cancellationToken);
-    Task<SharedKernel.Results.Result> RevokeSuperAdminAsync(string actor, Guid assignmentId, string reason, CancellationToken cancellationToken);
+    Task<SharedKernel.Results.Result> RevokeSuperAdminAsync(string actor, string targetUserId, Guid assignmentId, string reason, CancellationToken cancellationToken);
 }
 
 public static class PlatformPermissions

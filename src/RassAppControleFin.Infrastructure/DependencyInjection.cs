@@ -26,6 +26,7 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .Validate(DatabaseConnectionSettings.IsValid, "Invalid or unsafe database configuration.")
             .ValidateOnStart();
+        services.AddOptions<PlatformAdministrationOptions>().BindConfiguration(PlatformAdministrationOptions.SectionName);
         services.AddOptions<NeonOptions>().BindConfiguration(NeonOptions.SectionName)
             .ValidateOnStart();
         services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName);
@@ -67,7 +68,8 @@ public static class DependencyInjection
         services.AddScoped<INeonAuthService, NeonAuthService>();
         services.AddScoped<IIdentityStore, IdentityStore>();
         services.AddScoped<IPlatformAuthorizationService, PlatformAuthorizationService>();
-        services.AddScoped<IPlatformAdministrationService, PlatformAdministrationService>();
+        services.AddSingleton<PlatformAdministrationDataSource>();
+        services.AddScoped<IPlatformAdministrationService, IsolatedPlatformAdministrationService>();
         services.AddHttpClient("gemini", client => client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/"))
             .RemoveAllLoggers().AddStandardResilienceHandler(options =>
             {

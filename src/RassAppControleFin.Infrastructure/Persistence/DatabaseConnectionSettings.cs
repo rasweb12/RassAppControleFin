@@ -22,6 +22,22 @@ public static class DatabaseConnectionSettings
         catch (Exception exception) when (exception is ArgumentException or FormatException) { return false; }
     }
 
+    public static bool IsValid(string connectionString, string expectedRole)
+    {
+        if (string.IsNullOrWhiteSpace(expectedRole) || string.IsNullOrWhiteSpace(connectionString)) return false;
+        try
+        {
+            var connection = new NpgsqlConnectionStringBuilder(connectionString);
+            var local = connection.Host is "localhost" or "127.0.0.1" or "::1";
+            return !string.IsNullOrWhiteSpace(connection.Host) && !string.IsNullOrWhiteSpace(connection.Database)
+                && connection.Username == expectedRole
+                && (local || connection.SslMode == SslMode.VerifyFull)
+                && !connection.NoResetOnClose && !connection.Multiplexing
+                && !connection.IncludeErrorDetail && !connection.LogParameters;
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException) { return false; }
+    }
+
     public static NpgsqlConnectionStringBuilder Build(DatabaseOptions options)
     {
         var connection = new NpgsqlConnectionStringBuilder(string.IsNullOrWhiteSpace(options.ConnectionString)
@@ -38,6 +54,24 @@ public static class DatabaseConnectionSettings
             Multiplexing = false,
             Enlist = false,
             ApplicationName = "RassAppControleFin"
+        };
+        return connection;
+    }
+
+    public static NpgsqlConnectionStringBuilder Build(PlatformAdministrationOptions options)
+    {
+        var connection = new NpgsqlConnectionStringBuilder(options.ConnectionString)
+        {
+            MaxPoolSize = 2,
+            MinPoolSize = 0,
+            Timeout = options.ConnectionTimeoutSeconds,
+            CommandTimeout = options.CommandTimeoutSeconds,
+            IncludeErrorDetail = false,
+            LogParameters = false,
+            NoResetOnClose = false,
+            Multiplexing = false,
+            Enlist = false,
+            ApplicationName = "RassAppControleFin.PlatformAdmin"
         };
         return connection;
     }

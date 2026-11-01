@@ -12,6 +12,19 @@ public sealed class DatabaseOptions
     [Range(1, 120)] public int CommandTimeoutSeconds { get; set; } = 30;
 }
 
+/// <summary>
+/// Dedicated, least-privilege connection for global platform administration.
+/// It is deliberately separate from the financial runtime connection.
+/// </summary>
+public sealed class PlatformAdministrationOptions
+{
+    public const string SectionName = "PlatformAdministration";
+    public string ConnectionString { get; set; } = "";
+    public string Role { get; set; } = "rass_platform_admin_v1";
+    [Range(1, 30)] public int ConnectionTimeoutSeconds { get; set; } = 10;
+    [Range(1, 120)] public int CommandTimeoutSeconds { get; set; } = 30;
+}
+
 public sealed class NeonOptions
 {
     public const string SectionName = "Neon";
