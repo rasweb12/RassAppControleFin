@@ -98,7 +98,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     private void ValidateWrites()
     {
-        if ((_tenantId is null || _userId is null) && _platformActor is null || Database.CurrentTransaction is null)
+        if (((_tenantId is null || _userId is null) && _platformActor is null)
+            || Database.CurrentTransaction is null)
             throw new InvalidOperationException("An authorized tenant transaction is required.");
 
         foreach (var entry in ChangeTracker.Entries().Where(entry =>
@@ -108,7 +109,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             {
                 Tenant tenant => tenant.Id == _tenantId,
                 UserProfile profile => profile.TenantId == _tenantId && profile.UserId == _userId,
-                PlatformRoleAssignment assignment => _platformActor is not null && assignment.GrantedBy == _platformActor,
+                // The service has already verified the actor's own assignment and set
+                // the transaction-local RLS gate. A SuperAdmin may revoke another
+                // administrator; limiting writes to GrantedBy would make that valid
+                // revocation impossible.
+                PlatformRoleAssignment => _platformActor is not null,
                 IFinancialResource resource => resource.TenantId == _tenantId && resource.UserId == _userId,
                 _ => false
             };

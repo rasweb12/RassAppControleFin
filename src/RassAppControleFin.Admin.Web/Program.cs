@@ -23,6 +23,7 @@ builder.Services.AddHttpClient<SystemClient>((services, client) =>
 }).AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
 builder.Services.AddHealthChecks();
 builder.AddServerAuthentication("Admin");
+builder.Services.AddScoped<PlatformClient>();
 
 var app = builder.Build();
 app.UseExceptionHandler();

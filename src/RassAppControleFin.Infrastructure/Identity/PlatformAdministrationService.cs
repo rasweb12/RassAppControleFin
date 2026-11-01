@@ -37,6 +37,7 @@ public sealed class PlatformAdministrationService(AppDbContext db) : IPlatformAd
         if (actor == targetUserId) return Result<PlatformRoleView>.Failure(Conflict);
         await using var tx = await AuthorizeAsync(actor, ct);
         if (tx is null) return Result<PlatformRoleView>.Failure(Forbidden);
+        await LockSuperAdminChangesAsync(ct);
         if (await db.PlatformRoleAssignments.AnyAsync(x => x.UserId == targetUserId && x.Role == PlatformRole.SuperAdmin && x.IsActive, ct))
             return Result<PlatformRoleView>.Failure(Conflict);
         var assignment = PlatformRoleAssignment.Grant(Guid.NewGuid(), targetUserId, PlatformRole.SuperAdmin, actor, reason, DateTimeOffset.UtcNow);
@@ -50,7 +51,10 @@ public sealed class PlatformAdministrationService(AppDbContext db) : IPlatformAd
     {
         await using var tx = await AuthorizeAsync(actor, ct);
         if (tx is null) return Result.Failure(Forbidden);
-        var assignment = await db.PlatformRoleAssignments.SingleOrDefaultAsync(x => x.Id == assignmentId, ct);
+        await LockSuperAdminChangesAsync(ct);
+        // The application context is intentionally NoTracking by default. Revocation
+        // changes lifecycle state, therefore this specific aggregate must be tracked.
+        var assignment = await db.PlatformRoleAssignments.AsTracking().SingleOrDefaultAsync(x => x.Id == assignmentId, ct);
         if (assignment is null || !assignment.IsActive || assignment.UserId == actor
             || await db.PlatformRoleAssignments.CountAsync(x => x.IsActive && x.Role == PlatformRole.SuperAdmin, ct) <= 1)
             return Result.Failure(Conflict);
@@ -76,5 +80,12 @@ public sealed class PlatformAdministrationService(AppDbContext db) : IPlatformAd
         INSERT INTO app."AuditEntries" ("Id","UserId","TenantId","Action","ResourceId","Outcome","CorrelationId","CreatedAt")
         VALUES ({Guid.NewGuid()},{actor},{(Guid?)null},{action},{resourceId},{"success"},{Guid.NewGuid().ToString()},{DateTimeOffset.UtcNow})
         """, ct);
+
+    // The application serializes grants and revocations so a concurrent request cannot
+    // observe two different "last active administrator" states.  The database unique
+    // index remains the final guard for duplicate active grants.
+    private Task LockSuperAdminChangesAsync(CancellationToken ct)
+        => db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtext('rass.platform.superadmin'))", ct);
+
     private static PlatformRoleView View(PlatformRoleAssignment x) => new(x.Id, x.UserId, x.Role.ToString(), x.IsActive, x.GrantedBy, x.GrantedAt, x.RevokedBy, x.RevokedAt, x.Reason);
 }
