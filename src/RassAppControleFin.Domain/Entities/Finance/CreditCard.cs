@@ -57,4 +57,11 @@ public sealed class CreditCard : FinancialAggregate
     public void Rename(string name) { Name = NameValue(name); Version = checked(Version + 1); }
     public bool Archive()
     { if (Outstanding != 0 || IsArchived) return false; IsArchived = true; Version = checked(Version + 1); return true; }
+    public bool Reactivate()
+    {
+        if (!IsArchived) return false;
+        IsArchived = false;
+        Version = checked(Version + 1);
+        return true;
+    }
 }

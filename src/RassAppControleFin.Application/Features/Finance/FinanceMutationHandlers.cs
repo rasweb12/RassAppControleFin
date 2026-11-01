@@ -142,8 +142,12 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
                 if (c.Archive) category.Archive(); else category.Rename(c.Name);
                 break;
             case CreditCard card:
-                if (card.IsArchived || (c.Archive && !card.Archive())) return Fail("CARD_STATE_INVALID", "Cartao arquivado ou com saldo devedor.");
-                if (!c.Archive) card.Rename(c.Name);
+                if (c.Archive && !card.Archive()) return Fail("CARD_STATE_INVALID", "Cartao ja esta arquivado ou possui saldo devedor.");
+                if (!c.Archive && card.IsArchived)
+                {
+                    if (!card.Reactivate()) return Fail("CARD_STATE_INVALID", "Cartao nao pode ser reativado.");
+                }
+                else if (!c.Archive) card.Rename(c.Name);
                 break;
         }
         return Result<MutationReceipt>.Success(new(resource.Id, c.OperationId, resource.Version));

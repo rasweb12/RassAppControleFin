@@ -82,6 +82,16 @@ public sealed class FinanceDomainTests
     }
 
     [Fact]
+    public void Archived_credit_card_can_be_reactivated_without_outstanding_balance()
+    {
+        var card = CreditCard.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Cartao", Money.Create(100m, "BRL"), 10, 20, DateTimeOffset.UtcNow);
+
+        Assert.True(card.Archive());
+        Assert.True(card.Reactivate());
+        Assert.False(card.IsArchived);
+    }
+
+    [Fact]
     public void Credit_card_uses_the_last_day_of_short_months_for_billing_dates()
     {
         var card = CreditCard.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Cartao",

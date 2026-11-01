@@ -231,6 +231,58 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
     }
   }
 
+  Future<void> _maintainCard() async {
+    final archive = !widget.card.archived;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(archive ? 'Arquivar cartão?' : 'Reativar cartão?'),
+        content: Text(
+          archive
+              ? 'O cartão só pode ser arquivado sem saldo devedor.'
+              : 'O cartão voltará a ficar disponível para compras.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(archive ? 'Arquivar' : 'Reativar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final state = await widget.repository.maintainCreditCard(
+        tenantId: widget.tenantId,
+        card: widget.card,
+        archive: archive,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            state == FinanceWriteState.pending
+                ? 'Alteração pendente de sincronização.'
+                : archive
+                ? 'Cartão arquivado.'
+                : 'Cartão reativado.',
+          ),
+        ),
+      );
+      Navigator.pop(context);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível alterar o cartão.')),
+        );
+      }
+    }
+  }
+
   Future<void> _pay(CreditCardInvoiceSummary invoice) async {
     final accounts = widget.accounts
         .where((item) => !item.archived && item.currency == invoice.currency)
@@ -269,7 +321,16 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.card.name)),
+    appBar: AppBar(
+      title: Text(widget.card.name),
+      actions: [
+        IconButton(
+          onPressed: _maintainCard,
+          tooltip: widget.card.archived ? 'Reativar cartão' : 'Arquivar cartão',
+          icon: Icon(widget.card.archived ? Icons.unarchive_outlined : Icons.archive_outlined),
+        ),
+      ],
+    ),
     floatingActionButton: FloatingActionButton.extended(
       onPressed: widget.card.archived ? null : _purchase,
       icon: const Icon(Icons.shopping_bag_outlined),
@@ -367,7 +428,7 @@ class _CreditCardTile extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-            '${card.institution}${card.brand == null ? '' : ' · ${card.brand}'}\nUsado ${_money(card.outstanding, card.currency)} de ${_money(card.limit, card.currency)} · fecha dia ${card.closingDay}',
+              '${card.institution}${card.brand == null ? '' : ' · ${card.brand}'}\nUsado ${_money(card.outstanding, card.currency)} de ${_money(card.limit, card.currency)} · fecha dia ${card.closingDay}',
               style: TextStyle(color: Colors.white.withValues(alpha: .8)),
             ),
           ],
@@ -409,7 +470,16 @@ class _RetryState extends StatelessWidget {
 }
 
 class _CardInput {
-  const _CardInput(this.name, this.limit, this.closingDay, this.dueDay, this.institution, this.brand, this.preferredPaymentAccountId, this.accentColor);
+  const _CardInput(
+    this.name,
+    this.limit,
+    this.closingDay,
+    this.dueDay,
+    this.institution,
+    this.brand,
+    this.preferredPaymentAccountId,
+    this.accentColor,
+  );
   final String name;
   final num limit;
   final int closingDay;
@@ -458,8 +528,18 @@ Future<_CardInput?> _showCardForm(BuildContext context) async {
               controller: name,
               decoration: const InputDecoration(labelText: 'Nome do cartão'),
             ),
-    TextField(controller: institution, decoration: const InputDecoration(labelText: 'Instituição financeira')),
-    TextField(controller: brand, decoration: const InputDecoration(labelText: 'Bandeira (opcional)')),
+            TextField(
+              controller: institution,
+              decoration: const InputDecoration(
+                labelText: 'Instituição financeira',
+              ),
+            ),
+            TextField(
+              controller: brand,
+              decoration: const InputDecoration(
+                labelText: 'Bandeira (opcional)',
+              ),
+            ),
             TextField(
               controller: limit,
               keyboardType: const TextInputType.numberWithOptions(
@@ -492,7 +572,8 @@ Future<_CardInput?> _showCardForm(BuildContext context) async {
             final value = _number(limit.text);
             final close = int.tryParse(closing.text);
             final dueDay = int.tryParse(due.text);
-            if (name.text.trim().isEmpty || institution.text.trim().isEmpty ||
+            if (name.text.trim().isEmpty ||
+                institution.text.trim().isEmpty ||
                 value == null ||
                 value <= 0 ||
                 close == null ||
@@ -505,7 +586,16 @@ Future<_CardInput?> _showCardForm(BuildContext context) async {
             }
             Navigator.pop(
               context,
-              _CardInput(name.text.trim(), value, close, dueDay, institution.text.trim(), brand.text.trim().isEmpty ? null : brand.text.trim(), null, null),
+              _CardInput(
+                name.text.trim(),
+                value,
+                close,
+                dueDay,
+                institution.text.trim(),
+                brand.text.trim().isEmpty ? null : brand.text.trim(),
+                null,
+                null,
+              ),
             );
           },
           child: const Text('Salvar'),

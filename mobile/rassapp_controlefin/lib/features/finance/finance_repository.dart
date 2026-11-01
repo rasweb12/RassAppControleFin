@@ -80,10 +80,6 @@ class AccountSummary {
     required this.balance,
     required this.version,
     required this.archived,
-    this.institution = 'Não informado',
-    this.brand,
-    this.preferredPaymentAccountId,
-    this.accentColor,
     this.overdraftLimit = 0,
     this.accountType = 'Bank',
     this.subtype,
@@ -96,10 +92,6 @@ class AccountSummary {
   final num balance;
   final int version;
   final bool archived;
-  final String institution;
-  final String? brand;
-  final String? preferredPaymentAccountId;
-  final String? accentColor;
   final num overdraftLimit;
   final String accountType;
   final String? subtype;
@@ -132,6 +124,10 @@ class CreditCardSummary {
     required this.dueDay,
     required this.version,
     required this.archived,
+    this.institution = 'Não informado',
+    this.brand,
+    this.preferredPaymentAccountId,
+    this.accentColor,
   });
 
   final String id;
@@ -143,6 +139,10 @@ class CreditCardSummary {
   final int dueDay;
   final int version;
   final bool archived;
+  final String institution;
+  final String? brand;
+  final String? preferredPaymentAccountId;
+  final String? accentColor;
 
   num get availableLimit => (limit - outstanding).clamp(0, limit);
 
@@ -921,6 +921,32 @@ class FinanceRepository {
         'version': 0,
         'isArchived': false,
       },
+    );
+  }
+
+  Future<FinanceWriteState> maintainCreditCard({
+    required String tenantId,
+    required CreditCardSummary card,
+    required bool archive,
+  }) {
+    final operationId = _newOperationId();
+    return _writeOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/credit-cards/${card.id}',
+      entityType: 'card',
+      entityId: card.id,
+      operationType: 'maintain',
+      payload: {
+        'operationId': operationId,
+        'version': card.version,
+        'name': card.name,
+        'archive': archive,
+      },
+      request: (payload) => _auth.patchAuthenticated(
+        '/api/v1/credit-cards/${card.id}',
+        payload,
+        tenantId: tenantId,
+      ),
     );
   }
 
