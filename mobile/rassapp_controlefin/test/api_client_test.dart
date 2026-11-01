@@ -165,4 +165,30 @@ void main() {
       ),
     );
   });
+
+  test('maps gateway failures to a retryable unavailable error', () async {
+    final client = ApiClient(
+      client: MockClient(
+        (request) async => http.Response(
+          '{"success":false,"data":null,"error":{"message":"Gateway indisponível."}}',
+          HttpStatus.gatewayTimeout,
+          headers: const {'x-correlation-id': 'correlation-504'},
+        ),
+      ),
+    );
+
+    expect(
+      () => client.get('/api/v1/transactions'),
+      throwsA(
+        isA<ApiException>()
+            .having((error) => error.failure, 'failure', ApiFailure.unavailable)
+            .having((error) => error.statusCode, 'statusCode', 504)
+            .having(
+              (error) => error.correlationId,
+              'correlationId',
+              'correlation-504',
+            ),
+      ),
+    );
+  });
 }

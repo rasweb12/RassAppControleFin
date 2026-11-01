@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import '../../core/network/api_client.dart';
 import '../../core/storage/offline_finance_store.dart';
 import '../auth/auth_controller.dart';
@@ -958,6 +960,12 @@ class FinanceRepository {
     required String description,
     required int installmentCount,
   }) {
+    if (card.id.startsWith('local-') || card.version <= 0) {
+      throw const ApiException(
+        ApiFailure.validation,
+        'Cartão ainda não sincronizado. Sincronize e atualize a lista antes de registrar uma compra.',
+      );
+    }
     final operationId = _newOperationId();
     return _postOrQueue(
       tenantId: tenantId,
@@ -1250,14 +1258,32 @@ class FinanceRepository {
 
       final resources = ((data as Map<String, dynamic>)['items'] as List)
           .cast<Map<String, dynamic>>();
+      if (kDebugMode && entityType == 'card') {
+        for (final resource in resources) {
+          debugPrint(
+            'CHECKPOINT12_CARD_API: '
+            'id=${resource['id']}, '
+            'version=${resource['version']}, '
+            'hasVersion=${resource.containsKey('version')}',
+          );
+        }
+      }
       await (await _store).cacheAll(tenantId, entityType, resources);
       return resources.map(parser).toList(growable: false);
     } on ApiException catch (error) {
       if (!_canReadOffline(error)) rethrow;
-      return (await (await _store).cached(
-        tenantId,
-        entityType,
-      )).map(parser).toList(growable: false);
+      final cachedResources = await (await _store).cached(tenantId, entityType);
+      if (kDebugMode && entityType == 'card') {
+        for (final resource in cachedResources) {
+          debugPrint(
+            'CHECKPOINT12_CARD_CACHE: '
+            'id=${resource['id']}, '
+            'version=${resource['version']}, '
+            'hasVersion=${resource.containsKey('version')}',
+          );
+        }
+      }
+      return cachedResources.map(parser).toList(growable: false);
     }
   }
 

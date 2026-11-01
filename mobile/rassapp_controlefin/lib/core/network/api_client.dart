@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
@@ -55,6 +56,8 @@ class ApiClient {
     Object? payload, {
     Map<String, String> headers = const {},
   }) => _send(
+    'POST',
+    path,
     () => _client.post(
       AppConfig.apiBaseUri.resolve(path),
       headers: _headers(headers),
@@ -67,6 +70,8 @@ class ApiClient {
     Object? payload, {
     Map<String, String> headers = const {},
   }) => _send(
+    'PATCH',
+    path,
     () => _client.patch(
       AppConfig.apiBaseUri.resolve(path),
       headers: _headers(headers),
@@ -79,6 +84,8 @@ class ApiClient {
     Object? payload, {
     Map<String, String> headers = const {},
   }) => _send(
+    'PUT',
+    path,
     () => _client.put(
       AppConfig.apiBaseUri.resolve(path),
       headers: _headers(headers),
@@ -91,6 +98,8 @@ class ApiClient {
     Map<String, String> headers = const {},
     Map<String, String>? queryParameters,
   }) => _send(
+    'GET',
+    path,
     () => _client.get(
       AppConfig.apiBaseUri
           .resolve(path)
@@ -105,13 +114,21 @@ class ApiClient {
     ...additional,
   };
 
-  Future<Object?> _send(Future<http.Response> Function() request) async {
+  Future<Object?> _send(
+    String method,
+    String path,
+    Future<http.Response> Function() request,
+  ) async {
     try {
       final response = await request().timeout(AppConfig.requestTimeout);
       final correlationId = response.headers['x-correlation-id'];
-      if (response.body.isEmpty) throw const FormatException('Empty response.');
+      if (response.body.isEmpty) {
+        _debugFailure(method, path, 'empty-response', correlationId);
+        throw const FormatException('Empty response.');
+      }
       final decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {
+        _debugFailure(method, path, 'invalid-envelope', correlationId);
         throw const FormatException('Invalid envelope.');
       }
       final body = decoded;
@@ -129,10 +146,10 @@ class ApiClient {
         409 => ApiFailure.conflict,
         422 => ApiFailure.ruleViolation,
         429 => ApiFailure.rateLimited,
-        500 => ApiFailure.unavailable,
-        503 => ApiFailure.unavailable,
+        500 || 502 || 503 || 504 => ApiFailure.unavailable,
         _ => ApiFailure.unexpected,
       };
+      _debugFailure(method, path, 'http-${response.statusCode}', correlationId);
       throw ApiException(
         failure,
         error is Map && error['message'] is String
@@ -143,26 +160,51 @@ class ApiClient {
       );
     } on ApiException {
       rethrow;
-    } on TimeoutException {
+    } on TimeoutException catch (_, stackTrace) {
+      _debugFailure(method, path, 'timeout', null, stackTrace);
       throw const ApiException(
         ApiFailure.timeout,
         'O tempo de resposta foi excedido. Tente novamente.',
       );
-    } on SocketException {
+    } on SocketException catch (_, stackTrace) {
+      _debugFailure(method, path, 'socket', null, stackTrace);
       throw const ApiException(
         ApiFailure.offline,
         'Sem conexão com a internet.',
       );
-    } on FormatException {
+    } on http.ClientException catch (_, stackTrace) {
+      _debugFailure(method, path, 'transport', null, stackTrace);
+      throw const ApiException(
+        ApiFailure.offline,
+        'Não foi possível alcançar o serviço. Verifique sua conexão.',
+      );
+    } on FormatException catch (_, stackTrace) {
+      _debugFailure(method, path, 'format', null, stackTrace);
       throw const ApiException(
         ApiFailure.unexpected,
         'A resposta do serviço não possui o formato esperado.',
       );
-    } on Exception {
+    } on Exception catch (error, stackTrace) {
+      _debugFailure(method, path, error.runtimeType.toString(), null, stackTrace);
       throw const ApiException(
         ApiFailure.unavailable,
         'Não foi possível concluir a solicitação agora.',
       );
+    }
+  }
+
+  void _debugFailure(
+    String method,
+    String path,
+    String reason,
+    String? correlationId, [
+    StackTrace? stackTrace,
+  ]) {
+    if (!kDebugMode) return;
+    final correlation = correlationId == null ? '' : ' correlationId=$correlationId';
+    debugPrint('RASS_HTTP_FAILURE method=$method path=$path reason=$reason$correlation');
+    if (stackTrace != null) {
+      debugPrintStack(label: 'RASS_HTTP_FAILURE_STACK', stackTrace: stackTrace);
     }
   }
 
@@ -174,7 +216,7 @@ class ApiClient {
     409 => 'Os dados foram alterados. Atualize e tente novamente.',
     422 => 'Esta operação não atende às regras financeiras.',
     429 => 'Muitas solicitações. Aguarde um instante.',
-    500 || 503 => 'O serviço está temporariamente indisponível.',
+    500 || 502 || 503 || 504 => 'O serviço está temporariamente indisponível.',
     _ => 'Não foi possível concluir a solicitação.',
   };
 }

@@ -45,20 +45,56 @@ class FinanceSyncService {
       var blocked = false;
       for (final operation in await _store.pending(tenantId)) {
         try {
+          Object? response;
           if (operation.operationType == 'put') {
-            await _auth.putAuthenticated(
+            response = await _auth.putAuthenticated(
+              operation.endpoint,
+              operation.payload,
+              tenantId: operation.tenantId,
+            );
+          } else if (operation.operationType == 'maintain') {
+            response = await _auth.patchAuthenticated(
               operation.endpoint,
               operation.payload,
               tenantId: operation.tenantId,
             );
           } else {
-            await _auth.postAuthenticated(
+            response = await _auth.postAuthenticated(
               operation.endpoint,
               operation.payload,
               tenantId: operation.tenantId,
             );
           }
-          await _store.acknowledge(operation.operationId);
+          if (operation.entityType == 'card' &&
+              operation.operationType == 'create' &&
+              operation.entityId.startsWith('local-')) {
+            final result = response is Map ? response : null;
+            final resourceId = result?['resourceId'];
+            final version = result?['version'];
+            if (resourceId is! String ||
+                resourceId.isEmpty ||
+                resourceId.startsWith('local-') ||
+                version is! num ||
+                version.toInt() <= 0) {
+              // Keep the original operation for manual reconciliation. A
+              // successful POST without an identity must not orphan the card.
+              await _store.defer(
+                operation.operationId,
+                safeError:
+                    'Cartão criado sem identificador ou versão válida; revisar sincronização.',
+                retryable: false,
+              );
+              blocked = true;
+              continue;
+            }
+            await _store.reconcileCreatedCard(
+              operation: operation,
+              resourceId: resourceId,
+              version: version.toInt(),
+            );
+          } else {
+            await _store.acknowledge(operation.operationId);
+          }
         } on ApiException catch (error) {
           if (_isRetryable(error.failure)) {
             await _store.defer(

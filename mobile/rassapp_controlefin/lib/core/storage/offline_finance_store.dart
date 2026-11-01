@@ -235,6 +235,69 @@ class OfflineFinanceStore {
         .toList(growable: false);
   }
 
+  /// Atomically replaces a pending local card with its server identity.
+  /// Never invents a version or deletes unrelated cached resources.
+  Future<void> reconcileCreatedCard({
+    required PendingFinanceOperation operation,
+    required String resourceId,
+    required int version,
+  }) async {
+    if (operation.entityType != 'card' ||
+        operation.operationType != 'create' ||
+        !operation.entityId.startsWith('local-') ||
+        resourceId.isEmpty ||
+        resourceId.startsWith('local-') ||
+        version <= 0) {
+      throw ArgumentError('Invalid card reconciliation');
+    }
+    await _database.transaction(() async {
+      final local =
+          await (_database.select(_database.cachedResources)..where(
+                (row) =>
+                    row.subject.equals(subject) &
+                    row.tenantId.equals(operation.tenantId) &
+                    row.entityType.equals('card') &
+                    row.entityId.equals(operation.entityId),
+              ))
+              .getSingleOrNull();
+      if (local != null) {
+        final resource = jsonDecode(local.payloadJson) as Map<String, dynamic>;
+        await _database
+            .into(_database.cachedResources)
+            .insertOnConflictUpdate(
+              CachedResourcesCompanion.insert(
+                subject: subject,
+                tenantId: operation.tenantId,
+                entityType: 'card',
+                entityId: resourceId,
+                payloadJson: jsonEncode({
+                  ...resource,
+                  'id': resourceId,
+                  'version': version,
+                }),
+                version: Value(version),
+                updatedAt: DateTime.now().toUtc(),
+              ),
+            );
+        await (_database.delete(_database.cachedResources)..where(
+              (row) =>
+                  row.subject.equals(subject) &
+                  row.tenantId.equals(operation.tenantId) &
+                  row.entityType.equals('card') &
+                  row.entityId.equals(operation.entityId),
+            ))
+            .go();
+      }
+      await (_database.delete(_database.pendingSyncOperations)..where(
+            (row) =>
+                row.subject.equals(subject) &
+                row.tenantId.equals(operation.tenantId) &
+                row.operationId.equals(operation.operationId),
+          ))
+          .go();
+    });
+  }
+
   Future<void> acknowledge(String operationId) => (_database.delete(
     _database.pendingSyncOperations,
   )..where((row) => row.operationId.equals(operationId))).go();
