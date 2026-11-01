@@ -48,6 +48,17 @@ android {
         versionName = flutter.versionName
     }
 
+    // Keep isolated homologation credentials, encrypted Drift database and
+    // outbox separate from the public application installed on the emulator.
+    flavorDimensions += "environment"
+    productFlavors {
+        create("homologation") {
+            dimension = "environment"
+            applicationIdSuffix = ".homologation"
+            versionNameSuffix = "-homologation"
+        }
+    }
+
     buildTypes {
         release {
             if (hasReleaseSigning) {
