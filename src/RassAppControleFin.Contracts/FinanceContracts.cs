@@ -6,7 +6,8 @@ public sealed record MaintainResourceRequest(Guid OperationId, long Version, str
 public sealed record UpdateAccountRequest(Guid OperationId, long Version, string Name, decimal OverdraftLimit,
     string AccountType, string? Subtype, string? Institution, bool IncludeInNetWorth);
 public sealed record CreateCategoryRequest(Guid OperationId, string Name, string Flow);
-public sealed record CreateCardRequest(Guid OperationId, string Name, string Currency, decimal Limit, int ClosingDay, int DueDay);
+public sealed record CreateCardRequest(Guid OperationId, string Name, string Currency, decimal Limit, int ClosingDay, int DueDay,
+    string Institution, string? Brand = null, Guid? PreferredPaymentAccountId = null, string? AccentColor = null);
 public sealed record CreateTransactionRequest(Guid OperationId, Guid AccountId, Guid CategoryId, decimal Amount,
     string Currency, string Flow, string Status, DateTimeOffset OccurredAt, string Description, long AccountVersion);
 public sealed record EditTransactionRequest(Guid OperationId, long Version, Guid CategoryId, decimal Amount,
@@ -16,6 +17,10 @@ public sealed record CreateTransferRequest(Guid OperationId, Guid SourceAccountI
     string Currency, DateTimeOffset OccurredAt, string Description, long SourceVersion, long DestinationVersion);
 public sealed record CreateCardMovementRequest(Guid OperationId, Guid CardId, long CardVersion, decimal Amount, string Currency,
     string Kind, Guid? AccountId, long? AccountVersion, Guid? CategoryId, DateTimeOffset OccurredAt, string Description);
+public sealed record CreateCreditCardPurchaseRequest(Guid OperationId, Guid CardId, long CardVersion, Guid CategoryId,
+    decimal Amount, string Currency, DateTimeOffset OccurredAt, string Description, int InstallmentCount);
+public sealed record PayCreditCardInvoiceRequest(Guid OperationId, long InvoiceVersion, Guid AccountId, long AccountVersion,
+    decimal Amount, string Currency, DateTimeOffset OccurredAt, string Description);
 
 public sealed record MutationReceiptDto(Guid ResourceId, Guid OperationId, long Version, long? SourceVersion,
     long? DestinationVersion, decimal? SourceBalance, decimal? DestinationBalance);
@@ -23,6 +28,7 @@ public sealed record AccountDto(Guid Id, string Name, string Currency, decimal B
     string? Subtype, string? Institution, bool IncludeInNetWorth, long Version, bool IsArchived);
 public sealed record CategoryDto(Guid Id, string Name, string Flow, long Version, bool IsArchived);
 public sealed record CardDto(Guid Id, string Name, string Currency, decimal Limit, decimal Outstanding,
+    string Institution, string? Brand, Guid? PreferredPaymentAccountId, string? AccentColor,
     int ClosingDay, int DueDay, long Version, bool IsArchived);
 public sealed record TransactionDto(Guid Id, Guid AccountId, Guid CategoryId, decimal Amount, string Currency,
     string Flow, string Status, DateTimeOffset OccurredAt, string Description, long Version,
@@ -31,6 +37,8 @@ public sealed record TransferDto(Guid Id, Guid SourceAccountId, Guid Destination
     string Currency, DateTimeOffset OccurredAt, string Description, string Status);
 public sealed record CardMovementDto(Guid Id, Guid CardId, Guid? AccountId, Guid? CategoryId, decimal Amount,
     string Currency, string Kind, DateTimeOffset OccurredAt, string Description);
+public sealed record CreditCardInvoiceDto(Guid Id, Guid CardId, DateOnly Competence, DateOnly ClosingDate,
+    DateOnly DueDate, decimal TotalAmount, decimal PaidAmount, string Currency, string Status, long Version);
 public sealed record PageDto<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 public sealed record TransactionSummaryDto(string Currency, decimal Income, decimal Expense);
 public sealed record TransactionPageDto(PageDto<TransactionDto> Page, IReadOnlyList<TransactionSummaryDto> Summary);

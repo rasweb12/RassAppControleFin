@@ -75,7 +75,7 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                   "TenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
                   AND "UserId" = NULLIF(current_setting('app.user_id', true), '')
                 );
-                GRANT SELECT, INSERT, UPDATE ON app."ExpenseReductionGoals" TO rass_app_runtime;
+                GRANT SELECT, INSERT, UPDATE ON app."ExpenseReductionGoals" TO rass_app_runtime_v2;
                 """);
         }
 

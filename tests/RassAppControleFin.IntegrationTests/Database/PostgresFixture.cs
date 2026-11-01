@@ -34,18 +34,18 @@ public sealed class PostgresFixture : IAsyncLifetime
             || admin.Host?.Replace("-pooler", "", StringComparison.Ordinal) !=
                 runtime.Host?.Replace("-pooler", "", StringComparison.Ordinal)
             || admin.Host?.Contains("-pooler", StringComparison.Ordinal) == true
-            || runtime.Username != "rass_app_runtime")
+            || runtime.Username != "rass_app_runtime_v2")
             throw new InvalidOperationException("Database tests require the dedicated rass_sprint1_tests database.");
 
         await using (var connection = new NpgsqlConnection(AdminConnection))
         {
             await connection.OpenAsync();
             // CI provisions its own restricted login. Never change existing role passwords.
-            await using var query = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rass_app_runtime')", connection);
+            await using var query = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rass_app_runtime_v2')", connection);
             if (!(bool)(await query.ExecuteScalarAsync())!)
             {
                 await using var format = new NpgsqlCommand("""
-                    SELECT format('CREATE ROLE rass_app_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT PASSWORD %L', @password)
+                    SELECT format('CREATE ROLE rass_app_runtime_v2 LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT PASSWORD %L', @password)
                     """, connection);
                 format.Parameters.AddWithValue("password", runtime.Password ?? throw new InvalidOperationException("Test runtime password required."));
                 var createSql = (string)(await format.ExecuteScalarAsync())!;

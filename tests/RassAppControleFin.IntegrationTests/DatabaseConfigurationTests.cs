@@ -7,17 +7,17 @@ namespace RassAppControleFin.IntegrationTests;
 public sealed class DatabaseConfigurationTests
 {
     [Theory]
-    [InlineData("Host=remote.example;Database=app;Username=rass_app_runtime;SSL Mode=VerifyFull", true)]
-    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime", true)]
+    [InlineData("Host=remote.example;Database=app;Username=rass_app_runtime_v2;SSL Mode=VerifyFull", true)]
+    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime_v2", true)]
     [InlineData("", true)]
-    [InlineData("Host=remote.example;Database=app;Username=rass_app_runtime;SSL Mode=Require", false)]
+    [InlineData("Host=remote.example;Database=app;Username=rass_app_runtime_v2;SSL Mode=Require", false)]
     [InlineData("Host=localhost;Database=app;Username=owner", false)]
-    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime;No Reset On Close=true", false)]
-    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime;Multiplexing=true", false)]
-    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime;Include Error Detail=true", false)]
-    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime;Log Parameters=true", false)]
+    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime_v2;No Reset On Close=true", false)]
+    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime_v2;Multiplexing=true", false)]
+    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime_v2;Include Error Detail=true", false)]
+    [InlineData("Host=localhost;Database=app;Username=rass_app_runtime_v2;Log Parameters=true", false)]
     [InlineData("NotAConnection=secret-sentinel", false)]
-    [InlineData("Username=rass_app_runtime", false)]
+    [InlineData("Username=rass_app_runtime_v2", false)]
     public void Unsafe_database_settings_are_rejected_without_exposing_values(string connection, bool expected)
         => Assert.Equal(expected, DatabaseConnectionSettings.IsValid(new DatabaseOptions { ConnectionString = connection }));
 
@@ -26,7 +26,7 @@ public sealed class DatabaseConfigurationTests
     {
         var settings = DatabaseConnectionSettings.Build(new DatabaseOptions
         {
-            ConnectionString = "Host=localhost;Database=app;Username=rass_app_runtime",
+            ConnectionString = "Host=localhost;Database=app;Username=rass_app_runtime_v2",
             MaxPoolSize = 5, ConnectionTimeoutSeconds = 7, CommandTimeoutSeconds = 12
         });
         Assert.Equal(5, settings.MaxPoolSize);

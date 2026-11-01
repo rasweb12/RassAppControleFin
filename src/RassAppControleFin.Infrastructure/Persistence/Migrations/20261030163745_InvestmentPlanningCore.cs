@@ -348,8 +348,8 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                   AND "UserId" = NULLIF(current_setting('app.user_id', true), '')
                 );
                 GRANT SELECT, INSERT, UPDATE ON app."PayYourselfFirstPlans", app."EmergencyFundPlans",
-                  app."InvestmentAssets", app."TargetPortfolioAllocations" TO rass_app_runtime;
-                GRANT SELECT, INSERT ON app."PayYourselfFirstPlanRevisions", app."InvestmentTransactions" TO rass_app_runtime;
+                  app."InvestmentAssets", app."TargetPortfolioAllocations" TO rass_app_runtime_v2;
+                GRANT SELECT, INSERT ON app."PayYourselfFirstPlanRevisions", app."InvestmentTransactions" TO rass_app_runtime_v2;
                 """);
         }
 

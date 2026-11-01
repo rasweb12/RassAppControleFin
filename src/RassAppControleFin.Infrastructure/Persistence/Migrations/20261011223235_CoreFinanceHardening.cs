@@ -63,11 +63,11 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                   END IF;
                 END $trigger$;
                 GRANT SELECT, INSERT, UPDATE ON app."Accounts", app."Categories", app."CreditCards",
-                  app."Transactions" TO rass_app_runtime;
+                  app."Transactions" TO rass_app_runtime_v2;
                 GRANT SELECT, INSERT ON app."Transfers", app."LedgerEntries", app."CardMovements",
-                  app."SyncOperations", app."FinancialOutbox" TO rass_app_runtime;
+                  app."SyncOperations", app."FinancialOutbox" TO rass_app_runtime_v2;
                 REVOKE ALL ON FUNCTION app.assert_transfer_ledger() FROM PUBLIC;
-                GRANT EXECUTE ON FUNCTION app.assert_transfer_ledger() TO rass_app_runtime;
+                GRANT EXECUTE ON FUNCTION app.assert_transfer_ledger() TO rass_app_runtime_v2;
                 """);
         }
 

@@ -20,7 +20,7 @@
 - Foram adicionados os agregados `Budget` e `Goal`, comandos CQRS, validadores, consultas, endpoints e contratos.
 - Orçamentos podem ser gerais ou associados a uma categoria de despesa. O valor gasto e derivado de transacoes postadas no periodo, nunca informado pelo cliente.
 - Metas preservam moeda, valor alvo, progresso, estado e data opcional. Progresso acima do alvo, moeda divergente e alteracao de metas inativas sao recusados.
-- A migracao `PlanningAndDashboard` cria tabelas, indices, constraints, RLS forçado e grants minimos para `rass_app_runtime`.
+- A migracao `PlanningAndDashboard` cria tabelas, indices, constraints, RLS forçado e grants minimos para `rass_app_runtime_v2`.
 
 ## Validacao
 

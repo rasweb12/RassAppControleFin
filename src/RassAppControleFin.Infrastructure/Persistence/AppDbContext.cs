@@ -14,6 +14,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<CreditCard> CreditCards => Set<CreditCard>();
+    public DbSet<CreditCardPurchase> CreditCardPurchases => Set<CreditCardPurchase>();
+    public DbSet<CreditCardInvoice> CreditCardInvoices => Set<CreditCardInvoice>();
+    public DbSet<CreditCardInstallment> CreditCardInstallments => Set<CreditCardInstallment>();
     public DbSet<FinancialTransaction> Transactions => Set<FinancialTransaction>();
     public DbSet<Transfer> Transfers => Set<Transfer>();
     public DbSet<Budget> Budgets => Set<Budget>();
@@ -51,6 +54,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         Scope<Account>(modelBuilder);
         Scope<Category>(modelBuilder);
         Scope<CreditCard>(modelBuilder);
+        Scope<CreditCardPurchase>(modelBuilder);
+        Scope<CreditCardInvoice>(modelBuilder);
+        Scope<CreditCardInstallment>(modelBuilder);
         Scope<FinancialTransaction>(modelBuilder);
         Scope<Transfer>(modelBuilder);
         Scope<Budget>(modelBuilder);

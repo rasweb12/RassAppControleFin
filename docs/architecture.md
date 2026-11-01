@@ -247,7 +247,7 @@ via set_config parametrizado na mesma transacao EF. Dispose sem commit desfaz.
 Sem estrategia automatica de retry de escrita: o chamador futuro tratara
 idempotencia e conflitos. SaveChanges sem transacao autorizada e proibido.
 
-Runtime rass_app_runtime: LOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE,
+Runtime rass_app_runtime_v2: LOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE,
 sem membership privilegiado/ownership/CREATE/TRUNCATE. Bootstrap de privilegios
 versionado separado das migrations. Migrations usam conexao direta privilegiada
 apenas no job explicito; API usa conexao pooled TLS VerifyFull. Health/readiness

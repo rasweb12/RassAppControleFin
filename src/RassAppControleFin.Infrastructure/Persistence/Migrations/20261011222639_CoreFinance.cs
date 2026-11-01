@@ -496,11 +496,11 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                   EXECUTE FUNCTION app.assert_transfer_ledger();
 
                 GRANT SELECT, INSERT, UPDATE ON app."Accounts", app."Categories", app."CreditCards",
-                  app."Transactions" TO rass_app_runtime;
+                  app."Transactions" TO rass_app_runtime_v2;
                 GRANT SELECT, INSERT ON app."Transfers", app."LedgerEntries", app."CardMovements",
-                  app."SyncOperations", app."FinancialOutbox" TO rass_app_runtime;
+                  app."SyncOperations", app."FinancialOutbox" TO rass_app_runtime_v2;
                 REVOKE ALL ON FUNCTION app.assert_transfer_ledger() FROM PUBLIC;
-                GRANT EXECUTE ON FUNCTION app.assert_transfer_ledger() TO rass_app_runtime;
+                GRANT EXECUTE ON FUNCTION app.assert_transfer_ledger() TO rass_app_runtime_v2;
                 """);
         }
 
@@ -508,7 +508,7 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
-                REVOKE EXECUTE ON FUNCTION app.assert_transfer_ledger() FROM rass_app_runtime;
+                REVOKE EXECUTE ON FUNCTION app.assert_transfer_ledger() FROM rass_app_runtime_v2;
                 DROP FUNCTION IF EXISTS app.assert_transfer_ledger();
                 """);
             migrationBuilder.DropTable(

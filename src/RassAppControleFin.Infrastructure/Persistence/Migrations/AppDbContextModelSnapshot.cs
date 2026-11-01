@@ -221,6 +221,14 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AccentColor")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Brand")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<int>("ClosingDay")
                         .HasColumnType("integer");
 
@@ -234,6 +242,13 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("DueDay")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Institution")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasDefaultValue("");
 
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
@@ -251,11 +266,16 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         .HasPrecision(16, 2)
                         .HasColumnType("numeric(16,2)");
 
+                    b.Property<Guid?>("PreferredPaymentAccountId")
+                        .HasColumnType("uuid");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
                     b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "PreferredPaymentAccountId");
 
                     b.ToTable("CreditCards", "app", t =>
                         {
@@ -270,6 +290,217 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_CreditCards_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
 
                             t.HasCheckConstraint("CK_CreditCards_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.CreditCardInstallment", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<Guid>("CardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Competence")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PurchaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "CardId");
+
+                    b.HasIndex("TenantId", "UserId", "InvoiceId", "Competence");
+
+                    b.HasIndex("TenantId", "UserId", "PurchaseId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("CreditCardInstallments", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_CreditCardInstallments_Amount", "\"Amount\" > 0");
+
+                            t.HasCheckConstraint("CK_CreditCardInstallments_Currency", "\"Currency\" IN ('BRL','USD','EUR')");
+
+                            t.HasCheckConstraint("CK_CreditCardInstallments_Number", "\"Number\" >= 1");
+
+                            t.HasCheckConstraint("CK_CreditCardInstallments_Status", "\"Status\" IN ('Scheduled','Posted','Cancelled')");
+
+                            t.HasCheckConstraint("CK_CreditCardInstallments_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_CreditCardInstallments_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.CreditCardInvoice", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("ClosingDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("Competence")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("PaidAmount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "CardId", "Competence")
+                        .IsUnique();
+
+                    b.ToTable("CreditCardInvoices", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_CreditCardInvoices_Amounts", "\"TotalAmount\" >= 0 AND \"PaidAmount\" BETWEEN 0 AND \"TotalAmount\"");
+
+                            t.HasCheckConstraint("CK_CreditCardInvoices_Currency", "\"Currency\" IN ('BRL','USD','EUR')");
+
+                            t.HasCheckConstraint("CK_CreditCardInvoices_Dates", "\"ClosingDate\" >= \"Competence\" AND \"DueDate\" >= \"ClosingDate\"");
+
+                            t.HasCheckConstraint("CK_CreditCardInvoices_Status", "\"Status\" IN ('Open','Closed','PartiallyPaid','Paid','Overdue','Cancelled')");
+
+                            t.HasCheckConstraint("CK_CreditCardInvoices_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_CreditCardInvoices_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.CreditCardPurchase", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(16, 2)
+                        .HasColumnType("numeric(16,2)");
+
+                    b.Property<Guid>("CardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("InstallmentCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateOnly>("PurchasedOn")
+                        .HasColumnType("date");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId", "UserId", "Id");
+
+                    b.HasIndex("TenantId", "UserId", "CategoryId");
+
+                    b.HasIndex("TenantId", "UserId", "CardId", "PurchasedOn", "Id");
+
+                    b.ToTable("CreditCardPurchases", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_CreditCardPurchases_Amount", "\"Amount\" > 0");
+
+                            t.HasCheckConstraint("CK_CreditCardPurchases_Currency", "\"Currency\" IN ('BRL','USD','EUR')");
+
+                            t.HasCheckConstraint("CK_CreditCardPurchases_Installments", "\"InstallmentCount\" BETWEEN 1 AND 360");
+
+                            t.HasCheckConstraint("CK_CreditCardPurchases_User", "length(btrim(\"UserId\")) BETWEEN 1 AND 256");
+
+                            t.HasCheckConstraint("CK_CreditCardPurchases_Version", "\"Version\" > 0");
                         });
                 });
 
@@ -1101,6 +1332,9 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(8)
@@ -1109,11 +1343,18 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("PurchaseId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("TenantId", "UserId", "Id");
 
                     b.HasIndex("TenantId", "UserId", "AccountId");
 
                     b.HasIndex("TenantId", "UserId", "CategoryId");
+
+                    b.HasIndex("TenantId", "UserId", "InvoiceId");
+
+                    b.HasIndex("TenantId", "UserId", "PurchaseId");
 
                     b.HasIndex("TenantId", "UserId", "CardId", "OccurredAt", "Id");
 
@@ -1288,6 +1529,74 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                     b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.Account", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "PreferredPaymentAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.CreditCardInstallment", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.CreditCard", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "CardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.CreditCardInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.CreditCardPurchase", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "PurchaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.CreditCardInvoice", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.CreditCard", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "CardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.Finance.CreditCardPurchase", b =>
+                {
+                    b.HasOne("RassAppControleFin.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.CreditCard", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "CardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.Category", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "CategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -1473,6 +1782,16 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                     b.HasOne("RassAppControleFin.Domain.Entities.Finance.Category", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "UserId", "CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.CreditCardInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RassAppControleFin.Domain.Entities.Finance.CreditCardPurchase", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UserId", "PurchaseId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

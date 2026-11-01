@@ -10,7 +10,7 @@
 ## 2. Neon
 
 1. No Neon, selecione a branch de homologacao e obtenha duas conexoes TLS: direta para migrations e pooled para a API.
-2. No secret store local, configure RASS_MIGRATIONS_CONNECTION com a conexao direta. Configure Database__ConnectionString com a conexao pooled e Database__RuntimeRole=rass_app_runtime.
+2. No secret store local, configure RASS_MIGRATIONS_CONNECTION com a conexao direta. Configure Database__ConnectionString com a conexao pooled e Database__RuntimeRole=rass_app_runtime_v2.
 3. Aplique, nesta ordem, somente pelo utilitario:
 
    dotnet run --project tools/RassAppControleFin.Database -c Release -- migrate

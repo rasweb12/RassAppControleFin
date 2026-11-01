@@ -22,10 +22,10 @@ API: Database:ConnectionString em formato Npgsql, nao URL postgres://.
 Exemplo SEM valores reais:
 
 ```text
-Host=<endpoint-pooler>;Database=neondb;Username=rass_app_runtime;Password=<secret>;SSL Mode=VerifyFull
+Host=<endpoint-pooler>;Database=neondb;Username=rass_app_runtime_v2;Password=<secret>;SSL Mode=VerifyFull
 ```
 
-Database:RuntimeRole=rass_app_runtime, MaxPoolSize=10, MinPoolSize=0,
+Database:RuntimeRole=rass_app_runtime_v2, MaxPoolSize=10, MinPoolSize=0,
 ConnectionTimeoutSeconds=10, CommandTimeoutSeconds=30. Runtime remoto exige
 VerifyFull; reset no retorno ao pool, sem multiplexing/enlist/parameter logging/
 IncludeErrorDetail. EF usa NullLoggerFactory; spans de transacoes sao saneados
@@ -58,7 +58,7 @@ nenhum deploy remoto executado. Nunca executar migrate automaticamente no startu
 DDL de provisionamento (senha deve ser aplicada pelo canal privado do operador):
 
 ```sql
-CREATE ROLE rass_app_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+CREATE ROLE rass_app_runtime_v2 LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
     NOREPLICATION NOBYPASSRLS NOINHERIT;
 ```
 

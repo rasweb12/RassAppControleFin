@@ -13,6 +13,8 @@ public interface IFinanceUnit : IAsyncDisposable
     Task<Account?> AccountAsync(Guid id, CancellationToken ct);
     Task<Category?> CategoryAsync(Guid id, CancellationToken ct);
     Task<CreditCard?> CardAsync(Guid id, CancellationToken ct);
+    Task<CreditCardInvoice?> CreditCardInvoiceAsync(Guid id, CancellationToken ct);
+    Task<CreditCardInvoice?> CreditCardInvoiceAsync(Guid cardId, DateOnly competence, CancellationToken ct);
     Task<FinancialTransaction?> TransactionAsync(Guid id, CancellationToken ct);
     Task<Budget?> BudgetAsync(Guid id, CancellationToken ct);
     Task<Goal?> GoalAsync(Guid id, CancellationToken ct);
@@ -28,7 +30,7 @@ public interface IFinanceUnit : IAsyncDisposable
     void Add(FinancialAggregate resource);
     void Ledger(Guid accountId, decimal delta, string kind, Guid resourceId, Guid? transferId = null);
     void CardMovement(Guid cardId, Guid? accountId, Guid? categoryId, decimal amount, string currency,
-        string kind, DateTimeOffset occurredAt, string description, Guid id);
+        string kind, DateTimeOffset occurredAt, string description, Guid id, Guid? invoiceId = null, Guid? purchaseId = null);
     Task<Result> CommitAsync(Guid operationId, string payloadHash, MutationReceipt receipt, string action, CancellationToken ct);
 }
 public interface IFinanceReadStore
@@ -39,6 +41,7 @@ public interface IFinanceReadStore
     Task<Result<Page<TransferView>>> TransfersAsync(ListTransfersQuery query, CancellationToken ct);
     Task<Result<TransactionPage>> TransactionsAsync(ListTransactionsQuery query, CancellationToken ct);
     Task<Result<Page<CardMovementView>>> CardMovementsAsync(ListCardMovementsQuery query, CancellationToken ct);
+    Task<Result<Page<CreditCardInvoiceView>>> CreditCardInvoicesAsync(ListCreditCardInvoicesQuery query, CancellationToken ct);
     Task<Result<Page<BudgetView>>> BudgetsAsync(ListBudgetsQuery query, CancellationToken ct);
     Task<Result<Page<GoalView>>> GoalsAsync(ListGoalsQuery query, CancellationToken ct);
     Task<Result<Page<ExpenseReductionGoalView>>> ExpenseReductionGoalsAsync(ListExpenseReductionGoalsQuery query, CancellationToken ct);

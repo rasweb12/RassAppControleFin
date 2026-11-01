@@ -35,7 +35,8 @@ public static class FinanceEndpoints
             => Query(s, new ListCategoriesQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.CategoriesRead);
 
         finance.MapPost("/credit-cards", (CreateCardRequest r, ISender s, HttpContext h, CancellationToken ct)
-            => Send(s, new CreateCardCommand(r.OperationId, r.Name, r.Currency, r.Limit, r.ClosingDay, r.DueDay), h, ct))
+            => Send(s, new CreateCardCommand(r.OperationId, r.Name, r.Currency, r.Limit, r.ClosingDay, r.DueDay,
+                r.Institution, r.Brand, r.PreferredPaymentAccountId, r.AccentColor), h, ct))
             .RequireAuthorization(Permissions.CreditCardsWrite);
         finance.MapPatch("/credit-cards/{id:guid}", (Guid id, MaintainResourceRequest r, ISender s, HttpContext h, CancellationToken ct)
             => Send(s, new MaintainResourceCommand(r.OperationId, "card", id, r.Version, r.Name, r.Archive), h, ct))
@@ -48,6 +49,16 @@ public static class FinanceEndpoints
             .RequireAuthorization(Permissions.CreditCardsWrite);
         finance.MapGet("/credit-cards/{id:guid}/movements", (Guid id, int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => Query(s, new ListCardMovementsQuery(id, page, pageSize), h, ct)).RequireAuthorization(Permissions.CreditCardsRead);
+        finance.MapGet("/credit-cards/{id:guid}/invoices", (Guid id, int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
+            => Query(s, new ListCreditCardInvoicesQuery(id, page, pageSize), h, ct)).RequireAuthorization(Permissions.CreditCardsRead);
+        finance.MapPost("/credit-card-purchases", (CreateCreditCardPurchaseRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new CreateCreditCardPurchaseCommand(r.OperationId, r.CardId, r.CardVersion, r.CategoryId,
+                r.Amount, r.Currency, r.OccurredAt, r.Description, r.InstallmentCount), h, ct))
+            .RequireAuthorization(Permissions.CreditCardsWrite);
+        finance.MapPost("/credit-card-invoices/{id:guid}/payments", (Guid id, PayCreditCardInvoiceRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new PayCreditCardInvoiceCommand(r.OperationId, id, r.InvoiceVersion, r.AccountId,
+                r.AccountVersion, r.Amount, r.Currency, r.OccurredAt, r.Description), h, ct))
+            .RequireAuthorization(Permissions.CreditCardsWrite);
 
         finance.MapPost("/transactions", (CreateTransactionRequest r, ISender s, HttpContext h, CancellationToken ct)
             => Send(s, new CreateTransactionCommand(r.OperationId, r.AccountId, r.CategoryId, r.Amount, r.Currency,

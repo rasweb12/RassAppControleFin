@@ -18,7 +18,7 @@ Nenhuma migration desta etapa foi aplicada em Neon.
    constraints e indices de consulta.
 4. Habilitar e forcar RLS, criando politicas `USING` e `WITH CHECK` baseadas
    no contexto transacional atual.
-5. Conceder somente privilegios minimos a `rass_app_runtime`.
+5. Conceder somente privilegios minimos a `rass_app_runtime_v2`.
 6. Atualizar Drift, outbox/inbox e handlers de eventos conhecidos.
 7. Gerar migration local, script SQL revisavel e testes de RLS/idempotencia.
 

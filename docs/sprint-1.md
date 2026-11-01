@@ -10,7 +10,7 @@ Escopo encerrado: persistencia e RLS foundation, nao identidade nem financas.
   Infrastructure. Nenhum DTO exposto ou endpoint financeiro adicionado.
 - Migration inicial 20261009114112_InitialFoundation e snapshot, UUID/UTC,
   constraints, FK/unique index, Version/concurrency, ENABLE/FORCE RLS.
-- Runtime login SQL rass_app_runtime sem bypass/admin/membership/ownership/DDL/
+- Runtime login SQL rass_app_runtime_v2 sem bypass/admin/membership/ownership/DDL/
   TRUNCATE; bootstrap de grants versionado e embutido.
 - Contexto tenant/subject parametrizado LOCAL por transacao; filtros adicionais,
   write guard, rollback/dispose/cancel, conflitos explicitos sem LWW ou retry.

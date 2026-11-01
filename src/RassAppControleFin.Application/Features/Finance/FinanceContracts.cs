@@ -17,7 +17,8 @@ public sealed record UpdateAccountCommand(Guid OperationId, Guid Id, long Versio
 { public string Permission => Permissions.AccountsWrite; }
 public sealed record CreateCategoryCommand(Guid OperationId, string Name, string Flow) : IFinanceMutation
 { public string Permission => Permissions.CategoriesWrite; }
-public sealed record CreateCardCommand(Guid OperationId, string Name, string Currency, decimal Limit, int ClosingDay, int DueDay) : IFinanceMutation
+public sealed record CreateCardCommand(Guid OperationId, string Name, string Currency, decimal Limit, int ClosingDay, int DueDay,
+    string Institution, string? Brand, Guid? PreferredPaymentAccountId, string? AccentColor) : IFinanceMutation
 { public string Permission => Permissions.CreditCardsWrite; }
 public sealed record CreateTransactionCommand(Guid OperationId, Guid AccountId, Guid CategoryId, decimal Amount,
     string Currency, string Flow, string Status, DateTimeOffset OccurredAt, string Description, long AccountVersion) : IFinanceMutation
@@ -33,11 +34,18 @@ public sealed record TransferCommand(Guid OperationId, Guid SourceAccountId, Gui
 public sealed record CardMovementCommand(Guid OperationId, Guid CardId, long CardVersion, decimal Amount, string Currency,
     string Kind, Guid? AccountId, long? AccountVersion, Guid? CategoryId, DateTimeOffset OccurredAt, string Description) : IFinanceMutation
 { public string Permission => Permissions.CreditCardsWrite; }
+public sealed record CreateCreditCardPurchaseCommand(Guid OperationId, Guid CardId, long CardVersion, Guid CategoryId,
+    decimal Amount, string Currency, DateTimeOffset OccurredAt, string Description, int InstallmentCount) : IFinanceMutation
+{ public string Permission => Permissions.CreditCardsWrite; }
+public sealed record PayCreditCardInvoiceCommand(Guid OperationId, Guid InvoiceId, long InvoiceVersion, Guid AccountId,
+    long AccountVersion, decimal Amount, string Currency, DateTimeOffset OccurredAt, string Description) : IFinanceMutation
+{ public string Permission => Permissions.CreditCardsWrite; }
 
 public sealed record AccountView(Guid Id, string Name, string Currency, decimal Balance, decimal OverdraftLimit, string AccountType,
     string? Subtype, string? Institution, bool IncludeInNetWorth, long Version, bool IsArchived);
 public sealed record CategoryView(Guid Id, string Name, string Flow, long Version, bool IsArchived);
 public sealed record CardView(Guid Id, string Name, string Currency, decimal Limit, decimal Outstanding,
+    string Institution, string? Brand, Guid? PreferredPaymentAccountId, string? AccentColor,
     int ClosingDay, int DueDay, long Version, bool IsArchived);
 public sealed record TransactionView(Guid Id, Guid AccountId, Guid CategoryId, decimal Amount, string Currency,
     string Flow, string Status, DateTimeOffset OccurredAt, string Description, long Version,
@@ -46,6 +54,8 @@ public sealed record TransferView(Guid Id, Guid SourceAccountId, Guid Destinatio
     string Currency, DateTimeOffset OccurredAt, string Description, string Status);
 public sealed record CardMovementView(Guid Id, Guid CardId, Guid? AccountId, Guid? CategoryId, decimal Amount,
     string Currency, string Kind, DateTimeOffset OccurredAt, string Description);
+public sealed record CreditCardInvoiceView(Guid Id, Guid CardId, DateOnly Competence, DateOnly ClosingDate,
+    DateOnly DueDate, decimal TotalAmount, decimal PaidAmount, string Currency, string Status, long Version);
 public sealed record BudgetView(Guid Id, Guid? CategoryId, decimal Amount, decimal Spent, string Currency,
     DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
 public sealed record GoalView(Guid Id, string Name, decimal TargetAmount, decimal CurrentAmount, string Currency,
@@ -75,6 +85,7 @@ public sealed record ListCategoriesQuery(int Page = 1, int PageSize = 50) : IReq
 public sealed record ListCardsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<CardView>>>, IPageQuery;
 public sealed record ListTransfersQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<TransferView>>>, IPageQuery;
 public sealed record ListCardMovementsQuery(Guid CardId, int Page = 1, int PageSize = 50) : IRequest<Result<Page<CardMovementView>>>, IPageQuery;
+public sealed record ListCreditCardInvoicesQuery(Guid CardId, int Page = 1, int PageSize = 50) : IRequest<Result<Page<CreditCardInvoiceView>>>, IPageQuery;
 public sealed record ListTransactionsQuery(string? Search = null, Guid? AccountId = null, Guid? CategoryId = null,
     string? Flow = null, string? Status = null, DateTimeOffset? From = null, DateTimeOffset? To = null,
     int Page = 1, int PageSize = 50) : IRequest<Result<TransactionPage>>, IPageQuery;

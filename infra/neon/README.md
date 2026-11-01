@@ -18,7 +18,7 @@ NAO criar runtime via Console/API/CLI e assumir que e seguro. A verificacao real
 do papel criado via API encontrou BYPASSRLS/CREATEROLE/CREATEDB e neon_superuser.
 Esse papel temporario foi removido antes de ser usado pela aplicacao.
 
-rass_app_runtime foi criado via SQL: LOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB,
+rass_app_runtime_v2 foi criado via SQL: LOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB,
 NOCREATEROLE, NOREPLICATION, NOINHERIT, sem memberships ou ownership.
 bootstrap-runtime.sql valida atributos/membership antes de conceder privilegios.
 Nao tenta remover atributos que o Neon reserva ao provedor. Papel inseguro

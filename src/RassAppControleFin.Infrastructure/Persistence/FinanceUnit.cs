@@ -61,6 +61,10 @@ internal sealed class FinanceUnit(AppDbContext db, ITenantTransaction transactio
         => db.Categories.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<CreditCard?> CardAsync(Guid id, CancellationToken ct)
         => db.CreditCards.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    public Task<CreditCardInvoice?> CreditCardInvoiceAsync(Guid id, CancellationToken ct)
+        => db.CreditCardInvoices.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    public Task<CreditCardInvoice?> CreditCardInvoiceAsync(Guid cardId, DateOnly competence, CancellationToken ct)
+        => db.CreditCardInvoices.AsTracking().SingleOrDefaultAsync(x => x.CardId == cardId && x.Competence == competence, ct);
     public Task<FinancialTransaction?> TransactionAsync(Guid id, CancellationToken ct)
         => db.Transactions.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<Budget?> BudgetAsync(Guid id, CancellationToken ct)
@@ -106,10 +110,11 @@ internal sealed class FinanceUnit(AppDbContext db, ITenantTransaction transactio
         => db.Add(new LedgerEntry { Id = Guid.NewGuid(), TenantId = tenantId, UserId = userId, AccountId = accountId,
             Delta = delta, Kind = kind, ResourceId = resourceId, TransferId = transferId, CreatedAt = DateTimeOffset.UtcNow });
     public void CardMovement(Guid cardId, Guid? accountId, Guid? categoryId, decimal amount, string currency,
-        string kind, DateTimeOffset occurredAt, string description, Guid id)
+        string kind, DateTimeOffset occurredAt, string description, Guid id, Guid? invoiceId = null, Guid? purchaseId = null)
         => db.Add(new CardMovementRow { Id = id, TenantId = tenantId, UserId = userId, CardId = cardId,
             AccountId = accountId, CategoryId = categoryId, Amount = amount, Currency = currency, Kind = kind,
-            OccurredAt = occurredAt, Description = description, CreatedAt = DateTimeOffset.UtcNow });
+            OccurredAt = occurredAt, Description = description, InvoiceId = invoiceId, PurchaseId = purchaseId,
+            CreatedAt = DateTimeOffset.UtcNow });
     public async Task<Result> CommitAsync(Guid operationId, string payloadHash, MutationReceipt receipt, string action, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;

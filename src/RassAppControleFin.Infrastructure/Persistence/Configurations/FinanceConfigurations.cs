@@ -6,7 +6,7 @@ using RassAppControleFin.Domain.Entities.Finance;
 namespace RassAppControleFin.Infrastructure.Persistence.Configurations;
 
 internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>, IEntityTypeConfiguration<Category>,
-    IEntityTypeConfiguration<CreditCard>, IEntityTypeConfiguration<FinancialTransaction>, IEntityTypeConfiguration<Transfer>,
+    IEntityTypeConfiguration<CreditCard>, IEntityTypeConfiguration<CreditCardPurchase>, IEntityTypeConfiguration<CreditCardInvoice>, IEntityTypeConfiguration<CreditCardInstallment>, IEntityTypeConfiguration<FinancialTransaction>, IEntityTypeConfiguration<Transfer>,
     IEntityTypeConfiguration<Budget>, IEntityTypeConfiguration<Goal>, IEntityTypeConfiguration<ExpenseReductionGoal>, IEntityTypeConfiguration<FinancialNotification>,
     IEntityTypeConfiguration<PayYourselfFirstPlan>, IEntityTypeConfiguration<PayYourselfFirstPlanRevision>,
     IEntityTypeConfiguration<EmergencyFundPlan>, IEntityTypeConfiguration<InvestmentAsset>,
@@ -71,11 +71,61 @@ internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>,
         b.Property(x => x.Name).HasMaxLength(120);
         b.Property(x => x.Limit).HasPrecision(16, 2);
         b.Property(x => x.Outstanding).HasPrecision(16, 2);
+        b.Property(x => x.Institution).HasMaxLength(120).HasDefaultValue("");
+        b.Property(x => x.Brand).HasMaxLength(40);
+        b.Property(x => x.AccentColor).HasMaxLength(16);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.PreferredPaymentAccountId }).OnDelete(DeleteBehavior.Restrict);
         b.ToTable("CreditCards", t =>
         {
             t.HasCheckConstraint("CK_CreditCards_Balances", "\"Limit\" > 0 AND \"Outstanding\" BETWEEN 0 AND \"Limit\"");
             t.HasCheckConstraint("CK_CreditCards_Days", "\"ClosingDay\" BETWEEN 1 AND 28 AND \"DueDay\" BETWEEN 1 AND 28");
             t.HasCheckConstraint("CK_CreditCards_Name", "length(btrim(\"Name\")) BETWEEN 1 AND 120");
+        });
+    }
+    public void Configure(EntityTypeBuilder<CreditCardPurchase> b)
+    {
+        Aggregate(b, "CreditCardPurchases"); Currency(b, "CreditCardPurchases");
+        b.Property(x => x.Description).HasMaxLength(500);
+        b.Property(x => x.Amount).HasPrecision(16, 2);
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.CardId, x.PurchasedOn, x.Id });
+        b.HasOne<CreditCard>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.CardId }).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Category>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.CategoryId }).OnDelete(DeleteBehavior.Restrict);
+        b.ToTable("CreditCardPurchases", t =>
+        {
+            t.HasCheckConstraint("CK_CreditCardPurchases_Amount", "\"Amount\" > 0");
+            t.HasCheckConstraint("CK_CreditCardPurchases_Installments", "\"InstallmentCount\" BETWEEN 1 AND 360");
+        });
+    }
+    public void Configure(EntityTypeBuilder<CreditCardInvoice> b)
+    {
+        Aggregate(b, "CreditCardInvoices"); Currency(b, "CreditCardInvoices");
+        b.Property(x => x.TotalAmount).HasPrecision(16, 2);
+        b.Property(x => x.PaidAmount).HasPrecision(16, 2);
+        b.Property(x => x.Status).HasMaxLength(16);
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.CardId, x.Competence }).IsUnique();
+        b.HasOne<CreditCard>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.CardId }).OnDelete(DeleteBehavior.Restrict);
+        b.ToTable("CreditCardInvoices", t =>
+        {
+            t.HasCheckConstraint("CK_CreditCardInvoices_Amounts", "\"TotalAmount\" >= 0 AND \"PaidAmount\" BETWEEN 0 AND \"TotalAmount\"");
+            t.HasCheckConstraint("CK_CreditCardInvoices_Dates", "\"ClosingDate\" >= \"Competence\" AND \"DueDate\" >= \"ClosingDate\"");
+            t.HasCheckConstraint("CK_CreditCardInvoices_Status", "\"Status\" IN ('Open','Closed','PartiallyPaid','Paid','Overdue','Cancelled')");
+        });
+    }
+    public void Configure(EntityTypeBuilder<CreditCardInstallment> b)
+    {
+        Aggregate(b, "CreditCardInstallments"); Currency(b, "CreditCardInstallments");
+        b.Property(x => x.Amount).HasPrecision(16, 2);
+        b.Property(x => x.Status).HasMaxLength(16);
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.PurchaseId, x.Number }).IsUnique();
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.InvoiceId, x.Competence });
+        b.HasOne<CreditCardPurchase>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.PurchaseId }).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<CreditCard>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.CardId }).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<CreditCardInvoice>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.InvoiceId }).OnDelete(DeleteBehavior.Restrict);
+        b.ToTable("CreditCardInstallments", t =>
+        {
+            t.HasCheckConstraint("CK_CreditCardInstallments_Amount", "\"Amount\" > 0");
+            t.HasCheckConstraint("CK_CreditCardInstallments_Number", "\"Number\" >= 1");
+            t.HasCheckConstraint("CK_CreditCardInstallments_Status", "\"Status\" IN ('Scheduled','Posted','Cancelled')");
         });
     }
     public void Configure(EntityTypeBuilder<FinancialTransaction> b)
@@ -268,7 +318,10 @@ internal sealed class FinanceConfigurations : IEntityTypeConfiguration<Account>,
         b.HasOne<CreditCard>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.CardId }).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Account>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.AccountId }).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Category>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.CategoryId }).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<CreditCardInvoice>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.InvoiceId }).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<CreditCardPurchase>().WithMany().HasForeignKey(x => new { x.TenantId, x.UserId, x.PurchaseId }).OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(x => new { x.TenantId, x.UserId, x.CardId, x.OccurredAt, x.Id });
+        b.HasIndex(x => new { x.TenantId, x.UserId, x.InvoiceId });
         b.ToTable("CardMovements", t =>
         {
             t.HasCheckConstraint("CK_CardMovements_Amount", "\"Amount\" > 0");

@@ -23,6 +23,8 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
     IRequestHandler<CancelTransactionCommand, Result<MutationReceipt>>,
     IRequestHandler<TransferCommand, Result<MutationReceipt>>,
     IRequestHandler<CardMovementCommand, Result<MutationReceipt>>,
+    IRequestHandler<CreateCreditCardPurchaseCommand, Result<MutationReceipt>>,
+    IRequestHandler<PayCreditCardInvoiceCommand, Result<MutationReceipt>>,
     IRequestHandler<CreateBudgetCommand, Result<MutationReceipt>>,
     IRequestHandler<ArchiveBudgetCommand, Result<MutationReceipt>>,
     IRequestHandler<CreateGoalCommand, Result<MutationReceipt>>,
@@ -105,7 +107,8 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
 
     public Task<Result<MutationReceipt>> Handle(CreateCardCommand c, CancellationToken ct) => Execute(c, unit =>
     {
-        var card = CreditCard.Create(Guid.NewGuid(), TenantId, Subject, c.Name, Money.Create(c.Limit, c.Currency), c.ClosingDay, c.DueDay, DateTimeOffset.UtcNow);
+        var card = CreditCard.Create(Guid.NewGuid(), TenantId, Subject, c.Name, Money.Create(c.Limit, c.Currency), c.ClosingDay, c.DueDay,
+            DateTimeOffset.UtcNow, c.Institution, c.Brand, c.PreferredPaymentAccountId, c.AccentColor);
         unit.Add(card);
         return Task.FromResult(Result<MutationReceipt>.Success(new(card.Id, c.OperationId, card.Version)));
     }, ct);
@@ -269,6 +272,82 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
         if (account is not null) unit.Ledger(account.Id, -c.Amount, "CardPayment", id);
         return Result<MutationReceipt>.Success(new(id, c.OperationId, card.Version, account?.Version, SourceBalance: account?.Balance));
     }, ct, c.Kind == "Payment" ? Permissions.AccountsWrite : null);
+
+    public Task<Result<MutationReceipt>> Handle(CreateCreditCardPurchaseCommand c, CancellationToken ct) => Execute(c, async unit =>
+    {
+        var card = await unit.CardAsync(c.CardId, ct);
+        var category = await unit.CategoryAsync(c.CategoryId, ct);
+        if (card is null || category is null) return Missing();
+        if (card.Version != c.CardVersion) return Conflict();
+        if (card.IsArchived || card.Currency != c.Currency || !ValidCategory(category, FinancialFlow.Expense))
+            return Fail("CARD_PURCHASE_INVALID", "Cartao, moeda ou categoria invalida.");
+        var money = Money.Create(c.Amount, c.Currency);
+        if (!card.TryCharge(money)) return Fail("CARD_LIMIT_EXCEEDED", "Limite do cartao excedido.");
+
+        var purchaseDate = DateOnly.FromDateTime(c.OccurredAt.UtcDateTime);
+        var purchase = CreditCardPurchase.Create(Guid.NewGuid(), TenantId, Subject, card.Id, category.Id, c.Description,
+            money, purchaseDate, c.InstallmentCount, DateTimeOffset.UtcNow);
+        unit.Add(purchase);
+        CreditCardInvoice? firstInvoice = null;
+        var amounts = purchase.SplitInstallments();
+        for (var index = 0; index < amounts.Count; index++)
+        {
+            var invoice = await InvoiceForAsync(unit, card, purchaseDate.AddMonths(index), ct);
+            firstInvoice ??= invoice;
+            invoice.AddCharge(Money.Create(amounts[index], c.Currency));
+            unit.Add(CreditCardInstallment.Create(Guid.NewGuid(), TenantId, Subject, purchase.Id, card.Id, invoice.Id,
+                index + 1, amounts[index], c.Currency, invoice.Competence, DateTimeOffset.UtcNow));
+        }
+        unit.CardMovement(card.Id, null, category.Id, money.Amount, c.Currency, "Purchase", c.OccurredAt,
+            c.Description.Trim(), purchase.Id, firstInvoice!.Id, purchase.Id);
+        return Result<MutationReceipt>.Success(new(purchase.Id, c.OperationId, card.Version));
+    }, ct);
+
+    public Task<Result<MutationReceipt>> Handle(PayCreditCardInvoiceCommand c, CancellationToken ct) => Execute(c, async unit =>
+    {
+        var invoice = await unit.CreditCardInvoiceAsync(c.InvoiceId, ct);
+        var account = await unit.AccountAsync(c.AccountId, ct);
+        if (invoice is null || account is null) return Missing();
+        var card = await unit.CardAsync(invoice.CardId, ct);
+        if (card is null) return Missing();
+        if (invoice.Version != c.InvoiceVersion || account.Version != c.AccountVersion) return Conflict();
+        var money = Money.Create(c.Amount, c.Currency);
+        if (!ValidAccount(account, c.AccountVersion, c.Currency) || card.IsArchived || card.Currency != c.Currency)
+            return Fail("CARD_PAYMENT_INVALID", "Conta, cartao ou moeda invalida.");
+        try
+        {
+            invoice.RegisterPayment(money);
+        }
+        catch (InvalidOperationException)
+        {
+            return Fail("INVOICE_PAYMENT_INVALID", "O pagamento excede o saldo da fatura ou a fatura esta encerrada.");
+        }
+        if (!account.TryApply(-money.Amount) || !card.TryPay(money))
+            return Fail("CARD_PAYMENT_INVALID", "Saldo ou pagamento invalido.");
+        var id = Guid.NewGuid();
+        unit.CardMovement(card.Id, account.Id, null, money.Amount, c.Currency, "Payment", c.OccurredAt,
+            c.Description.Trim(), id, invoice.Id);
+        unit.Ledger(account.Id, -money.Amount, "CardPayment", id);
+        return Result<MutationReceipt>.Success(new(invoice.Id, c.OperationId, invoice.Version, account.Version,
+            SourceBalance: account.Balance));
+    }, ct, Permissions.AccountsWrite);
+
+    private async Task<CreditCardInvoice> InvoiceForAsync(IFinanceUnit unit, CreditCard card, DateOnly purchaseDate,
+        CancellationToken ct)
+    {
+        var closingThisMonth = card.BillingDate(purchaseDate.Year, purchaseDate.Month, dueDate: false);
+        var billingMonth = purchaseDate > closingThisMonth ? purchaseDate.AddMonths(1) : purchaseDate;
+        var competence = new DateOnly(billingMonth.Year, billingMonth.Month, 1);
+        var existing = await unit.CreditCardInvoiceAsync(card.Id, competence, ct);
+        if (existing is not null) return existing;
+        var closing = card.BillingDate(billingMonth.Year, billingMonth.Month, dueDate: false);
+        var due = card.BillingDate(billingMonth.Year, billingMonth.Month, dueDate: true);
+        if (due < closing) due = due.AddMonths(1);
+        var invoice = CreditCardInvoice.Open(Guid.NewGuid(), TenantId, Subject, card.Id, competence, closing, due,
+            card.Currency, DateTimeOffset.UtcNow);
+        unit.Add(invoice);
+        return invoice;
+    }
 
     public Task<Result<MutationReceipt>> Handle(CreateBudgetCommand c, CancellationToken ct) => Execute(c, async unit =>
     {

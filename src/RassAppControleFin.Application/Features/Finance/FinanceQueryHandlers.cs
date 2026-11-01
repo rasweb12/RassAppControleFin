@@ -14,6 +14,7 @@ public sealed class FinanceQueryHandlers(IFinanceReadStore store, IUserContext u
     IRequestHandler<ListTransfersQuery, Result<Page<TransferView>>>,
     IRequestHandler<ListTransactionsQuery, Result<TransactionPage>>,
     IRequestHandler<ListCardMovementsQuery, Result<Page<CardMovementView>>>,
+    IRequestHandler<ListCreditCardInvoicesQuery, Result<Page<CreditCardInvoiceView>>>,
     IRequestHandler<ListBudgetsQuery, Result<Page<BudgetView>>>,
     IRequestHandler<ListGoalsQuery, Result<Page<GoalView>>>,
     IRequestHandler<ListExpenseReductionGoalsQuery, Result<Page<ExpenseReductionGoalView>>>,
@@ -36,6 +37,8 @@ public sealed class FinanceQueryHandlers(IFinanceReadStore store, IUserContext u
         => Read(Permissions.TransactionsRead, () => store.TransactionsAsync(q, ct));
     public Task<Result<Page<CardMovementView>>> Handle(ListCardMovementsQuery q, CancellationToken ct)
         => Read(Permissions.CreditCardsRead, () => store.CardMovementsAsync(q, ct));
+    public Task<Result<Page<CreditCardInvoiceView>>> Handle(ListCreditCardInvoicesQuery q, CancellationToken ct)
+        => Read(Permissions.CreditCardsRead, () => store.CreditCardInvoicesAsync(q, ct));
     public Task<Result<Page<BudgetView>>> Handle(ListBudgetsQuery q, CancellationToken ct)
         => Read(Permissions.TransactionsRead, () => store.BudgetsAsync(q, ct));
     public Task<Result<Page<GoalView>>> Handle(ListGoalsQuery q, CancellationToken ct)
@@ -59,6 +62,8 @@ public sealed class ListCardsValidator : PageValidator<ListCardsQuery>;
 public sealed class ListTransfersValidator : PageValidator<ListTransfersQuery>;
 public sealed class ListCardMovementsValidator : PageValidator<ListCardMovementsQuery>
 { public ListCardMovementsValidator() => RuleFor(x => x.CardId).NotEmpty(); }
+public sealed class ListCreditCardInvoicesValidator : PageValidator<ListCreditCardInvoicesQuery>
+{ public ListCreditCardInvoicesValidator() => RuleFor(x => x.CardId).NotEmpty(); }
 public sealed class ListTransactionsValidator : PageValidator<ListTransactionsQuery>
 {
     public ListTransactionsValidator()

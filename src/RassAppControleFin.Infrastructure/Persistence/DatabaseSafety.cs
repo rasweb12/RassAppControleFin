@@ -36,7 +36,7 @@ internal static class DatabaseSafety
                 AND (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
                     WHERE n.nspname='app' AND c.relname IN ('TenantMemberships','UserSessions','AuditEntries',
                       'Accounts','Categories','CreditCards','Transactions','Transfers','LedgerEntries',
-                      'CardMovements','SyncOperations','FinancialOutbox','Budgets','Goals','ExpenseReductionGoals','FinancialNotifications',
+                      'CardMovements','CreditCardPurchases','CreditCardInvoices','CreditCardInstallments','SyncOperations','FinancialOutbox','Budgets','Goals','ExpenseReductionGoals','FinancialNotifications',
                       'PayYourselfFirstPlans','PayYourselfFirstPlanRevisions','EmergencyFundPlans','InvestmentAssets',
                       'InvestmentTransactions','TargetPortfolioAllocations')
                     AND c.relrowsecurity AND c.relforcerowsecurity
@@ -70,7 +70,7 @@ internal static class DatabaseSafety
             WHERE n.nspname = 'app'
               AND c.relname IN (
                   'TenantMemberships', 'UserSessions', 'AuditEntries', 'Accounts', 'Categories',
-                  'CreditCards', 'Transactions', 'Transfers', 'LedgerEntries', 'CardMovements',
+                  'CreditCards', 'Transactions', 'Transfers', 'LedgerEntries', 'CardMovements', 'CreditCardPurchases', 'CreditCardInvoices', 'CreditCardInstallments',
                   'SyncOperations', 'FinancialOutbox', 'Budgets', 'Goals', 'ExpenseReductionGoals', 'FinancialNotifications',
                   'PayYourselfFirstPlans', 'PayYourselfFirstPlanRevisions', 'EmergencyFundPlans', 'InvestmentAssets',
                   'InvestmentTransactions', 'TargetPortfolioAllocations', 'Tenants', 'UserProfiles')

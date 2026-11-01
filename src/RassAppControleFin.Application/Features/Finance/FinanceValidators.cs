@@ -45,7 +45,9 @@ public sealed class CardValidator : MutationValidator<CreateCardCommand>
 {
     public CardValidator() { RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
         RuleFor(x => x).Must(x => Money.IsValid(x.Limit, x.Currency));
-        RuleFor(x => x.ClosingDay).InclusiveBetween(1, 28); RuleFor(x => x.DueDay).InclusiveBetween(1, 28); }
+        RuleFor(x => x.ClosingDay).InclusiveBetween(1, 31); RuleFor(x => x.DueDay).InclusiveBetween(1, 31);
+        RuleFor(x => x.Institution).NotEmpty().MaximumLength(120); RuleFor(x => x.Brand).MaximumLength(40);
+        RuleFor(x => x.AccentColor).MaximumLength(16); }
 }
 public sealed class TransactionValidator : MutationValidator<CreateTransactionCommand>
 {
@@ -83,6 +85,25 @@ public sealed class CardMovementValidator : MutationValidator<CardMovementComman
         RuleFor(x => x.AccountId).NotNull().NotEqual(Guid.Empty).When(x => x.Kind == "Payment");
         RuleFor(x => x.AccountVersion).NotNull().GreaterThan(0).When(x => x.Kind == "Payment");
         RuleFor(x => x.CategoryId).Null().When(x => x.Kind == "Payment"); }
+}
+public sealed class CreateCreditCardPurchaseValidator : MutationValidator<CreateCreditCardPurchaseCommand>
+{
+    public CreateCreditCardPurchaseValidator()
+    {
+        RuleFor(x => x.CardId).NotEmpty(); RuleFor(x => x.CardVersion).GreaterThan(0); RuleFor(x => x.CategoryId).NotEmpty();
+        RuleFor(x => x).Must(x => Money.IsValid(x.Amount, x.Currency)); RuleFor(x => x.OccurredAt).Must(x => x.Offset == TimeSpan.Zero);
+        RuleFor(x => x.Description).NotEmpty().MaximumLength(500); RuleFor(x => x.InstallmentCount).InclusiveBetween(1, 360);
+    }
+}
+public sealed class PayCreditCardInvoiceValidator : MutationValidator<PayCreditCardInvoiceCommand>
+{
+    public PayCreditCardInvoiceValidator()
+    {
+        RuleFor(x => x.InvoiceId).NotEmpty(); RuleFor(x => x.InvoiceVersion).GreaterThan(0);
+        RuleFor(x => x.AccountId).NotEmpty(); RuleFor(x => x.AccountVersion).GreaterThan(0);
+        RuleFor(x => x).Must(x => Money.IsValid(x.Amount, x.Currency)); RuleFor(x => x.OccurredAt).Must(x => x.Offset == TimeSpan.Zero);
+        RuleFor(x => x.Description).NotEmpty().MaximumLength(500);
+    }
 }
 public sealed class CreateBudgetValidator : MutationValidator<CreateBudgetCommand>
 {

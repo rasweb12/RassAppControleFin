@@ -23,6 +23,8 @@ internal sealed class CardMovementRow : IAppendOnlyFinancialRecord
     public Guid CardId { get; set; }
     public Guid? AccountId { get; set; }
     public Guid? CategoryId { get; set; }
+    public Guid? InvoiceId { get; set; }
+    public Guid? PurchaseId { get; set; }
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "";
     public string Kind { get; set; } = "";

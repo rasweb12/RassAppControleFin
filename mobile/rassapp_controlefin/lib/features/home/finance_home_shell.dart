@@ -8,6 +8,7 @@ import '../../core/storage/offline_finance_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../auth/auth_controller.dart';
 import '../finance/finance_repository.dart';
+import '../finance/credit_cards_page.dart';
 import '../finance/financial_assistant_page.dart';
 import '../finance/financial_notifications_page.dart';
 import 'finance_forms.dart';
@@ -232,6 +233,22 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         ),
       ),
     );
+  }
+
+  Future<void> _openCreditCards() async {
+    final tenant = _tenant;
+    if (tenant == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => CreditCardsPage(
+          repository: _repository,
+          tenantId: tenant.id,
+          accounts: _accounts,
+          categories: _categories,
+        ),
+      ),
+    );
+    if (mounted) await _load();
   }
 
   Future<void> _openGoals() async {
@@ -901,6 +918,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               conflictCount: _conflicts.length,
               onReviewConflicts: _reviewConflicts,
               onCategories: _openCategories,
+              onCreditCards: _openCreditCards,
               onGoals: _openGoals,
               onExpenseReductionGoals: _openExpenseReductionGoals,
               onNotifications: _openNotifications,
@@ -1409,8 +1427,8 @@ class _Transactions extends StatelessWidget {
                   context,
                   item,
                   canModify: !transfer && account != null,
-                  sourceName,
-                  destinationName,
+                  sourceName: sourceName,
+                  destinationName: destinationName,
                 );
                 if (!context.mounted || account == null) return;
                 switch (action) {
@@ -1434,11 +1452,11 @@ enum _TransactionDetailAction { edit, cancel }
 
 Future<_TransactionDetailAction?> _showTransactionDetails(
   BuildContext context,
-  TransactionSummary transaction,
-  {required bool canModify,
+  TransactionSummary transaction, {
+  required bool canModify,
   String? sourceName,
-  String? destinationName,}
-) => showModalBottomSheet<void>(
+  String? destinationName,
+}) => showModalBottomSheet<_TransactionDetailAction>(
   context: context,
   useRootNavigator: true,
   builder: (context) {
@@ -1485,25 +1503,24 @@ Future<_TransactionDetailAction?> _showTransactionDetails(
             ],
             _DetailRow(label: 'Data', value: _date(transaction.occurredAt)),
             _DetailRow(label: 'Status', value: transaction.status),
-            if (onEdit != null && transaction.status != 'Cancelled') ...[
+            if (canModify && transaction.status != 'Cancelled') ...[
               const SizedBox(height: 12),
               FilledButton.tonalIcon(
-                onPressed: () async {
-                  final edit = onEdit;
-                  Navigator.of(context, rootNavigator: true).pop();
-                  await Future<void>.delayed(const Duration(milliseconds: 250));
-                  await edit();
-                },
+                onPressed: () => Navigator.of(
+                  context,
+                  rootNavigator: true,
+                ).pop(_TransactionDetailAction.edit),
                 icon: const Icon(Icons.edit_outlined),
                 label: const Text('Editar valor e descrição'),
               ),
             ],
-            if (onCancel != null && transaction.status != 'Cancelled') ...[
+            if (canModify && transaction.status != 'Cancelled') ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: () async {
                   final confirmed = await showDialog<bool>(
                     context: context,
+                    useRootNavigator: true,
                     builder: (dialog) => AlertDialog(
                       title: const Text('Cancelar lançamento?'),
                       content: const Text(
@@ -1511,24 +1528,29 @@ Future<_TransactionDetailAction?> _showTransactionDetails(
                       ),
                       actions: [
                         TextButton(
-                          onPressed: () => Navigator.pop(dialog, false),
+                          onPressed: () => Navigator.of(
+                            dialog,
+                            rootNavigator: true,
+                          ).pop(false),
                           child: const Text('Voltar'),
                         ),
                         FilledButton(
-                          onPressed: () => Navigator.pop(dialog, true),
+                          onPressed: () => Navigator.of(
+                            dialog,
+                            rootNavigator: true,
+                          ).pop(true),
                           child: const Text('Cancelar'),
                         ),
                       ],
                     ),
                   );
                   if (confirmed == true) {
-                    if (!context.mounted) return;
-                    final cancel = onCancel;
-                    Navigator.of(context, rootNavigator: true).pop();
-                    await Future<void>.delayed(
-                      const Duration(milliseconds: 250),
-                    );
-                    await cancel();
+                    if (context.mounted) {
+                      Navigator.of(
+                        context,
+                        rootNavigator: true,
+                      ).pop(_TransactionDetailAction.cancel);
+                    }
                   }
                 },
                 icon: const Icon(Icons.cancel_outlined),
@@ -1913,6 +1935,7 @@ class _Menu extends StatelessWidget {
     required this.conflictCount,
     required this.onReviewConflicts,
     required this.onCategories,
+    required this.onCreditCards,
     required this.onGoals,
     required this.onExpenseReductionGoals,
     required this.onNotifications,
@@ -1927,6 +1950,7 @@ class _Menu extends StatelessWidget {
   final int conflictCount;
   final Future<void> Function() onReviewConflicts;
   final Future<void> Function() onCategories;
+  final Future<void> Function() onCreditCards;
   final Future<void> Function() onGoals;
   final Future<void> Function() onExpenseReductionGoals;
   final Future<void> Function() onNotifications;
@@ -1961,6 +1985,13 @@ class _Menu extends StatelessWidget {
         subtitle: const Text('Organize receitas e despesas.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onCategories,
+      ),
+      _MenuItem(
+        leading: const Icon(Icons.credit_card_outlined),
+        title: const Text('Cartões de crédito'),
+        subtitle: const Text('Faturas, limites e compras parceladas.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onCreditCards,
       ),
       _MenuItem(
         leading: const Icon(Icons.flag_outlined),

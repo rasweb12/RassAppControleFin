@@ -26,7 +26,8 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
             .Select(x => new CategoryView(x.Id, x.Name, x.Flow.ToString(), x.Version, x.IsArchived)), q.Page, q.PageSize, ct), ct);
     public Task<Result<Page<CardView>>> CardsAsync(ListCardsQuery q, CancellationToken ct) => Read(() => PageAsync(
         db.CreditCards.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Select(x => new CardView(x.Id, x.Name, x.Currency, x.Limit, x.Outstanding, x.ClosingDay, x.DueDay, x.Version, x.IsArchived)), q.Page, q.PageSize, ct), ct);
+            .Select(x => new CardView(x.Id, x.Name, x.Currency, x.Limit, x.Outstanding, x.Institution, x.Brand,
+                x.PreferredPaymentAccountId, x.AccentColor, x.ClosingDay, x.DueDay, x.Version, x.IsArchived)), q.Page, q.PageSize, ct), ct);
     public Task<Result<Page<TransferView>>> TransfersAsync(ListTransfersQuery q, CancellationToken ct) => Read(() => PageAsync(
         db.Transfers.AsNoTracking().OrderByDescending(x => x.OccurredAt).ThenBy(x => x.Id)
             .Select(x => new TransferView(x.Id, x.SourceAccountId, x.DestinationAccountId, x.Amount, x.Currency, x.OccurredAt, x.Description, x.Status)),
@@ -35,6 +36,10 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
         db.Set<CardMovementRow>().AsNoTracking().Where(x => x.CardId == q.CardId).OrderByDescending(x => x.OccurredAt).ThenBy(x => x.Id)
             .Select(x => new CardMovementView(x.Id, x.CardId, x.AccountId, x.CategoryId, x.Amount, x.Currency, x.Kind, x.OccurredAt, x.Description)),
         q.Page, q.PageSize, ct), ct);
+    public Task<Result<Page<CreditCardInvoiceView>>> CreditCardInvoicesAsync(ListCreditCardInvoicesQuery q, CancellationToken ct) => Read(() => PageAsync(
+        db.CreditCardInvoices.AsNoTracking().Where(x => x.CardId == q.CardId).OrderByDescending(x => x.Competence).ThenBy(x => x.Id)
+            .Select(x => new CreditCardInvoiceView(x.Id, x.CardId, x.Competence, x.ClosingDate, x.DueDate,
+                x.TotalAmount, x.PaidAmount, x.Currency, x.Status, x.Version)), q.Page, q.PageSize, ct), ct);
     public Task<Result<TransactionPage>> TransactionsAsync(ListTransactionsQuery q, CancellationToken ct) => Read(async () =>
     {
         var rows = db.Transactions.AsNoTracking();

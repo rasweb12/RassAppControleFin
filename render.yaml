@@ -14,7 +14,7 @@ services:
       - key: Database__ConnectionString
         sync: false
       - key: Database__RuntimeRole
-        value: rass_app_runtime
+        value: rass_app_runtime_v2
       - key: Neon__AuthBaseUrl
         sync: false
       - key: Neon__JwksUrl

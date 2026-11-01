@@ -14,7 +14,7 @@ Status: implementado localmente e pendente de aplicacao da migration em ambiente
 - Consultas paginadas para ativos e movimentacoes; consultas unitarias para estrategia e reserva.
 - Outbox financeira existente reutilizada para todos os comandos novos.
 - Flutter sincroniza os novos eventos e snapshots pelo cache Drift existente.
-- Migration local `20261030163745_InvestmentPlanningCore` com FKs, indices, constraints, RLS forcado e grants minimos para `rass_app_runtime`.
+- Migration local `20261030163745_InvestmentPlanningCore` com FKs, indices, constraints, RLS forcado e grants minimos para `rass_app_runtime_v2`.
 
 ### Seguranca
 
@@ -40,6 +40,6 @@ Status: implementado localmente e pendente de aplicacao da migration em ambiente
 ### Ordem segura de publicacao
 
 1. Aplicar `InvestmentPlanningCore` com uma conexao direta de migration no ambiente aprovado.
-2. Verificar migrations, RLS, policies e grants com a role `rass_app_runtime`.
+2. Verificar migrations, RLS, policies e grants com a role `rass_app_runtime_v2`.
 3. Publicar a API que exige essa migration no readiness.
 4. Liberar o Flutter com as telas e a escrita offline do modulo.

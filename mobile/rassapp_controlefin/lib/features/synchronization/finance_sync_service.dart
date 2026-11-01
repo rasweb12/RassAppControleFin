@@ -21,6 +21,8 @@ class FinanceSyncService {
     'CancelTransactionCommand',
     'TransferCommand',
     'CardMovementCommand',
+    'CreateCreditCardPurchaseCommand',
+    'PayCreditCardInvoiceCommand',
     'CreateBudgetCommand',
     'ArchiveBudgetCommand',
     'CreateGoalCommand',
@@ -206,10 +208,14 @@ class FinanceSyncService {
       tenantId,
     );
     final movements = <Map<String, dynamic>>[];
+    final invoices = <Map<String, dynamic>>[];
     for (final card in cards) {
       final cardId = _requiredText(card['id']);
       movements.addAll(
         await _loadPaged('/api/v1/credit-cards/$cardId/movements', tenantId),
+      );
+      invoices.addAll(
+        await _loadPaged('/api/v1/credit-cards/$cardId/invoices', tenantId),
       );
     }
 
@@ -237,6 +243,7 @@ class FinanceSyncService {
         tenantId,
       ),
       'cardMovement': movements,
+      'cardInvoice': invoices,
       'dashboard': await _loadDashboard(tenantId),
     };
   }

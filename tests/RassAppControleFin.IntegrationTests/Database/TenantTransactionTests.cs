@@ -225,7 +225,7 @@ public sealed class TenantTransactionTests(PostgresFixture fixture)
                 new Dictionary<string, string?>
                 {
                     ["Database:ConnectionString"] = fixture.RuntimeConnection,
-                    ["Database:RuntimeRole"] = "rass_app_runtime"
+                    ["Database:RuntimeRole"] = "rass_app_runtime_v2"
                 })));
         using var client = factory.CreateClient();
         using var response = await client.GetAsync("/health/ready");

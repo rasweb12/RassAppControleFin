@@ -82,6 +82,44 @@ public sealed class FinanceDomainTests
     }
 
     [Fact]
+    public void Credit_card_uses_the_last_day_of_short_months_for_billing_dates()
+    {
+        var card = CreditCard.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Cartao",
+            Money.Create(1000m, "BRL"), 31, 31, DateTimeOffset.UtcNow);
+
+        Assert.Equal(new DateOnly(2028, 2, 29), card.BillingDate(2028, 2, dueDate: false));
+        Assert.Equal(new DateOnly(2027, 2, 28), card.BillingDate(2027, 2, dueDate: true));
+    }
+
+    [Fact]
+    public void Credit_card_purchase_distributes_residual_cents_without_losing_value()
+    {
+        var purchase = CreditCardPurchase.Create(Guid.NewGuid(), Guid.NewGuid(), "user", Guid.NewGuid(), Guid.NewGuid(),
+            "Compra parcelada", Money.Create(100m, "BRL"), new DateOnly(2026, 10, 31), 3, DateTimeOffset.UtcNow);
+
+        var installments = purchase.SplitInstallments();
+
+        Assert.Equal(new[] { 33.34m, 33.33m, 33.33m }, installments);
+        Assert.Equal(100m, installments.Sum());
+    }
+
+    [Fact]
+    public void Invoice_allows_partial_then_full_payment_without_overpayment()
+    {
+        var invoice = CreditCardInvoice.Open(Guid.NewGuid(), Guid.NewGuid(), "user", Guid.NewGuid(),
+            new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 28), new DateOnly(2026, 11, 5), "BRL", DateTimeOffset.UtcNow);
+        invoice.AddCharge(Money.Create(100m, "BRL"));
+
+        invoice.RegisterPayment(Money.Create(40m, "BRL"));
+        Assert.Equal("PartiallyPaid", invoice.Status);
+        Assert.Equal(60m, invoice.OpenAmount);
+
+        invoice.RegisterPayment(Money.Create(60m, "BRL"));
+        Assert.Equal("Paid", invoice.Status);
+        Assert.Throws<InvalidOperationException>(() => invoice.RegisterPayment(Money.Create(0.01m, "BRL")));
+    }
+
+    [Fact]
     public void Budget_requires_a_valid_utc_period()
     {
         var now = DateTimeOffset.UtcNow;

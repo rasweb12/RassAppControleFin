@@ -80,6 +80,10 @@ class AccountSummary {
     required this.balance,
     required this.version,
     required this.archived,
+    this.institution = 'Não informado',
+    this.brand,
+    this.preferredPaymentAccountId,
+    this.accentColor,
     this.overdraftLimit = 0,
     this.accountType = 'Bank',
     this.subtype,
@@ -92,6 +96,10 @@ class AccountSummary {
   final num balance;
   final int version;
   final bool archived;
+  final String institution;
+  final String? brand;
+  final String? preferredPaymentAccountId;
+  final String? accentColor;
   final num overdraftLimit;
   final String accountType;
   final String? subtype;
@@ -111,6 +119,91 @@ class AccountSummary {
     institution: json['institution'] as String?,
     includeInNetWorth: json['includeInNetWorth'] as bool? ?? true,
   );
+}
+
+class CreditCardSummary {
+  const CreditCardSummary({
+    required this.id,
+    required this.name,
+    required this.currency,
+    required this.limit,
+    required this.outstanding,
+    required this.closingDay,
+    required this.dueDay,
+    required this.version,
+    required this.archived,
+  });
+
+  final String id;
+  final String name;
+  final String currency;
+  final num limit;
+  final num outstanding;
+  final int closingDay;
+  final int dueDay;
+  final int version;
+  final bool archived;
+
+  num get availableLimit => (limit - outstanding).clamp(0, limit);
+
+  factory CreditCardSummary.fromJson(Map<String, dynamic> json) =>
+      CreditCardSummary(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        currency: json['currency'] as String,
+        limit: json['limit'] as num,
+        outstanding: json['outstanding'] as num,
+        closingDay: (json['closingDay'] as num).toInt(),
+        dueDay: (json['dueDay'] as num).toInt(),
+        version: (json['version'] as num?)?.toInt() ?? 0,
+        archived: json['isArchived'] as bool? ?? false,
+        institution: json['institution'] as String? ?? 'Não informado',
+        brand: json['brand'] as String?,
+        preferredPaymentAccountId: json['preferredPaymentAccountId'] as String?,
+        accentColor: json['accentColor'] as String?,
+      );
+}
+
+class CreditCardInvoiceSummary {
+  const CreditCardInvoiceSummary({
+    required this.id,
+    required this.cardId,
+    required this.competence,
+    required this.closingDate,
+    required this.dueDate,
+    required this.totalAmount,
+    required this.paidAmount,
+    required this.currency,
+    required this.status,
+    required this.version,
+  });
+
+  final String id;
+  final String cardId;
+  final DateTime competence;
+  final DateTime closingDate;
+  final DateTime dueDate;
+  final num totalAmount;
+  final num paidAmount;
+  final String currency;
+  final String status;
+  final int version;
+
+  num get openAmount => (totalAmount - paidAmount).clamp(0, totalAmount);
+
+  factory CreditCardInvoiceSummary.fromJson(Map<String, dynamic> json) =>
+      CreditCardInvoiceSummary(
+        id: json['id'] as String,
+        cardId: json['cardId'] as String,
+        competence: DateTime.parse(json['competence'] as String).toLocal(),
+        closingDate: DateTime.parse(json['closingDate'] as String).toLocal(),
+        dueDate: DateTime.parse(json['dueDate'] as String).toLocal(),
+        totalAmount: json['totalAmount'] as num,
+        paidAmount: json['paidAmount'] as num,
+        currency: json['currency'] as String,
+        status: json['status'] as String,
+        version: (json['version'] as num).toInt(),
+      );
 }
 
 class CategorySummary {
@@ -406,6 +499,25 @@ class FinanceRepository {
       )).map(AccountSummary.fromJson).toList(growable: false);
     }
   }
+
+  Future<List<CreditCardSummary>> creditCards(String tenantId) => _loadPage(
+    tenantId: tenantId,
+    endpoint: '/api/v1/credit-cards',
+    entityType: 'card',
+    parser: CreditCardSummary.fromJson,
+    pageSize: '100',
+  );
+
+  Future<List<CreditCardInvoiceSummary>> creditCardInvoices({
+    required String tenantId,
+    required String cardId,
+  }) => _loadPage(
+    tenantId: tenantId,
+    endpoint: '/api/v1/credit-cards/$cardId/invoices',
+    entityType: 'cardInvoice',
+    parser: CreditCardInvoiceSummary.fromJson,
+    pageSize: '100',
+  );
 
   Future<List<TransactionSummary>> transactions(String tenantId) async {
     try {
@@ -761,6 +873,117 @@ class FinanceRepository {
         'operationId': operationId,
         'version': goal.version,
         'archive': archive,
+      },
+    );
+  }
+
+  Future<FinanceWriteState> createCreditCard({
+    required String tenantId,
+    required String name,
+    required num limit,
+    required int closingDay,
+    required int dueDay,
+    required String institution,
+    String? brand,
+    String? preferredPaymentAccountId,
+    String? accentColor,
+  }) {
+    final operationId = _newOperationId();
+    return _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/credit-cards',
+      entityType: 'card',
+      entityId: 'local-$operationId',
+      payload: {
+        'operationId': operationId,
+        'name': name,
+        'currency': 'BRL',
+        'limit': limit,
+        'closingDay': closingDay,
+        'dueDay': dueDay,
+        'institution': institution,
+        'brand': brand,
+        'preferredPaymentAccountId': preferredPaymentAccountId,
+        'accentColor': accentColor,
+      },
+      localResource: {
+        'id': 'local-$operationId',
+        'name': name,
+        'currency': 'BRL',
+        'limit': limit,
+        'outstanding': 0,
+        'closingDay': closingDay,
+        'dueDay': dueDay,
+        'institution': institution,
+        'brand': brand,
+        'preferredPaymentAccountId': preferredPaymentAccountId,
+        'accentColor': accentColor,
+        'version': 0,
+        'isArchived': false,
+      },
+    );
+  }
+
+  Future<FinanceWriteState> createCreditCardPurchase({
+    required String tenantId,
+    required CreditCardSummary card,
+    required CategorySummary category,
+    required num amount,
+    required String description,
+    required int installmentCount,
+  }) {
+    final operationId = _newOperationId();
+    return _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/credit-card-purchases',
+      entityType: 'cardPurchase',
+      entityId: 'local-$operationId',
+      payload: {
+        'operationId': operationId,
+        'cardId': card.id,
+        'cardVersion': card.version,
+        'categoryId': category.id,
+        'amount': amount,
+        'currency': card.currency,
+        'occurredAt': DateTime.now().toUtc().toIso8601String(),
+        'description': description,
+        'installmentCount': installmentCount,
+      },
+      localResource: {
+        'id': 'local-$operationId',
+        'cardId': card.id,
+        'categoryId': category.id,
+        'amount': amount,
+        'currency': card.currency,
+        'description': description,
+        'installmentCount': installmentCount,
+        'occurredAt': DateTime.now().toUtc().toIso8601String(),
+        'version': 0,
+      },
+    );
+  }
+
+  Future<FinanceWriteState> payCreditCardInvoice({
+    required String tenantId,
+    required CreditCardInvoiceSummary invoice,
+    required AccountSummary account,
+    required num amount,
+  }) {
+    final operationId = _newOperationId();
+    return _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/credit-card-invoices/${invoice.id}/payments',
+      entityType: 'cardInvoice',
+      entityId: invoice.id,
+      payload: {
+        'operationId': operationId,
+        'invoiceVersion': invoice.version,
+        'accountId': account.id,
+        'accountVersion': account.version,
+        'amount': amount,
+        'currency': invoice.currency,
+        'occurredAt': DateTime.now().toUtc().toIso8601String(),
+        'description': 'Pagamento de fatura',
       },
     );
   }

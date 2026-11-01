@@ -13,7 +13,7 @@ Date: 2026-10-17
 ## Required remote actions
 
 1. Set the Render health-check path to `/health/ready`.
-2. Confirm the connection targets the intended branch with `rass_app_runtime` and TLS `VerifyFull`.
+2. Confirm the connection targets the intended branch with `rass_app_runtime_v2` and TLS `VerifyFull`.
 3. Approve a separate production promotion: backup, schema/migrations/RLS, grants, readiness verification, rollback.
 4. Rotate the previously exposed runtime password and update secrets without logging it.
 

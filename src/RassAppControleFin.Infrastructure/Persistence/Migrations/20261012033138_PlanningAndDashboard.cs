@@ -122,7 +122,7 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                     )', target);
                   END LOOP;
                 END $rls$;
-                GRANT SELECT, INSERT, UPDATE ON app."Budgets", app."Goals" TO rass_app_runtime;
+                GRANT SELECT, INSERT, UPDATE ON app."Budgets", app."Goals" TO rass_app_runtime_v2;
                 """);
         }
 

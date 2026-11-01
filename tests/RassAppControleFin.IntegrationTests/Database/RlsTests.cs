@@ -12,7 +12,7 @@ public sealed class RlsTests(PostgresFixture fixture)
     {
         await using var connection = await fixture.DataSource.OpenConnectionAsync();
         await using var command = new NpgsqlCommand("""
-            SELECT current_user = 'rass_app_runtime'
+            SELECT current_user = 'rass_app_runtime_v2'
                 AND NOT EXISTS (SELECT 1 FROM pg_roles r
                     WHERE pg_has_role(current_user, r.oid, 'MEMBER')
                     AND (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication))
