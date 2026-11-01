@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../../core/network/api_client.dart';
 import 'finance_repository.dart';
 
 class CreditCardsPage extends StatefulWidget {
@@ -200,10 +200,13 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
       );
       return;
     }
+
     final input = await _showPurchaseForm(context, categories);
     if (input == null || !mounted) return;
+
+    FinanceWriteState state;
     try {
-      final state = await widget.repository.createCreditCardPurchase(
+      state = await widget.repository.createCreditCardPurchase(
         tenantId: widget.tenantId,
         card: widget.card,
         category: input.category,
@@ -211,23 +214,53 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
         description: input.description,
         installmentCount: input.installmentCount,
       );
+      debugPrint('CHECKPOINT12_PURCHASE_WRITE_OK: $state');
+    } catch (error, stackTrace) {
+      if (error is ApiException) {
+        debugPrint(
+          'CHECKPOINT12_PURCHASE_API: '
+          'failure=${error.failure.name}, '
+          'status=${error.statusCode}, '
+          'message=${error.message}, '
+          'correlationId=${error.correlationId}',
+        );
+      } else {
+        debugPrint('CHECKPOINT12_PURCHASE_UNEXPECTED: $error');
+      }
+      debugPrintStack(
+        label: 'CHECKPOINT12_PURCHASE_STACK',
+        stackTrace: stackTrace,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            state == FinanceWriteState.pending
-                ? 'Compra pendente de sincronização.'
-                : 'Compra registrada. Atualize as faturas.',
-          ),
+        const SnackBar(
+          content: Text('Não foi possível registrar a compra. Consulte o log.'),
         ),
       );
+      return;
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          state == FinanceWriteState.pending
+              ? 'Compra pendente de sincronização.'
+              : 'Compra registrada. Atualize as faturas.',
+        ),
+      ),
+    );
+
+    debugPrint('CHECKPOINT12_PURCHASE_RELOAD_START');
+    try {
       await _load();
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível registrar a compra.')),
-        );
-      }
+      debugPrint('CHECKPOINT12_PURCHASE_RELOAD_END');
+    } catch (error, stackTrace) {
+      debugPrint('CHECKPOINT12_PURCHASE_RELOAD_ERROR: $error');
+      debugPrintStack(
+        label: 'CHECKPOINT12_PURCHASE_RELOAD_STACK',
+        stackTrace: stackTrace,
+      );
     }
   }
 
