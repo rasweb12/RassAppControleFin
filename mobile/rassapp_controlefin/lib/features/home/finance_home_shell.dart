@@ -2746,23 +2746,89 @@ class _TransactionEditInput {
 Future<_TransactionEditInput?> _showTransactionEditForm(
   BuildContext context,
   TransactionSummary transaction,
-) async {
-  final amount = TextEditingController(
-    text: transaction.amount.toStringAsFixed(2).replaceAll('.', ','),
-  );
-  final description = TextEditingController(text: transaction.description);
-  var occurredAt = transaction.occurredAt;
-  final result = await showDialog<_TransactionEditInput>(
+) {
+  return showDialog<_TransactionEditInput>(
     context: context,
     useRootNavigator: true,
-    builder: (dialogContext) => AlertDialog(
+    builder: (_) => _TransactionEditDialog(transaction: transaction),
+  );
+}
+
+class _TransactionEditDialog extends StatefulWidget {
+  const _TransactionEditDialog({required this.transaction});
+
+  final TransactionSummary transaction;
+
+  @override
+  State<_TransactionEditDialog> createState() => _TransactionEditDialogState();
+}
+
+class _TransactionEditDialogState extends State<_TransactionEditDialog> {
+  late final TextEditingController _amount;
+  late final TextEditingController _description;
+  late DateTime _occurredAt;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _amount = TextEditingController(
+      text: widget.transaction.amount.toStringAsFixed(2).replaceAll('.', ','),
+    );
+
+    _description = TextEditingController(text: widget.transaction.description);
+
+    _occurredAt = widget.transaction.occurredAt;
+  }
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  Future<void> _selectDate() async {
+    final chosen = await showDatePicker(
+      context: context,
+      initialDate: _occurredAt,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(DateTime.now().year + 30),
+    );
+
+    if (!mounted || chosen == null) return;
+
+    setState(() {
+      _occurredAt = chosen;
+    });
+  }
+
+  void _save() {
+    final parsedAmount = _parseAmount(_amount.text);
+
+    if (parsedAmount == null || parsedAmount <= 0) {
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _TransactionEditInput(
+        amount: parsedAmount,
+        description: _description.text.trim(),
+        occurredAt: _occurredAt,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
       title: const Text('Editar lançamento'),
-      content: StatefulBuilder(
-        builder: (context, setState) => Column(
+      content: SingleChildScrollView(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: amount,
+              controller: _amount,
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
@@ -2771,53 +2837,28 @@ Future<_TransactionEditInput?> _showTransactionEditForm(
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: description,
+              controller: _description,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(labelText: 'Descrição'),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: () async {
-                final chosen = await showDatePicker(
-                  context: dialogContext,
-                  initialDate: occurredAt,
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime(DateTime.now().year + 30),
-                );
-                if (chosen != null) setState(() => occurredAt = chosen);
-              },
+              onPressed: _selectDate,
               icon: const Icon(Icons.calendar_today_outlined),
-              label: Text('Data da transação: ${_dateFull(occurredAt)}'),
+              label: Text('Data da transação: ${_dateFull(_occurredAt)}'),
             ),
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(dialogContext),
+          onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancelar'),
         ),
-        FilledButton(
-          onPressed: () {
-            final parsedAmount = _parseAmount(amount.text);
-            if (parsedAmount == null || parsedAmount <= 0) return;
-            Navigator.pop(
-              dialogContext,
-              _TransactionEditInput(
-                amount: parsedAmount,
-                description: description.text.trim(),
-                occurredAt: occurredAt,
-              ),
-            );
-          },
-          child: const Text('Salvar'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('Salvar')),
       ],
-    ),
-  );
-  amount.dispose();
-  description.dispose();
-  return result;
+    );
+  }
 }
 
 Future<_ResourceAction?> _showResourceActions(

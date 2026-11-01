@@ -235,7 +235,8 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
     final archive = !widget.card.archived;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      useRootNavigator: true,
+      builder: (dialogContext) => AlertDialog(
         title: Text(archive ? 'Arquivar cartão?' : 'Reativar cartão?'),
         content: Text(
           archive
@@ -244,11 +245,13 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () =>
+                Navigator.of(dialogContext, rootNavigator: true).pop(false),
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () =>
+                Navigator.of(dialogContext, rootNavigator: true).pop(true),
             child: Text(archive ? 'Arquivar' : 'Reativar'),
           ),
         ],
@@ -327,7 +330,11 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
         IconButton(
           onPressed: _maintainCard,
           tooltip: widget.card.archived ? 'Reativar cartão' : 'Arquivar cartão',
-          icon: Icon(widget.card.archived ? Icons.unarchive_outlined : Icons.archive_outlined),
+          icon: Icon(
+            widget.card.archived
+                ? Icons.unarchive_outlined
+                : Icons.archive_outlined,
+          ),
         ),
       ],
     ),
@@ -509,39 +516,110 @@ class _PaymentInput {
   final num amount;
 }
 
-Future<_CardInput?> _showCardForm(BuildContext context) async {
-  final name = TextEditingController();
-  final institution = TextEditingController();
-  final brand = TextEditingController();
-  final limit = TextEditingController();
-  final closing = TextEditingController(text: '25');
-  final due = TextEditingController(text: '5');
-  final result = await showDialog<_CardInput>(
+Future<_CardInput?> _showCardForm(BuildContext context) {
+  return showDialog<_CardInput>(
     context: context,
-    builder: (context) => AlertDialog(
+    useRootNavigator: true,
+    builder: (_) => const _CardFormDialog(),
+  );
+}
+
+class _CardFormDialog extends StatefulWidget {
+  const _CardFormDialog();
+
+  @override
+  State<_CardFormDialog> createState() => _CardFormDialogState();
+}
+
+class _CardFormDialogState extends State<_CardFormDialog> {
+  late final TextEditingController _name;
+  late final TextEditingController _institution;
+  late final TextEditingController _brand;
+  late final TextEditingController _limit;
+  late final TextEditingController _closing;
+  late final TextEditingController _due;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _name = TextEditingController();
+    _institution = TextEditingController();
+    _brand = TextEditingController();
+    _limit = TextEditingController();
+    _closing = TextEditingController(text: '25');
+    _due = TextEditingController(text: '5');
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _institution.dispose();
+    _brand.dispose();
+    _limit.dispose();
+    _closing.dispose();
+    _due.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final value = _number(_limit.text);
+    final close = int.tryParse(_closing.text);
+    final dueDay = int.tryParse(_due.text);
+
+    if (_name.text.trim().isEmpty ||
+        _institution.text.trim().isEmpty ||
+        value == null ||
+        value <= 0 ||
+        close == null ||
+        dueDay == null ||
+        close < 1 ||
+        close > 31 ||
+        dueDay < 1 ||
+        dueDay > 31) {
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _CardInput(
+        _name.text.trim(),
+        value,
+        close,
+        dueDay,
+        _institution.text.trim(),
+        _brand.text.trim().isEmpty ? null : _brand.text.trim(),
+        null,
+        null,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
       title: const Text('Novo cartão'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: name,
+              controller: _name,
               decoration: const InputDecoration(labelText: 'Nome do cartão'),
             ),
             TextField(
-              controller: institution,
+              controller: _institution,
               decoration: const InputDecoration(
                 labelText: 'Instituição financeira',
               ),
             ),
             TextField(
-              controller: brand,
+              controller: _brand,
               decoration: const InputDecoration(
                 labelText: 'Bandeira (opcional)',
               ),
             ),
             TextField(
-              controller: limit,
+              controller: _limit,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -550,12 +628,12 @@ Future<_CardInput?> _showCardForm(BuildContext context) async {
               ),
             ),
             TextField(
-              controller: closing,
+              controller: _closing,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Dia de fechamento'),
             ),
             TextField(
-              controller: due,
+              controller: _due,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Dia de vencimento'),
             ),
@@ -564,140 +642,132 @@ Future<_CardInput?> _showCardForm(BuildContext context) async {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancelar'),
         ),
-        FilledButton(
-          onPressed: () {
-            final value = _number(limit.text);
-            final close = int.tryParse(closing.text);
-            final dueDay = int.tryParse(due.text);
-            if (name.text.trim().isEmpty ||
-                institution.text.trim().isEmpty ||
-                value == null ||
-                value <= 0 ||
-                close == null ||
-                dueDay == null ||
-                close < 1 ||
-                close > 31 ||
-                dueDay < 1 ||
-                dueDay > 31) {
-              return;
-            }
-            Navigator.pop(
-              context,
-              _CardInput(
-                name.text.trim(),
-                value,
-                close,
-                dueDay,
-                institution.text.trim(),
-                brand.text.trim().isEmpty ? null : brand.text.trim(),
-                null,
-                null,
-              ),
-            );
-          },
-          child: const Text('Salvar'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('Salvar')),
       ],
-    ),
-  );
-  name.dispose();
-  institution.dispose();
-  brand.dispose();
-  limit.dispose();
-  closing.dispose();
-  due.dispose();
-  return result;
+    );
+  }
 }
 
 Future<_PurchaseInput?> _showPurchaseForm(
   BuildContext context,
   List<CategorySummary> categories,
-) async {
-  final amount = TextEditingController();
-  final description = TextEditingController();
-  final installments = TextEditingController(text: '1');
-  CategorySummary selected = categories.first;
-  final result = await showDialog<_PurchaseInput>(
+) {
+  return showDialog<_PurchaseInput>(
     context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Compra no cartão'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<CategorySummary>(
-                initialValue: selected,
-                items: categories
-                    .map(
-                      (item) =>
-                          DropdownMenuItem(value: item, child: Text(item.name)),
-                    )
-                    .toList(),
-                onChanged: (item) {
-                  if (item != null) {
-                    setState(() => selected = item);
-                  }
-                },
-                decoration: const InputDecoration(labelText: 'Categoria'),
-              ),
-              TextField(
-                controller: amount,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(labelText: 'Valor (R\$)'),
-              ),
-              TextField(
-                controller: installments,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Parcelas (1 a 360)',
-                ),
-              ),
-              TextField(
-                controller: description,
-                maxLength: 500,
-                decoration: const InputDecoration(labelText: 'Descrição'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final value = _number(amount.text);
-              final count = int.tryParse(installments.text);
-              if (value == null ||
-                  value <= 0 ||
-                  count == null ||
-                  count < 1 ||
-                  count > 360 ||
-                  description.text.trim().isEmpty) {
-                return;
-              }
-              Navigator.pop(
-                context,
-                _PurchaseInput(selected, value, description.text.trim(), count),
-              );
-            },
-            child: const Text('Registrar'),
-          ),
-        ],
-      ),
-    ),
+    useRootNavigator: true,
+    builder: (_) => _PurchaseFormDialog(categories: categories),
   );
-  amount.dispose();
-  description.dispose();
-  installments.dispose();
-  return result;
+}
+
+class _PurchaseFormDialog extends StatefulWidget {
+  const _PurchaseFormDialog({required this.categories});
+
+  final List<CategorySummary> categories;
+
+  @override
+  State<_PurchaseFormDialog> createState() => _PurchaseFormDialogState();
+}
+
+class _PurchaseFormDialogState extends State<_PurchaseFormDialog> {
+  late final TextEditingController _amount;
+  late final TextEditingController _description;
+  late final TextEditingController _installments;
+  late CategorySummary _selected;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _amount = TextEditingController();
+    _description = TextEditingController();
+    _installments = TextEditingController(text: '1');
+
+    _selected = widget.categories.first;
+  }
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _description.dispose();
+    _installments.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final value = _number(_amount.text);
+    final count = int.tryParse(_installments.text);
+
+    if (value == null ||
+        value <= 0 ||
+        count == null ||
+        count < 1 ||
+        count > 360 ||
+        _description.text.trim().isEmpty) {
+      return;
+    }
+
+    Navigator.of(
+      context,
+    ).pop(_PurchaseInput(_selected, value, _description.text.trim(), count));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Compra no cartão'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<CategorySummary>(
+              initialValue: _selected,
+              items: widget.categories
+                  .map(
+                    (item) =>
+                        DropdownMenuItem(value: item, child: Text(item.name)),
+                  )
+                  .toList(),
+              onChanged: (item) {
+                if (item != null) {
+                  setState(() => _selected = item);
+                }
+              },
+              decoration: const InputDecoration(labelText: 'Categoria'),
+            ),
+            TextField(
+              controller: _amount,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Valor (R\$)'),
+            ),
+            TextField(
+              controller: _installments,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Parcelas (1 a 360)',
+              ),
+            ),
+            TextField(
+              controller: _description,
+              maxLength: 500,
+              decoration: const InputDecoration(labelText: 'Descrição'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Registrar')),
+      ],
+    );
+  }
 }
 
 Future<_PaymentInput?> _showPaymentForm(
@@ -711,7 +781,8 @@ Future<_PaymentInput?> _showPaymentForm(
   AccountSummary selected = accounts.first;
   final result = await showDialog<_PaymentInput>(
     context: context,
-    builder: (context) => StatefulBuilder(
+    useRootNavigator: true,
+    builder: (dialogContext) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
         title: const Text('Pagar fatura'),
         content: Column(
@@ -745,7 +816,8 @@ Future<_PaymentInput?> _showPaymentForm(
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () =>
+                Navigator.of(dialogContext, rootNavigator: true).pop(),
             child: const Text('Cancelar'),
           ),
           FilledButton(
@@ -754,7 +826,10 @@ Future<_PaymentInput?> _showPaymentForm(
               if (value == null || value <= 0 || value > invoice.openAmount) {
                 return;
               }
-              Navigator.pop(context, _PaymentInput(selected, value));
+              Navigator.of(
+                dialogContext,
+                rootNavigator: true,
+              ).pop(_PaymentInput(selected, value));
             },
             child: const Text('Pagar'),
           ),
