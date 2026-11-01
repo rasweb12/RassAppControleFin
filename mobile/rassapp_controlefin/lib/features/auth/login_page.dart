@@ -99,6 +99,10 @@ class _LoginPageState extends State<LoginPage> {
                     TextFormField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
+                      // Homologation builds must never receive credentials from
+                      // another installed RassFin variant through Android Autofill.
+                      autofillHints: const <String>[],
+                      enableIMEPersonalizedLearning: false,
                       autocorrect: false,
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
@@ -117,6 +121,8 @@ class _LoginPageState extends State<LoginPage> {
                     TextFormField(
                       controller: _password,
                       obscureText: _obscure,
+                      autofillHints: const <String>[],
+                      enableIMEPersonalizedLearning: false,
                       enableSuggestions: false,
                       autocorrect: false,
                       onFieldSubmitted: (_) => _signIn(),

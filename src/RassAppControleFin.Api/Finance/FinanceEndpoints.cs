@@ -100,8 +100,10 @@ public static class FinanceEndpoints
             => Send(s, new UpdateInvestmentAssetCommand(r.OperationId, id, r.Version, r.Name, r.Ticker, r.AssetClass,
                 r.AssetSubClass, r.AccountId, r.Issuer, r.Indexer, r.Rate, r.MaturityDate, r.LiquidityType, r.FgcProtected,
                 r.TaxExempt, r.Notes, r.Active), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
-        finance.MapGet("/investment-assets", (bool includeInactive, int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
-            => InvestmentAssets(s, new ListInvestmentAssetsQuery(includeInactive, page, pageSize), h, ct))
+        // includeInactive is an optional filter. Keep it nullable at the HTTP
+        // boundary so a normal paged sync request need not send a synthetic false.
+        finance.MapGet("/investment-assets", (bool? includeInactive, int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
+            => InvestmentAssets(s, new ListInvestmentAssetsQuery(includeInactive ?? false, page, pageSize), h, ct))
             .RequireAuthorization(Permissions.TransactionsRead);
         finance.MapPost("/investment-transactions", (RecordInvestmentTransactionRequest r, ISender s, HttpContext h, CancellationToken ct)
             => Send(s, new RecordInvestmentTransactionCommand(r.OperationId, r.InvestmentAssetId, r.Date, r.Type, r.Quantity,
@@ -169,14 +171,14 @@ public static class FinanceEndpoints
     private static async Task<IResult> PayYourselfFirst(ISender sender, HttpContext context, CancellationToken ct)
     {
         var result = await sender.Send(new GetPayYourselfFirstPlanQuery(), ct);
-        return (result.IsSuccess ? Result<PayYourselfFirstPlanDto?>.Success(result.Value is null ? null : new(
+        return (result.IsSuccess ? Result<PayYourselfFirstPlanDto?>.SuccessOptional(result.Value is null ? null : new(
             result.Value.Id, result.Value.CurrentRate, result.Value.GoalRate, result.Value.EffectiveFrom, result.Value.Version))
             : Result<PayYourselfFirstPlanDto?>.Failure(result.Error!)).ToHttp(context);
     }
     private static async Task<IResult> EmergencyFund(ISender sender, HttpContext context, CancellationToken ct)
     {
         var result = await sender.Send(new GetEmergencyFundPlanQuery(), ct);
-        return (result.IsSuccess ? Result<EmergencyFundPlanDto?>.Success(result.Value is null ? null : new(result.Value.Id,
+        return (result.IsSuccess ? Result<EmergencyFundPlanDto?>.SuccessOptional(result.Value is null ? null : new(result.Value.Id,
             result.Value.TargetType, result.Value.TargetMultiple, result.Value.TargetAmount, result.Value.CurrentAmount,
             result.Value.MonthlyContributionTarget, result.Value.Currency, result.Value.LiquidityRequired, result.Value.Notes,
             result.Value.Version)) : Result<EmergencyFundPlanDto?>.Failure(result.Error!)).ToHttp(context);

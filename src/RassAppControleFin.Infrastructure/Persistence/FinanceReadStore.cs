@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using RassAppControleFin.Application.Abstractions.Persistence;
 using RassAppControleFin.Application.Features.Finance;
 using RassAppControleFin.Domain.Entities.Finance;
@@ -6,7 +7,8 @@ using RassAppControleFin.SharedKernel.Results;
 
 namespace RassAppControleFin.Infrastructure.Persistence;
 
-public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory) : IFinanceReadStore
+public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory,
+    ILogger<FinanceReadStore> logger) : IFinanceReadStore
 {
     private async Task<Result<T>> Read<T>(Func<Task<T>> query, CancellationToken ct)
     {
@@ -14,6 +16,13 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
         if (!opened.IsSuccess) return Result<T>.Failure(opened.Error!);
         await using var scope = opened.Value;
         return Result<T>.Success(await query());
+    }
+    private async Task<Result<T?>> ReadOptional<T>(Func<Task<T?>> query, CancellationToken ct) where T : class
+    {
+        var opened = await factory.BeginAsync(ct, true);
+        if (!opened.IsSuccess) return Result<T?>.Failure(opened.Error!);
+        await using var scope = opened.Value;
+        return Result<T?>.SuccessOptional(await query());
     }
     private static async Task<Page<T>> PageAsync<T>(IQueryable<T> query, int page, int size, CancellationToken ct)
         => new(await query.Skip((page - 1) * size).Take(size).ToListAsync(ct), await query.CountAsync(ct), page, size);
@@ -42,6 +51,10 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
                 x.TotalAmount, x.PaidAmount, x.Currency, x.Status, x.Version)), q.Page, q.PageSize, ct), ct);
     public Task<Result<TransactionPage>> TransactionsAsync(ListTransactionsQuery q, CancellationToken ct) => Read(async () =>
     {
+        const string operation = "finance.transactions.read";
+        var stage = "filter";
+        try
+        {
         var rows = db.Transactions.AsNoTracking();
         var transfers = db.Transfers.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(q.Search))
@@ -78,18 +91,43 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
         if (q.From is { } from) { rows = rows.Where(x => x.OccurredAt >= from); transfers = transfers.Where(x => x.OccurredAt >= from); }
         if (q.To is { } to) { rows = rows.Where(x => x.OccurredAt < to); transfers = transfers.Where(x => x.OccurredAt < to); }
 
-        var financialEntries = await rows.Select(x => new TransactionView(x.Id, x.AccountId, x.CategoryId, x.Amount, x.Currency,
-            x.Flow.ToString(), x.Status.ToString(), x.OccurredAt, x.Description, x.Version)).ToListAsync(ct);
-        var transferEntries = includeTransfers
-            ? await transfers.Select(x => new TransactionView(x.Id, x.SourceAccountId, Guid.Empty, x.Amount, x.Currency,
-                "Transfer", x.Status, x.OccurredAt, x.Description, x.Version, "Transfer", x.SourceAccountId, x.DestinationAccountId)).ToListAsync(ct)
-            : [];
+        // Keep the database work to filtering only. PostgreSQL's translation of enum
+        // formatting inside the two different projections is provider-sensitive and
+        // previously made an otherwise valid empty statement list fail at runtime.
+        // The unified stream is already materialized before ordering/paging, so the
+        // presentation-only mapping belongs on the client side of this read model.
+        stage = "financial_rows";
+        var financialRows = await rows.ToListAsync(ct);
+        var financialEntries = financialRows.Select(x => new TransactionView(x.Id, x.AccountId, x.CategoryId, x.Amount, x.Currency,
+            x.Flow.ToString(), x.Status.ToString(), x.OccurredAt, x.Description, x.Version)).ToArray();
+        stage = "transfer_rows";
+        var transferRows = includeTransfers ? await transfers.ToListAsync(ct) : [];
+        var transferEntries = transferRows.Select(x => new TransactionView(x.Id, x.SourceAccountId, Guid.Empty, x.Amount, x.Currency,
+            "Transfer", x.Status, x.OccurredAt, x.Description, x.Version, "Transfer", x.SourceAccountId, x.DestinationAccountId)).ToArray();
         var ordered = financialEntries.Concat(transferEntries).OrderByDescending(x => x.OccurredAt).ThenBy(x => x.Id).ToArray();
         var page = new Page<TransactionView>(ordered.Skip((q.Page - 1) * q.PageSize).Take(q.PageSize).ToArray(), ordered.Length, q.Page, q.PageSize);
-        var summary = await rows.Where(x => x.Status == TransactionStatus.Posted).GroupBy(x => x.Currency)
-            .Select(g => new TransactionSummary(g.Key, g.Sum(x => x.Flow == FinancialFlow.Income ? x.Amount : 0),
-                g.Sum(x => x.Flow == FinancialFlow.Expense ? x.Amount : 0))).OrderBy(x => x.Currency).ToListAsync(ct);
+        stage = "summary";
+        // This uses the same filtered source as the list above. It avoids a second
+        // provider translation of enum conditional aggregates, which PostgreSQL
+        // rejected at runtime for the unified read. Transfers deliberately remain
+        // outside the financial totals.
+        var summary = financialRows.Where(x => x.Status == TransactionStatus.Posted)
+            .GroupBy(x => x.Currency)
+            .OrderBy(x => x.Key)
+            .Select(g => new TransactionSummary(g.Key,
+                g.Where(x => x.Flow == FinancialFlow.Income).Sum(x => x.Amount),
+                g.Where(x => x.Flow == FinancialFlow.Expense).Sum(x => x.Amount)))
+            .ToArray();
         return new TransactionPage(page, summary);
+        }
+        catch (InvalidOperationException)
+        {
+            // The global handler deliberately withholds exception details. This
+            // stage marker is safe operational telemetry: it contains no SQL,
+            // user data, or request values.
+            logger.LogError("Unified transaction read failed. Operation={Operation} Stage={Stage}", operation, stage);
+            throw;
+        }
     }, ct);
     public Task<Result<Page<BudgetView>>> BudgetsAsync(ListBudgetsQuery q, CancellationToken ct) => Read(async () =>
     {
@@ -120,12 +158,12 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
         db.FinancialNotifications.AsNoTracking().OrderBy(x => x.ReadAt != null).ThenByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
             .Select(x => new FinancialNotificationView(x.Id, x.Type, x.Title, x.Message, x.CreatedAt, x.ReadAt, x.Version)),
         q.Page, q.PageSize, ct), ct);
-    public Task<Result<PayYourselfFirstPlanView?>> PayYourselfFirstPlanAsync(CancellationToken ct) => Read(async () =>
+    public Task<Result<PayYourselfFirstPlanView?>> PayYourselfFirstPlanAsync(CancellationToken ct) => ReadOptional(async () =>
     {
         var plan = await db.PayYourselfFirstPlans.AsNoTracking().SingleOrDefaultAsync(ct);
         return plan is null ? null : new PayYourselfFirstPlanView(plan.Id, plan.CurrentRate, plan.GoalRate, plan.EffectiveFrom, plan.Version);
     }, ct);
-    public Task<Result<EmergencyFundPlanView?>> EmergencyFundPlanAsync(CancellationToken ct) => Read(async () =>
+    public Task<Result<EmergencyFundPlanView?>> EmergencyFundPlanAsync(CancellationToken ct) => ReadOptional(async () =>
     {
         var plan = await db.EmergencyFundPlans.AsNoTracking().SingleOrDefaultAsync(ct);
         return plan is null ? null : new EmergencyFundPlanView(plan.Id, plan.TargetType.ToString(), plan.TargetMultiple,

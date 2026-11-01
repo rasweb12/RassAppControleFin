@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../core/network/api_client.dart';
 import 'finance_repository.dart';
 
-
 class CreditCardsPage extends StatefulWidget {
   const CreditCardsPage({
     required this.repository,
@@ -205,18 +204,16 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
     final input = await _showPurchaseForm(context, categories);
     if (input == null || !mounted) return;
 
-    FinanceWriteState state;
     try {
-    debugPrint(
-      'CHECKPOINT12_PURCHASE_INPUT: '
-      'cardVersion=${widget.card.version}, '
-      'currency=${widget.card.currency}, '
-      'amount=${input.amount}, '
-      'installments=${input.installmentCount}, '
-      'categoryId=${input.category.id}, '
-      'descriptionLength=${input.description.length}',
-    );      
-      state = await widget.repository.createCreditCardPurchase(
+      debugPrint(
+        'CHECKPOINT12_PURCHASE_INPUT: '
+        'cardVersion=${widget.card.version}, '
+        'currency=${widget.card.currency}, '
+        'amount=${input.amount}, '
+        'installments=${input.installmentCount}, '
+        'descriptionLength=${input.description.length}',
+      );
+      final state = await widget.repository.createCreditCardPurchase(
         tenantId: widget.tenantId,
         card: widget.card,
         category: input.category,
@@ -225,6 +222,17 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
         installmentCount: input.installmentCount,
       );
       debugPrint('CHECKPOINT12_PURCHASE_WRITE_OK: $state');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            state == FinanceWriteState.pending
+                ? 'Compra salva neste dispositivo e aguardando sincronização.'
+                : 'Compra registrada.',
+          ),
+        ),
+      );
+      await _load();
     } catch (error, stackTrace) {
       if (error is ApiException) {
         debugPrint(
@@ -314,7 +322,18 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
     final accounts = widget.accounts
         .where((item) => !item.archived && item.currency == invoice.currency)
         .toList(growable: false);
-    if (accounts.isEmpty || invoice.openAmount <= 0) return;
+    if (invoice.openAmount <= 0) return;
+    if (accounts.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Cadastre uma conta ativa em ${invoice.currency} para pagar esta fatura.',
+          ),
+        ),
+      );
+      return;
+    }
     final input = await _showPaymentForm(context, invoice, accounts);
     if (input == null || !mounted) return;
     try {
@@ -335,6 +354,12 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
         ),
       );
       await _load();
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -382,22 +407,45 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
                 const Text('Nenhuma fatura disponível ainda.'),
               for (final invoice in _invoices)
                 Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.receipt_long_outlined),
-                    title: Text(_month(invoice.competence)),
-                    subtitle: Text(
-                      'Fecha ${_date(invoice.closingDate)} · vence ${_date(invoice.dueDate)} · ${invoice.status}',
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(_money(invoice.openAmount, invoice.currency)),
-                        TextButton(
-                          onPressed: invoice.openAmount > 0
-                              ? () => _pay(invoice)
-                              : null,
-                          child: const Text('Pagar'),
+                        const Icon(Icons.receipt_long_outlined),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_month(invoice.competence)),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Fecha ${_date(invoice.closingDate)} · vence ${_date(invoice.dueDate)} · ${invoice.status}',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 92,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(_money(invoice.openAmount, invoice.currency)),
+                              SizedBox(
+                                height: 36,
+                                child: TextButton(
+                                  onPressed: invoice.openAmount > 0
+                                      ? () => _pay(invoice)
+                                      : null,
+                                  child: const Text('Pagar'),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),

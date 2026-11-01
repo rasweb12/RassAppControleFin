@@ -42,6 +42,13 @@ public sealed class Result<T> : IResult<Result<T>>
         return new(value);
     }
 
+    /// <summary>
+    /// Creates a successful result for a query whose domain contract allows an
+    /// absent value.  Keep <see cref="Success"/> strict for mutation and
+    /// required-query contracts.
+    /// </summary>
+    public static Result<T> SuccessOptional(T? value) => new(value!);
+
     public static Result<T> Failure(Error error)
     {
         ArgumentNullException.ThrowIfNull(error);

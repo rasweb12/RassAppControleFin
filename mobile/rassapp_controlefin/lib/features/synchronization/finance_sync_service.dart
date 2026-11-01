@@ -1,6 +1,7 @@
 import '../../core/network/api_client.dart';
 import '../../core/storage/offline_finance_store.dart';
 import '../auth/auth_controller.dart';
+import 'package:flutter/foundation.dart';
 
 enum FinanceSyncResult { synchronized, offline, unavailable, blocked, failed }
 
@@ -43,9 +44,22 @@ class FinanceSyncService {
     _running = true;
     try {
       var blocked = false;
-      for (final operation in await _store.pending(tenantId)) {
+      final pendingOperations = await _store.pending(tenantId);
+      if (kDebugMode) {
+        debugPrint(
+          'CHECKPOINT12_SYNC_OUTBOX: tenantPresent=${tenantId.isNotEmpty} '
+          'pending=${pendingOperations.length}',
+        );
+      }
+      for (final operation in pendingOperations) {
         try {
           Object? response;
+          if (kDebugMode) {
+            debugPrint(
+              'CHECKPOINT12_SYNC_SEND: entityType=${operation.entityType} '
+              'operationType=${operation.operationType}',
+            );
+          }
           if (operation.operationType == 'put') {
             response = await _auth.putAuthenticated(
               operation.endpoint,
@@ -92,10 +106,21 @@ class FinanceSyncService {
               resourceId: resourceId,
               version: version.toInt(),
             );
+            if (kDebugMode) {
+              debugPrint(
+                'CHECKPOINT12_SYNC_CARD_RECONCILED: versionValid=true',
+              );
+            }
           } else {
             await _store.acknowledge(operation.operationId);
           }
         } on ApiException catch (error) {
+          if (kDebugMode) {
+            debugPrint(
+              'CHECKPOINT12_SYNC_SEND_FAILURE: entityType=${operation.entityType} '
+              'failure=${error.failure.name}',
+            );
+          }
           if (_isRetryable(error.failure)) {
             await _store.defer(
               operation.operationId,
