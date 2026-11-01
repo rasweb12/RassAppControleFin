@@ -206,6 +206,15 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
 
     FinanceWriteState state;
     try {
+    debugPrint(
+      'CHECKPOINT12_PURCHASE_INPUT: '
+      'cardVersion=${widget.card.version}, '
+      'currency=${widget.card.currency}, '
+      'amount=${input.amount}, '
+      'installments=${input.installmentCount}, '
+      'categoryId=${input.category.id}, '
+      'descriptionLength=${input.description.length}',
+    );      
       state = await widget.repository.createCreditCardPurchase(
         tenantId: widget.tenantId,
         card: widget.card,
@@ -227,40 +236,21 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
       } else {
         debugPrint('CHECKPOINT12_PURCHASE_UNEXPECTED: $error');
       }
+
       debugPrintStack(
         label: 'CHECKPOINT12_PURCHASE_STACK',
         stackTrace: stackTrace,
       );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Não foi possível registrar a compra. Consulte o log.'),
-        ),
-      );
-      return;
-    }
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          state == FinanceWriteState.pending
-              ? 'Compra pendente de sincronização.'
-              : 'Compra registrada. Atualize as faturas.',
-        ),
-      ),
-    );
-
-    debugPrint('CHECKPOINT12_PURCHASE_RELOAD_START');
-    try {
-      await _load();
-      debugPrint('CHECKPOINT12_PURCHASE_RELOAD_END');
-    } catch (error, stackTrace) {
-      debugPrint('CHECKPOINT12_PURCHASE_RELOAD_ERROR: $error');
-      debugPrintStack(
-        label: 'CHECKPOINT12_PURCHASE_RELOAD_STACK',
-        stackTrace: stackTrace,
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Falha ao registrar ou atualizar a compra. Consulte o log.',
+            ),
+          ),
+        );
+      }
     }
   }
 
