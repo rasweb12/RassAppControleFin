@@ -266,6 +266,7 @@ void main() {
         ),
         amount: 50,
         description: 'Salário',
+        occurredAt: DateTime(2026, 11, 1),
       );
 
       expect(state, FinanceWriteState.pending);

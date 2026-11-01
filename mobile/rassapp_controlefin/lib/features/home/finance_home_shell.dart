@@ -1328,21 +1328,31 @@ class _TransactionsState extends State<_Transactions> {
 
   @override
   Widget build(BuildContext context) {
-    final visible = widget.items.where((item) {
-      final sameMonth = item.occurredAt.year == _month.year && item.occurredAt.month == _month.month;
-      final matchesFlow = _flow == 'All' || (_flow == 'Transfer'
-          ? item.isTransfer
-          : item.flow.toLowerCase() == _flow.toLowerCase());
-      final matchesSearch = _search.isEmpty || item.description.toLowerCase().contains(_search.toLowerCase());
-      return sameMonth && matchesFlow && matchesSearch;
-    }).toList()
-      ..sort((a, b) {
-        final byDate = a.occurredAt.compareTo(b.occurredAt);
-        final stable = byDate == 0 ? a.id.compareTo(b.id) : byDate;
-        return _ascending ? stable : -stable;
-      });
-    final income = visible.where((item) => item.flow == 'Income' && item.status == 'Posted').fold<num>(0, (sum, item) => sum + item.amount);
-    final expense = visible.where((item) => item.flow == 'Expense' && item.status == 'Posted').fold<num>(0, (sum, item) => sum + item.amount);
+    final visible =
+        widget.items.where((item) {
+          final sameMonth =
+              item.occurredAt.year == _month.year &&
+              item.occurredAt.month == _month.month;
+          final matchesFlow =
+              _flow == 'All' ||
+              (_flow == 'Transfer'
+                  ? item.isTransfer
+                  : item.flow.toLowerCase() == _flow.toLowerCase());
+          final matchesSearch =
+              _search.isEmpty ||
+              item.description.toLowerCase().contains(_search.toLowerCase());
+          return sameMonth && matchesFlow && matchesSearch;
+        }).toList()..sort((a, b) {
+          final byDate = a.occurredAt.compareTo(b.occurredAt);
+          final stable = byDate == 0 ? a.id.compareTo(b.id) : byDate;
+          return _ascending ? stable : -stable;
+        });
+    final income = visible
+        .where((item) => item.flow == 'Income' && item.status == 'Posted')
+        .fold<num>(0, (sum, item) => sum + item.amount);
+    final expense = visible
+        .where((item) => item.flow == 'Expense' && item.status == 'Posted')
+        .fold<num>(0, (sum, item) => sum + item.amount);
 
     if (widget.items.isEmpty) {
       return _MessageState(
@@ -1359,162 +1369,221 @@ class _TransactionsState extends State<_Transactions> {
         padding: const EdgeInsets.all(16),
         itemCount: visible.length + 1,
         itemBuilder: (context, index) {
-          if (index == 0) return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(children: [
-                IconButton(onPressed: () => setState(() => _month = DateTime(_month.year, _month.month - 1)), icon: const Icon(Icons.chevron_left)),
-                Expanded(child: Text(_monthLabel(_month), textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
-                IconButton(onPressed: () => setState(() => _month = DateTime(_month.year, _month.month + 1)), icon: const Icon(Icons.chevron_right)),
-                IconButton(tooltip: _ascending ? 'Mais recentes primeiro' : 'Mais antigas primeiro', onPressed: () => setState(() => _ascending = !_ascending), icon: Icon(_ascending ? Icons.arrow_upward : Icons.arrow_downward)),
-              ]),
-              _TransactionMonthSummary(income: income, expense: expense),
-              const SizedBox(height: 12),
-              TextField(
-                onChanged: (value) => setState(() => _search = value.trim()),
-                decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Buscar por descrição...'),
-              ),
-              const SizedBox(height: 10),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(children: [
-                  for (final filter in const [('All', 'Todas'), ('Income', 'Receitas'), ('Expense', 'Despesas'), ('Transfer', 'Transferências')])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(label: Text(filter.$2), selected: _flow == filter.$1, onSelected: (_) => setState(() => _flow = filter.$1)),
+          if (index == 0) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => setState(
+                        () => _month = DateTime(_month.year, _month.month - 1),
+                      ),
+                      icon: const Icon(Icons.chevron_left),
                     ),
-                ]),
-              ),
-              const SizedBox(height: 14),
-              if (visible.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 44), child: Center(child: Text('Nenhuma movimentação neste período.'))),
-            ],
-          );
+                    Expanded(
+                      child: Text(
+                        _monthLabel(_month),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => setState(
+                        () => _month = DateTime(_month.year, _month.month + 1),
+                      ),
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                    IconButton(
+                      tooltip: _ascending
+                          ? 'Mais recentes primeiro'
+                          : 'Mais antigas primeiro',
+                      onPressed: () => setState(() => _ascending = !_ascending),
+                      icon: Icon(
+                        _ascending ? Icons.arrow_upward : Icons.arrow_downward,
+                      ),
+                    ),
+                  ],
+                ),
+                _TransactionMonthSummary(income: income, expense: expense),
+                const SizedBox(height: 12),
+                TextField(
+                  onChanged: (value) => setState(() => _search = value.trim()),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: 'Buscar por descrição...',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final filter in const [
+                        ('All', 'Todas'),
+                        ('Income', 'Receitas'),
+                        ('Expense', 'Despesas'),
+                        ('Transfer', 'Transferências'),
+                      ])
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(filter.$2),
+                            selected: _flow == filter.$1,
+                            onSelected: (_) =>
+                                setState(() => _flow = filter.$1),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (visible.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 44),
+                    child: Center(
+                      child: Text('Nenhuma movimentação neste período.'),
+                    ),
+                  ),
+              ],
+            );
+          }
           final item = visible[index - 1];
           final previous = index > 1 ? visible[index - 2] : null;
-          final newDay = previous == null || !_sameFinancialDay(previous.occurredAt, item.occurredAt);
-          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            if (newDay) Padding(
-              padding: const EdgeInsets.fromLTRB(2, 14, 2, 8),
-              child: Text(_dayLabel(item.occurredAt), style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.muted)),
-            ),
-            _transactionTile(context, item),
-          ]);
+          final newDay =
+              previous == null ||
+              !_sameFinancialDay(previous.occurredAt, item.occurredAt);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (newDay)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 14, 2, 8),
+                  child: Text(
+                    _dayLabel(item.occurredAt),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.muted,
+                    ),
+                  ),
+                ),
+              _transactionTile(context, item),
+            ],
+          );
         },
       ),
     );
   }
 
   Widget _transactionTile(BuildContext context, TransactionSummary item) {
-          final transfer = item.isTransfer;
-          final income = item.flow.toLowerCase() == 'income';
-          String? sourceName;
-          String? destinationName;
-          for (final account in widget.accounts) {
-            if (account.id == (item.sourceAccountId ?? item.accountId)) {
-              sourceName = account.name;
-            }
-            if (account.id == item.destinationAccountId) {
-              destinationName = account.name;
+    final transfer = item.isTransfer;
+    final income = item.flow.toLowerCase() == 'income';
+    String? sourceName;
+    String? destinationName;
+    for (final account in widget.accounts) {
+      if (account.id == (item.sourceAccountId ?? item.accountId)) {
+        sourceName = account.name;
+      }
+      if (account.id == item.destinationAccountId) {
+        destinationName = account.name;
+      }
+    }
+    return Card(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: CircleAvatar(
+          backgroundColor: transfer
+              ? const Color(0xFFE7F0FF)
+              : income
+              ? const Color(0xFFDDF7E8)
+              : const Color(0xFFFDE8E7),
+          child: Icon(
+            transfer
+                ? Icons.swap_horiz
+                : income
+                ? Icons.south_west
+                : Icons.north_east,
+            color: transfer
+                ? AppTheme.blue
+                : income
+                ? const Color(0xFF00875A)
+                : const Color(0xFFD92D20),
+          ),
+        ),
+        title: Text(
+          item.description.isEmpty ? 'Transação' : item.description,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          transfer && destinationName != null
+              ? '${sourceName ?? 'Origem'} -> $destinationName · ${_date(item.occurredAt)} · ${item.status}'
+              : '${_date(item.occurredAt)} · ${item.status}',
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '${transfer
+                  ? ''
+                  : income
+                  ? '+'
+                  : '-'}${_money(item.amount, item.currency)}',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: transfer
+                    ? AppTheme.blue
+                    : income
+                    ? const Color(0xFF087A36)
+                    : const Color(0xFFD92D20),
+              ),
+            ),
+            Text(
+              transfer
+                  ? 'TRANSFERÊNCIA'
+                  : income
+                  ? 'RECEITA'
+                  : 'DESPESA',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: transfer
+                    ? AppTheme.blue
+                    : income
+                    ? const Color(0xFF087A36)
+                    : const Color(0xFFD92D20),
+              ),
+            ),
+          ],
+        ),
+        onTap: () async {
+          AccountSummary? account;
+          for (final candidate in widget.accounts) {
+            if (candidate.id == item.accountId) {
+              account = candidate;
+              break;
             }
           }
-          return Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 6,
-              ),
-              leading: CircleAvatar(
-                backgroundColor: transfer
-                    ? const Color(0xFFE7F0FF)
-                    : income
-                    ? const Color(0xFFDDF7E8)
-                    : const Color(0xFFFDE8E7),
-                child: Icon(
-                  transfer
-                      ? Icons.swap_horiz
-                      : income
-                      ? Icons.south_west
-                      : Icons.north_east,
-                  color: transfer
-                      ? AppTheme.blue
-                      : income
-                      ? const Color(0xFF00875A)
-                      : const Color(0xFFD92D20),
-                ),
-              ),
-              title: Text(
-                item.description.isEmpty ? 'Transação' : item.description,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: Text(
-                transfer && destinationName != null
-                    ? '${sourceName ?? 'Origem'} -> $destinationName · ${_date(item.occurredAt)} · ${item.status}'
-                    : '${_date(item.occurredAt)} · ${item.status}',
-              ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${transfer
-                        ? ''
-                        : income
-                        ? '+'
-                        : '-'}${_money(item.amount, item.currency)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: transfer
-                          ? AppTheme.blue
-                          : income
-                          ? const Color(0xFF087A36)
-                          : const Color(0xFFD92D20),
-                    ),
-                  ),
-                  Text(
-                    transfer
-                        ? 'TRANSFERÊNCIA'
-                        : income
-                        ? 'RECEITA'
-                        : 'DESPESA',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: transfer
-                          ? AppTheme.blue
-                          : income
-                          ? const Color(0xFF087A36)
-                          : const Color(0xFFD92D20),
-                    ),
-                  ),
-                ],
-              ),
-              onTap: () async {
-                AccountSummary? account;
-                for (final candidate in widget.accounts) {
-                  if (candidate.id == item.accountId) {
-                    account = candidate;
-                    break;
-                  }
-                }
-                final action = await _showTransactionDetails(
-                  context,
-                  item,
-                  canModify: !transfer && account != null,
-                  sourceName: sourceName,
-                  destinationName: destinationName,
-                );
-                if (!context.mounted || account == null) return;
-                switch (action) {
-                  case _TransactionDetailAction.edit:
-                    await widget.onEdit(item, account);
-                  case _TransactionDetailAction.cancel:
-                    await widget.onCancel(item, account);
-                  case null:
-                    break;
-                }
-              },
-            ),
+          final action = await _showTransactionDetails(
+            context,
+            item,
+            canModify: !transfer && account != null,
+            sourceName: sourceName,
+            destinationName: destinationName,
           );
+          if (!context.mounted || account == null) return;
+          switch (action) {
+            case _TransactionDetailAction.edit:
+              await widget.onEdit(item, account);
+            case _TransactionDetailAction.cancel:
+              await widget.onCancel(item, account);
+            case null:
+              break;
+          }
+        },
+      ),
+    );
   }
 }
 
@@ -1527,29 +1596,84 @@ class _TransactionMonthSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final net = income - expense;
     return Container(
-      margin: const EdgeInsets.only(top: 8), padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: const Color(0xFF111C42), borderRadius: BorderRadius.circular(22)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('SALDO DO MÊS', style: TextStyle(color: Color(0xFFB7C4E0), fontWeight: FontWeight.w700)),
-        const SizedBox(height: 4), Text(_money(net, 'BRL'), style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800)),
-        const Divider(color: Color(0xFF405070), height: 28),
-        Row(children: [
-          Expanded(child: _SummaryValue(label: 'ENTRADAS', value: income, color: const Color(0xFF39D7A5))),
-          Expanded(child: _SummaryValue(label: 'SAÍDAS', value: expense, color: const Color(0xFFFF7185))),
-        ]),
-      ]),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111C42),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'SALDO DO MÊS',
+            style: TextStyle(
+              color: Color(0xFFB7C4E0),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _money(net, 'BRL'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const Divider(color: Color(0xFF405070), height: 28),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryValue(
+                  label: 'ENTRADAS',
+                  value: income,
+                  color: const Color(0xFF39D7A5),
+                ),
+              ),
+              Expanded(
+                child: _SummaryValue(
+                  label: 'SAÍDAS',
+                  value: expense,
+                  color: const Color(0xFFFF7185),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _SummaryValue extends StatelessWidget {
-  const _SummaryValue({required this.label, required this.value, required this.color});
-  final String label; final num value; final Color color;
+  const _SummaryValue({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+  final String label;
+  final num value;
+  final Color color;
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(label, style: const TextStyle(color: Color(0xFFB7C4E0), fontWeight: FontWeight.w700, fontSize: 12)),
-    const SizedBox(height: 4), Text(_money(value, 'BRL'), style: TextStyle(color: color, fontWeight: FontWeight.w800)),
-  ]);
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFFB7C4E0),
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        _money(value, 'BRL'),
+        style: TextStyle(color: color, fontWeight: FontWeight.w800),
+      ),
+    ],
+  );
 }
 
 enum _TransactionDetailAction { edit, cancel }
@@ -2635,36 +2759,38 @@ Future<_TransactionEditInput?> _showTransactionEditForm(
       title: const Text('Editar lançamento'),
       content: StatefulBuilder(
         builder: (context, setState) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: amount,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Valor (R\$)'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: description,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Descrição'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final chosen = await showDatePicker(
-                context: dialogContext,
-                initialDate: occurredAt,
-                firstDate: DateTime(2000),
-                lastDate: DateTime(DateTime.now().year + 30),
-              );
-              if (chosen != null) setState(() => occurredAt = chosen);
-            },
-            icon: const Icon(Icons.calendar_today_outlined),
-            label: Text('Data da transação: ${_dateFull(occurredAt)}'),
-          ),
-        ],
-      ),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amount,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Valor (R\$)'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: description,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'Descrição'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final chosen = await showDatePicker(
+                  context: dialogContext,
+                  initialDate: occurredAt,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(DateTime.now().year + 30),
+                );
+                if (chosen != null) setState(() => occurredAt = chosen);
+              },
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text('Data da transação: ${_dateFull(occurredAt)}'),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
@@ -2776,15 +2902,27 @@ String _dateFull(DateTime value) =>
     '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 
 bool _sameFinancialDay(DateTime left, DateTime right) =>
-    left.year == right.year && left.month == right.month && left.day == right.day;
+    left.year == right.year &&
+    left.month == right.month &&
+    left.day == right.day;
 
 String _dayLabel(DateTime value) =>
     '${_dateFull(value)}${_sameFinancialDay(value, DateTime.now()) ? ' · HOJE' : ''}';
 
 String _monthLabel(DateTime value) {
   const months = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+    'Janeiro',
+    'Fevereiro',
+    'Março',
+    'Abril',
+    'Maio',
+    'Junho',
+    'Julho',
+    'Agosto',
+    'Setembro',
+    'Outubro',
+    'Novembro',
+    'Dezembro',
   ];
   return '${months[value.month - 1]} ${value.year}';
 }
