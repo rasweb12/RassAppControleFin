@@ -41,7 +41,7 @@ internal static class DatabaseSafety
                       'InvestmentTransactions','TargetPortfolioAllocations')
                     AND c.relrowsecurity AND c.relforcerowsecurity
                     AND NOT pg_has_role(current_user,c.relowner,'MEMBER')
-                    AND NOT has_table_privilege(current_user,c.oid,'TRUNCATE'))=22
+                    AND NOT has_table_privilege(current_user,c.oid,'TRUNCATE'))=25
             ) AS "Value"
             """).SingleAsync(cancellationToken);
     }
@@ -64,7 +64,7 @@ internal static class DatabaseSafety
             return "database.migration_pending";
 
         var requiredTablesPresent = await db.Database.SqlQuery<bool>($"""
-            SELECT count(*) = 24 AS "Value"
+            SELECT count(*) = 27 AS "Value"
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'app'
