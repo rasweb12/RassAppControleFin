@@ -9,7 +9,9 @@ BEGIN
         RAISE EXCEPTION 'Unexpected database or migration user';
     END IF;
 
-    IF EXISTS (
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rass_platform_executor_owner_v1')
+       OR NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rass_platform_admin_v1')
+       OR EXISTS (
         SELECT 1 FROM pg_roles
         WHERE rolname = 'rass_platform_executor_owner_v1'
           AND (rolcanlogin OR rolinherit OR rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls)
@@ -17,7 +19,8 @@ BEGIN
         SELECT 1 FROM pg_roles
         WHERE rolname = 'rass_platform_admin_v1'
           AND (NOT rolcanlogin OR rolinherit OR rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls)
-    ) THEN
+    ) OR pg_has_role('rass_platform_executor_owner_v1', 'neon_superuser', 'MEMBER')
+      OR pg_has_role('rass_platform_admin_v1', 'neon_superuser', 'MEMBER') THEN
         RAISE EXCEPTION 'Unsafe platform role attributes';
     END IF;
 END $$;

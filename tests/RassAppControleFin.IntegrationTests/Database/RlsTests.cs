@@ -59,7 +59,7 @@ public sealed class RlsTests(PostgresFixture fixture)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task Cross_tenant_or_user_update_and_delete_affect_no_rows(bool otherTenant)
+    public async Task Cross_tenant_update_affects_no_rows_and_delete_is_not_granted(bool otherTenant)
     {
         await using var connection = await fixture.DataSource.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -72,7 +72,8 @@ public sealed class RlsTests(PostgresFixture fixture)
         Assert.Equal(0, await update.ExecuteNonQueryAsync());
         await using var delete = new NpgsqlCommand("""DELETE FROM app."UserProfiles" WHERE "Id" = @id""", connection, transaction);
         delete.Parameters.AddWithValue("id", id);
-        Assert.Equal(0, await delete.ExecuteNonQueryAsync());
+        var exception = await Assert.ThrowsAsync<PostgresException>(() => delete.ExecuteNonQueryAsync());
+        Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, exception.SqlState);
     }
 
     [Theory]
@@ -108,7 +109,7 @@ public sealed class RlsTests(PostgresFixture fixture)
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(false, false)]
-    public async Task Missing_context_denies_update_and_delete(bool tenantPresent, bool userPresent)
+    public async Task Missing_context_denies_update_and_runtime_lacks_profile_delete(bool tenantPresent, bool userPresent)
     {
         await using var connection = await fixture.DataSource.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -119,34 +120,41 @@ public sealed class RlsTests(PostgresFixture fixture)
             """, connection, transaction);
         Assert.Equal(0, await update.ExecuteNonQueryAsync());
         await using var delete = new NpgsqlCommand("""DELETE FROM app."UserProfiles" """, connection, transaction);
-        Assert.Equal(0, await delete.ExecuteNonQueryAsync());
-    }
-
-    [Fact]
-    public async Task Tenant_table_cannot_read_update_delete_or_insert_another_tenant()
-    {
-        await using var connection = await fixture.DataSource.OpenConnectionAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-        await PostgresFixture.SetScopeAsync(connection, transaction, DevelopmentSeed.TenantA, DevelopmentSeed.Alice);
-        await using var query = new NpgsqlCommand("""SELECT count(*) FROM app."Tenants" WHERE "Id" = @id""", connection, transaction);
-        query.Parameters.AddWithValue("id", DevelopmentSeed.TenantB);
-        Assert.Equal(0L, await query.ExecuteScalarAsync());
-        await using var update = new NpgsqlCommand("""UPDATE app."Tenants" SET "Name" = 'forbidden' WHERE "Id" = @id""", connection, transaction);
-        update.Parameters.AddWithValue("id", DevelopmentSeed.TenantB);
-        Assert.Equal(0, await update.ExecuteNonQueryAsync());
-        await using var delete = new NpgsqlCommand("""DELETE FROM app."Tenants" WHERE "Id" = @id""", connection, transaction);
-        delete.Parameters.AddWithValue("id", DevelopmentSeed.TenantB);
-        Assert.Equal(0, await delete.ExecuteNonQueryAsync());
-        await using var insert = new NpgsqlCommand("""
-            INSERT INTO app."Tenants" ("Id", "Name", "CreatedAt") VALUES (@id, 'forbidden', now())
-            """, connection, transaction);
-        insert.Parameters.AddWithValue("id", Guid.NewGuid());
-        var exception = await Assert.ThrowsAsync<PostgresException>(() => insert.ExecuteNonQueryAsync());
+        var exception = await Assert.ThrowsAsync<PostgresException>(() => delete.ExecuteNonQueryAsync());
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, exception.SqlState);
     }
 
     [Fact]
-    public async Task Authorized_crud_is_possible_and_fixture_changes_roll_back()
+    public async Task Tenant_table_cannot_read_or_insert_another_tenant_and_runtime_cannot_update_tenants()
+    {
+        await using var connection = await fixture.DataSource.OpenConnectionAsync();
+        await using (var transaction = await connection.BeginTransactionAsync())
+        {
+            await PostgresFixture.SetScopeAsync(connection, transaction, DevelopmentSeed.TenantA, DevelopmentSeed.Alice);
+            await using var query = new NpgsqlCommand("""SELECT count(*) FROM app."Tenants" WHERE "Id" = @id""", connection, transaction);
+            query.Parameters.AddWithValue("id", DevelopmentSeed.TenantB);
+            Assert.Equal(0L, await query.ExecuteScalarAsync());
+            await using var update = new NpgsqlCommand("""UPDATE app."Tenants" SET "Name" = 'forbidden' WHERE "Id" = @id""", connection, transaction);
+            update.Parameters.AddWithValue("id", DevelopmentSeed.TenantB);
+            var updateException = await Assert.ThrowsAsync<PostgresException>(() => update.ExecuteNonQueryAsync());
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, updateException.SqlState);
+            await transaction.RollbackAsync();
+        }
+
+        await using (var transaction = await connection.BeginTransactionAsync())
+        {
+            await PostgresFixture.SetScopeAsync(connection, transaction, DevelopmentSeed.TenantA, DevelopmentSeed.Alice);
+            await using var insert = new NpgsqlCommand("""
+                INSERT INTO app."Tenants" ("Id", "Name", "CreatedAt") VALUES (@id, 'forbidden', now())
+                """, connection, transaction);
+            insert.Parameters.AddWithValue("id", Guid.NewGuid());
+            var exception = await Assert.ThrowsAsync<PostgresException>(() => insert.ExecuteNonQueryAsync());
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, exception.SqlState);
+        }
+    }
+
+    [Fact]
+    public async Task Authorized_create_read_update_is_possible_and_destructive_operations_are_not_granted()
     {
         var tenant = Guid.NewGuid();
         const string user = "crud-fixture";
@@ -165,9 +173,8 @@ public sealed class RlsTests(PostgresFixture fixture)
             """, connection, transaction);
         Assert.Equal(1, await update.ExecuteNonQueryAsync());
         await using var delete = new NpgsqlCommand("""DELETE FROM app."UserProfiles" """, connection, transaction);
-        Assert.Equal(1, await delete.ExecuteNonQueryAsync());
-        await using var deleteTenant = new NpgsqlCommand("""DELETE FROM app."Tenants" """, connection, transaction);
-        Assert.Equal(1, await deleteTenant.ExecuteNonQueryAsync());
+        var profileDelete = await Assert.ThrowsAsync<PostgresException>(() => delete.ExecuteNonQueryAsync());
+        Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, profileDelete.SqlState);
         await transaction.RollbackAsync();
     }
 

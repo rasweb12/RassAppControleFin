@@ -179,15 +179,19 @@ public sealed class TenantTransactionTests(PostgresFixture fixture)
         }
         finally
         {
-            await using var cleanup = Context();
-            var begin = await Factory(cleanup, tenant, user).BeginAsync(CancellationToken.None);
-            if (begin.IsSuccess)
-            {
-                await using var transaction = begin.Value;
-                await cleanup.UserProfiles.ExecuteDeleteAsync();
-                await cleanup.Tenants.ExecuteDeleteAsync();
-                Assert.True((await transaction.CommitAsync(CancellationToken.None)).IsSuccess);
-            }
+            // The runtime intentionally has no DELETE ACL. Fixture cleanup is
+            // administrative and explicitly scoped to the synthetic identity.
+            await using var cleanup = new NpgsqlConnection(fixture.AdminConnection);
+            await cleanup.OpenAsync();
+            await using var transaction = await cleanup.BeginTransactionAsync();
+            await PostgresFixture.SetScopeAsync(cleanup, transaction, tenant, user);
+            await using var deleteProfile = new NpgsqlCommand("DELETE FROM app.\"UserProfiles\" WHERE \"Id\"=@profile", cleanup, transaction);
+            deleteProfile.Parameters.AddWithValue("profile", profile);
+            await deleteProfile.ExecuteNonQueryAsync();
+            await using var deleteTenant = new NpgsqlCommand("DELETE FROM app.\"Tenants\" WHERE \"Id\"=@tenant", cleanup, transaction);
+            deleteTenant.Parameters.AddWithValue("tenant", tenant);
+            await deleteTenant.ExecuteNonQueryAsync();
+            await transaction.CommitAsync();
         }
     }
 
@@ -221,6 +225,15 @@ public sealed class TenantTransactionTests(PostgresFixture fixture)
     [Fact]
     public async Task Api_readiness_connects_to_real_postgres_without_auth_or_identity()
     {
+        await using (var adminConnection = new NpgsqlConnection(fixture.AdminConnection))
+        {
+            await adminConnection.OpenAsync();
+            await using var migrationHistoryGrant = new NpgsqlCommand("""
+                SELECT has_table_privilege('rass_app_runtime_v2', 'app."__EFMigrationsHistory"', 'SELECT')
+                """, adminConnection);
+            Assert.False((bool)(await migrationHistoryGrant.ExecuteScalarAsync())!);
+        }
+
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(

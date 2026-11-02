@@ -22,7 +22,9 @@ public sealed class PlatformFunctionExecuteHardening : Migration
                 RAISE EXCEPTION 'Migration owner must temporarily have SET permission for the platform executor';
               END IF;
 
-              IF EXISTS (
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rass_platform_executor_owner_v1')
+                 OR NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rass_platform_admin_v1')
+                 OR EXISTS (
                 SELECT 1 FROM pg_roles
                 WHERE rolname = 'rass_platform_executor_owner_v1'
                   AND (rolcanlogin OR rolinherit OR rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls)
@@ -30,7 +32,8 @@ public sealed class PlatformFunctionExecuteHardening : Migration
                 SELECT 1 FROM pg_roles
                 WHERE rolname = 'rass_platform_admin_v1'
                   AND (NOT rolcanlogin OR rolinherit OR rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls)
-              ) THEN
+              ) OR pg_has_role('rass_platform_executor_owner_v1', 'neon_superuser', 'MEMBER')
+                OR pg_has_role('rass_platform_admin_v1', 'neon_superuser', 'MEMBER') THEN
                 RAISE EXCEPTION 'Platform administration roles are not safely provisioned';
               END IF;
 
@@ -64,7 +67,8 @@ public sealed class PlatformFunctionExecuteHardening : Migration
 
             DO $$
             BEGIN
-              IF pg_has_role('neondb_owner', 'rass_platform_executor_owner_v1', 'SET')
+              IF has_schema_privilege('rass_platform_executor_owner_v1', 'app', 'CREATE')
+                 OR pg_has_role('neondb_owner', 'rass_platform_executor_owner_v1', 'SET')
                  OR pg_has_role('neondb_owner', 'rass_platform_executor_owner_v1', 'USAGE')
                  OR EXISTS (
                     SELECT 1

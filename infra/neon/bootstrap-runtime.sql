@@ -18,8 +18,11 @@ REVOKE ALL ON SCHEMA app FROM rass_app_runtime_v2;
 REVOKE ALL ON ALL TABLES IN SCHEMA app FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA app FROM rass_app_runtime_v2;
 GRANT USAGE ON SCHEMA app TO rass_app_runtime_v2;
-GRANT SELECT, INSERT, UPDATE, DELETE ON app."Tenants", app."UserProfiles" TO rass_app_runtime_v2;
-GRANT SELECT ON app."__EFMigrationsHistory" TO rass_app_runtime_v2;
+-- Keep runtime identity/session privileges aligned with
+-- RuntimeIdentityOperationalAclHardening. EF history is deployment metadata
+-- and is intentionally inaccessible to the runtime.
+GRANT SELECT, INSERT ON app."Tenants" TO rass_app_runtime_v2;
+GRANT SELECT, INSERT, UPDATE ON app."UserProfiles" TO rass_app_runtime_v2;
 GRANT SELECT, INSERT ON app."TenantMemberships", app."AuditEntries" TO rass_app_runtime_v2;
 -- Global role assignments are read-only to the financial runtime. A separate
 -- rass_platform_admin_v1 executor receives the minimal mutation grants after

@@ -170,17 +170,38 @@ public sealed class PlatformRbacTests(PostgresFixture fixture)
         Assert.Equal("42501", function.SqlState);
 
         await using var grants = new NpgsqlCommand("""
-            SELECT has_function_privilege(current_user, 'app.platform_dashboard()', 'EXECUTE'),
+            SELECT has_schema_privilege(current_user, 'app', 'USAGE'),
+                   has_schema_privilege(current_user, 'app', 'CREATE'),
+                   has_function_privilege(current_user, 'app.platform_dashboard()', 'EXECUTE'),
                    has_function_privilege(current_user, 'app.platform_roles(text)', 'EXECUTE'),
                    has_function_privilege(current_user, 'app.platform_grant_superadmin(uuid,uuid,text,text,text,text)', 'EXECUTE'),
                    has_function_privilege(current_user, 'app.platform_revoke_superadmin(uuid,text,text,uuid,text,text)', 'EXECUTE')
             """, connection);
         await using var grantReader = await grants.ExecuteReaderAsync();
         Assert.True(await grantReader.ReadAsync());
-        Assert.False(grantReader.GetBoolean(0));
+        Assert.True(grantReader.GetBoolean(0));
         Assert.False(grantReader.GetBoolean(1));
         Assert.False(grantReader.GetBoolean(2));
         Assert.False(grantReader.GetBoolean(3));
+        Assert.False(grantReader.GetBoolean(4));
+        Assert.False(grantReader.GetBoolean(5));
+        await grantReader.CloseAsync();
+
+        await using var publicAcl = new NpgsqlCommand("""
+            SELECT EXISTS (
+              SELECT 1
+              FROM pg_proc p
+              JOIN pg_namespace n ON n.oid = p.pronamespace
+              CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) privilege
+              WHERE n.nspname = 'app'
+                AND p.oid IN ('app.platform_dashboard()'::regprocedure,
+                              'app.platform_roles(text)'::regprocedure,
+                              'app.platform_grant_superadmin(uuid,uuid,text,text,text,text)'::regprocedure,
+                              'app.platform_revoke_superadmin(uuid,text,text,uuid,text,text)'::regprocedure)
+                AND privilege.grantee = 0
+                AND privilege.privilege_type = 'EXECUTE')
+            """, connection);
+        Assert.False((bool)(await publicAcl.ExecuteScalarAsync())!);
     }
 
     private async Task<HttpClient> CreateAuthenticatedClientAsync(string subject, string clientRole)

@@ -35,3 +35,10 @@ SELECT has_schema_privilege('rass_platform_executor_owner_v1', 'app', 'CREATE') 
            AND member_role.rolname = 'neondb_owner'
            AND granted_role.rolname = 'rass_platform_executor_owner_v1'
        ) AS temporary_owner_grant_remains;
+
+SELECT rolname, rolcanlogin, rolinherit, rolsuper, rolcreaterole, rolcreatedb,
+       rolreplication, rolbypassrls,
+       pg_has_role(oid, 'neon_superuser', 'MEMBER') AS member_of_neon_superuser
+FROM pg_roles
+WHERE rolname IN ('rass_app_runtime_v2', 'rass_platform_admin_v1', 'rass_platform_executor_owner_v1')
+ORDER BY rolname;

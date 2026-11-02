@@ -4,10 +4,9 @@ namespace RassAppControleFin.Infrastructure.Persistence;
 
 internal static class DatabaseSafety
 {
-    // The API maps the account classification fields introduced by this migration.
-    // Accepting an older schema postpones the failure until a financial query runs.
-    internal const string ExpectedMigration = "InvestmentPlanningCore";
-
+    // The API maps these account-classification fields. Checking their presence
+    // through PostgreSQL catalogs keeps readiness independent of EF's migration
+    // history table, which is deployment metadata rather than runtime data.
     internal static async Task<bool> VerifyAsync(AppDbContext db, string runtimeRole,
         CancellationToken cancellationToken)
     {
@@ -21,6 +20,18 @@ internal static class DatabaseSafety
                       AND (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication)
                 )
                 AND NOT has_schema_privilege(current_user, 'app', 'CREATE')
+                AND has_table_privilege(current_user, 'app."TenantMemberships"', 'SELECT')
+                AND has_table_privilege(current_user, 'app."TenantMemberships"', 'INSERT')
+                AND has_table_privilege(current_user, 'app."UserSessions"', 'SELECT')
+                AND has_table_privilege(current_user, 'app."UserSessions"', 'INSERT')
+                AND has_table_privilege(current_user, 'app."UserSessions"', 'UPDATE')
+                AND has_table_privilege(current_user, 'app."AuditEntries"', 'INSERT')
+                AND has_table_privilege(current_user, 'app."Tenants"', 'SELECT')
+                AND has_table_privilege(current_user, 'app."Tenants"', 'INSERT')
+                AND has_table_privilege(current_user, 'app."UserProfiles"', 'SELECT')
+                AND has_table_privilege(current_user, 'app."UserProfiles"', 'INSERT')
+                AND has_table_privilege(current_user, 'app."UserProfiles"', 'UPDATE')
+                AND NOT has_table_privilege(current_user, 'app."__EFMigrationsHistory"', 'SELECT')
                 AND (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
                     WHERE n.nspname = 'app' AND c.relname IN ('Tenants', 'UserProfiles')
                       AND c.relrowsecurity AND c.relforcerowsecurity
@@ -31,8 +42,14 @@ internal static class DatabaseSafety
                         (tablename = 'UserProfiles' AND policyname = 'tenant_user_scope'))) = 2
                 AND NOT has_table_privilege(current_user, 'app."Tenants"', 'TRUNCATE')
                 AND NOT has_table_privilege(current_user, 'app."UserProfiles"', 'TRUNCATE')
-                AND EXISTS (SELECT 1 FROM app."__EFMigrationsHistory"
-                    WHERE "MigrationId" LIKE {'%' + ExpectedMigration})
+                AND (SELECT count(*) FROM pg_attribute attribute
+                    JOIN pg_class table_class ON table_class.oid = attribute.attrelid
+                    JOIN pg_namespace schema ON schema.oid = table_class.relnamespace
+                    WHERE schema.nspname = 'app'
+                      AND table_class.relname = 'Accounts'
+                      AND attribute.attnum > 0
+                      AND NOT attribute.attisdropped
+                      AND attribute.attname IN ('IncludeInNetWorth', 'Institution', 'Subtype', 'Type')) = 4
                 AND (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
                     WHERE n.nspname='app' AND c.relname IN ('TenantMemberships','UserSessions','AuditEntries',
                       'Accounts','Categories','CreditCards','Transactions','Transfers','LedgerEntries',
@@ -80,13 +97,18 @@ internal static class DatabaseSafety
         if (!requiredTablesPresent)
             return "database.migration_pending";
 
-        var expectedMigrationApplied = await db.Database.SqlQuery<bool>($"""
-            SELECT EXISTS (
-                SELECT 1 FROM app."__EFMigrationsHistory"
-                WHERE "MigrationId" LIKE {'%' + ExpectedMigration}
-            ) AS "Value"
+        var expectedSchemaPresent = await db.Database.SqlQuery<bool>($"""
+            SELECT count(*) = 4 AS "Value"
+            FROM pg_attribute attribute
+            JOIN pg_class table_class ON table_class.oid = attribute.attrelid
+            JOIN pg_namespace schema ON schema.oid = table_class.relnamespace
+            WHERE schema.nspname = 'app'
+              AND table_class.relname = 'Accounts'
+              AND attribute.attnum > 0
+              AND NOT attribute.attisdropped
+              AND attribute.attname IN ('IncludeInNetWorth', 'Institution', 'Subtype', 'Type')
             """).SingleAsync(cancellationToken);
 
-        return expectedMigrationApplied ? "database.rls_invalid" : "database.migration_pending";
+        return expectedSchemaPresent ? "database.rls_invalid" : "database.migration_pending";
     }
 }

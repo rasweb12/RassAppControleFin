@@ -215,6 +215,9 @@ Os scripts locais em `infra/neon/checkpoint13/` são separados por finalidade:
 4. `04-diagnose-platform-administration.sql` — somente leitura: sessões, dependências e grants para diagnóstico de bloqueios.
 5. `05-temporary-function-acl-permissions.sql` — escrita manual exclusiva da branch descartável antes da migration 18; restaura somente o `SET` transitório necessário para assumir o owner `NOLOGIN` das funções.
 6. `06-post-function-acl-validation.sql` — somente leitura após a migration 18; exige ausência de `PUBLIC EXECUTE` e da execução pela runtime nas quatro funções.
+7. `02-test-rbac-db-temporary-ownership-permissions.sql`, `05-test-rbac-db-temporary-function-acl-permissions.sql`, `09-test-rbac-db-temporary-executor-set.sql`, `10-test-rbac-db-cleanup-temporary-executor.sql` e `11-test-rbac-db-post-validation.sql` — roteiro exclusivo do banco vazio `rass_sprint1_tests` em branch descartável. Não são intercambiáveis com os scripts destinados ao banco `neondb` da branch de referência.
+
+O orquestrador `scripts/checkpoint13/Invoke-RbacPostgresHomologation.ps1` nunca cria branch, banco ou roles. Ele exige confirmação externa da branch pelo Neon API, valida apenas variáveis de processo com endpoint direto/`VerifyFull`, aplica migrations em etapas, e usa `finally` para tentar a limpeza do grant temporário mesmo se uma migration ou teste falhar.
 
 Fatos verificados: uma membership de `neondb_owner` no executor existe. Ela por si só não prova que a transferência de ownership seja válida. A pré-validação deve confirmar `set_option = true`; a remoção posterior precisa ser limitada ao concedente da concessão temporária, pois memberships de outros concedentes podem permanecer. A script 2 somente é usada depois de validar que as roles possuem os atributos mínimos.
 
@@ -237,5 +240,29 @@ O arquivo legado `PlatformAdministrationService.cs` não está registrado para `
 - Arquitetura .NET: **5/5 APROVADOS**.
 - `flutter analyze`: **APROVADO**.
 - `flutter test`: **23/23 APROVADOS**.
-- Suíte PostgreSQL/API: **PENDENTE**. O utilitário de testes exige explicitamente conexões diretas e o banco dedicado `rass_sprint1_tests`; não foi executada porque a identidade/endpoint atual não foi confirmada como esse ambiente. Esse bloqueio evita conexões acidentais com `neondb` ou Production.
+- Suíte PostgreSQL/API: resultado final registrado abaixo após execução exclusiva no banco dedicado `rass_sprint1_tests`.
+
+### Forward fix 20 — ACL operacional de identidade e sessão
+
+O banco isolado evidenciou que uma inicialização apenas por migrations não recebia os grants de identidade anteriormente mantidos apenas em `bootstrap-runtime.sql`. Isso bloqueava `IdentityStore.RegisterSessionAsync` em `app."UserSessions"` com `42501`, antes dos cenários RBAC funcionais.
+
+A migration incremental `20261102040000_RuntimeIdentityOperationalAclHardening` torna os grants declarativos e idempotentes: `UserSessions` recebe `SELECT`, `INSERT` e `UPDATE`; `TenantMemberships` e `AuditEntries`, `SELECT`/`INSERT`; `Tenants`, `SELECT`/`INSERT`; `UserProfiles`, `SELECT`/`INSERT`/`UPDATE`. Ela não concede `DELETE`, `TRUNCATE`, `CREATE`, leitura do histórico EF, acesso às funções administrativas ou qualquer privilégio a `PUBLIC`.
+
+As políticas RLS/FORCE RLS permanecem obrigatórias para cada linha. A pré-validação `12-test-rbac-db-pre-validation.sql` identifica precisamente o objeto/operação ausente ou excessivo antes do seed temporário; a pós-validação exige 20 migrations e revalida as ACLs.
+
+### Homologação final RBAC — 2026-11-02
+
+Ambiente homologado exclusivamente: branch descartável `br-odd-silence-b646inmx`, banco `rass_sprint1_tests`. A migration 20 foi aplicada nesse ambiente isolado; Production, a branch de referência e o banco `neondb` não foram alterados.
+
+- Histórico EF: 20 migrations aplicadas.
+- `PlatformRbacTests`: **10/10 aprovados**.
+- Suíte PostgreSQL/API: **130/130 aprovados**.
+- Cleanup de `SET ROLE` temporário: aprovado, sem concessão residual.
+- Pós-validação de ACL, RLS, FORCE RLS, ownership e funções administrativas: aprovada.
+- Runtime: sem `CREATE` no schema `app`, sem `EXECUTE` administrativo e sem `DELETE` operacional desnecessário.
+- `PUBLIC`: sem `USAGE` no schema `app` e sem `EXECUTE` nas funções administrativas.
+
+Os avisos observados sobre licença MediatR e `database.connection_missing` em cenários controlados da suíte não invalidaram os 130 testes aprovados. A configuração de readiness de Production permanece uma verificação independente antes de qualquer implantação.
+
+**Veredito do Checkpoint 13: APROVADO NO AMBIENTE ISOLADO.** Esta evidência não autoriza alterações, deploy ou migrations em Production.
 
