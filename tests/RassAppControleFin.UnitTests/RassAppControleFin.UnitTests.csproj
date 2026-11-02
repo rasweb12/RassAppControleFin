@@ -11,5 +11,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/RassAppControleFin.Application/RassAppControleFin.Application.csproj" />
     <ProjectReference Include="../../src/RassAppControleFin.Domain/RassAppControleFin.Domain.csproj" />
+    <ProjectReference Include="../../src/RassAppControleFin.Admin.Web/RassAppControleFin.Admin.Web.csproj" />
   </ItemGroup>
 </Project>

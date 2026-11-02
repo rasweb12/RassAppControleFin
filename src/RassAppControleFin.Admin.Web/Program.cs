@@ -24,6 +24,7 @@ builder.Services.AddHttpClient<SystemClient>((services, client) =>
 builder.Services.AddHealthChecks();
 builder.AddServerAuthentication("Admin");
 builder.Services.AddScoped<PlatformClient>();
+builder.Services.AddScoped<AdminAccessClient>();
 
 var app = builder.Build();
 app.UseExceptionHandler();

@@ -1,6 +1,7 @@
 @page "/platform"
 @attribute [Authorize]
 @inject PlatformClient Client
+@inject AdminAccessClient Access
 @implements IDisposable
 
 <PageTitle>Administração da plataforma</PageTitle>
@@ -19,7 +20,7 @@
         {
             <p>Consultando permissões e indicadores...</p>
         }
-        else if (_forbidden)
+        else if (_forbidden || _access != AdminAccessLevel.SuperAdmin)
         {
             <p role="alert">Você não possui permissão de SuperAdmin para acessar este painel.</p>
         }
@@ -44,8 +45,18 @@
     private PlatformDashboardDto? _dashboard;
     private bool _loading;
     private bool _forbidden;
+    private AdminAccessLevel _access;
 
-    protected override Task OnInitializedAsync() => RefreshAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _access = await Access.ResolveAsync(_lifetime.Token);
+            if (_access == AdminAccessLevel.SuperAdmin) await RefreshAsync();
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        finally { _loading = false; }
+    }
 
     private async Task RefreshAsync()
     {

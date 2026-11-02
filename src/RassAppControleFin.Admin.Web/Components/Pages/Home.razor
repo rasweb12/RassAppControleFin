@@ -1,11 +1,18 @@
 @page "/"
 @attribute [Authorize]
 @inject SystemClient Client
+@inject AdminAccessClient Access
 @implements IDisposable
 
 <PageTitle>RASS Administracao</PageTitle>
-<header><strong>RASS Administracao</strong><span><a href="/platform">Painel da plataforma</a></span><form action="/auth/logout" method="post" data-enhance="false"><AntiforgeryToken /><button type="submit">Sair</button></form></header>
+<header><strong>RASS Administracao</strong>@if (_access == AdminAccessLevel.SuperAdmin) { <span><a href="/platform">Painel da plataforma</a></span> }<form action="/auth/logout" method="post" data-enhance="false"><AntiforgeryToken /><button type="submit">Sair</button></form></header>
 <main>
+    @if (_access == AdminAccessLevel.None && !_loading)
+    {
+        <section aria-live="polite"><h1>Acesso administrativo não autorizado</h1><p>Esta conta não possui função administrativa.</p></section>
+    }
+    else
+    {
     <div class="heading">
         <h1>Status do sistema</h1>
         <button @onclick="RefreshAsync" disabled="@_loading" aria-label="Atualizar status" title="Atualizar status"><img src="icons/refresh.svg" width="20" height="20" alt="" /></button>
@@ -29,6 +36,7 @@
             </dl>
         }
     </section>
+    }
 </main>
 
 @code {
@@ -36,8 +44,18 @@
     private SystemStatusDto? _status;
     private bool _loading;
     private bool _error;
+    private AdminAccessLevel _access;
 
-    protected override Task OnInitializedAsync() => RefreshAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _access = await Access.ResolveAsync(_lifetime.Token);
+            if (_access != AdminAccessLevel.None) await RefreshAsync();
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        finally { _loading = false; }
+    }
 
     private async Task RefreshAsync()
     {

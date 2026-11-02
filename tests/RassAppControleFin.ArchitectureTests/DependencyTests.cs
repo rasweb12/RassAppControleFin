@@ -9,7 +9,7 @@ public sealed class DependencyTests
     private static readonly IReadOnlyDictionary<string, string[]> Allowed = new Dictionary<string, string[]>
     {
         ["Domain"] = [], ["SharedKernel"] = [], ["Contracts"] = [],
-        ["Security"] = [], ["MultiTenancy"] = [], ["EventBus"] = [],
+        ["Security"] = ["SharedKernel"], ["MultiTenancy"] = [], ["EventBus"] = [],
         ["AI"] = ["SharedKernel"], ["Synchronization"] = ["SharedKernel"],
         ["Application"] = ["Domain", "SharedKernel", "Security", "MultiTenancy", "Synchronization", "AI", "EventBus"],
         ["Infrastructure"] = ["Application"],

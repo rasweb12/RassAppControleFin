@@ -161,6 +161,7 @@ class CreditCardDetailPage extends StatefulWidget {
 
 class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
   List<CreditCardInvoiceSummary> _invoices = const [];
+  late CreditCardSummary _card;
   bool _loading = true;
   String? _error;
 
@@ -170,11 +171,18 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
       _error = null;
     });
     try {
+      final cards = await widget.repository.creditCards(widget.tenantId);
+      final refreshedCard = cards.where((item) => item.id == _card.id).firstOrNull;
       final invoices = await widget.repository.creditCardInvoices(
         tenantId: widget.tenantId,
-        cardId: widget.card.id,
+        cardId: _card.id,
       );
-      if (mounted) setState(() => _invoices = invoices);
+      if (mounted) {
+        setState(() {
+          _invoices = invoices;
+          if (refreshedCard != null) _card = refreshedCard;
+        });
+      }
     } catch (_) {
       if (mounted) _error = 'Não foi possível carregar as faturas.';
     } finally {
@@ -185,6 +193,7 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
   @override
   void initState() {
     super.initState();
+    _card = widget.card;
     _load();
   }
 
@@ -207,15 +216,15 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
     try {
       debugPrint(
         'CHECKPOINT12_PURCHASE_INPUT: '
-        'cardVersion=${widget.card.version}, '
-        'currency=${widget.card.currency}, '
+        'cardVersion=${_card.version}, '
+        'currency=${_card.currency}, '
         'amount=${input.amount}, '
         'installments=${input.installmentCount}, '
         'descriptionLength=${input.description.length}',
       );
       final state = await widget.repository.createCreditCardPurchase(
         tenantId: widget.tenantId,
-        card: widget.card,
+        card: _card,
         category: input.category,
         amount: input.amount,
         description: input.description,
@@ -264,7 +273,7 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
   }
 
   Future<void> _maintainCard() async {
-    final archive = !widget.card.archived;
+    final archive = !_card.archived;
     final confirmed = await showDialog<bool>(
       context: context,
       useRootNavigator: true,
@@ -293,7 +302,7 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
     try {
       final state = await widget.repository.maintainCreditCard(
         tenantId: widget.tenantId,
-        card: widget.card,
+        card: _card,
         archive: archive,
       );
       if (!mounted) return;
@@ -349,7 +358,7 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
           content: Text(
             state == FinanceWriteState.pending
                 ? 'Pagamento pendente de sincronização.'
-                : 'Pagamento registrado. Atualize os dados.',
+                : 'Pagamento registrado.',
           ),
         ),
       );
@@ -374,13 +383,13 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(widget.card.name),
+      title: Text(_card.name),
       actions: [
         IconButton(
           onPressed: _maintainCard,
-          tooltip: widget.card.archived ? 'Reativar cartão' : 'Arquivar cartão',
+          tooltip: _card.archived ? 'Reativar cartão' : 'Arquivar cartão',
           icon: Icon(
-            widget.card.archived
+            _card.archived
                 ? Icons.unarchive_outlined
                 : Icons.archive_outlined,
           ),
@@ -388,7 +397,7 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
       ],
     ),
     floatingActionButton: FloatingActionButton.extended(
-      onPressed: widget.card.archived ? null : _purchase,
+      onPressed: _card.archived ? null : _purchase,
       icon: const Icon(Icons.shopping_bag_outlined),
       label: const Text('Registrar compra'),
     ),
@@ -399,7 +408,7 @@ class _CreditCardDetailPageState extends State<CreditCardDetailPage> {
         : ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _CreditCardTile(card: widget.card),
+              _CreditCardTile(card: _card),
               const SizedBox(height: 20),
               Text('Faturas', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
