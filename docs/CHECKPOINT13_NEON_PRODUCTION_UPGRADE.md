@@ -1,7 +1,7 @@
 # Checkpoint 13 — Atualização Neon Production
 
 Data: 2026-11-01  
-Estado: **REPROVADO PARA PRODUCTION — simulação isolada bloqueada por provisionamento de roles**
+Estado: **REPROVADO PARA PRODUCTION — ACL `PUBLIC EXECUTE` residual nas funções administrativas da branch de validação**
 
 ## Escopo e proteção
 
@@ -29,7 +29,7 @@ As roles PostgreSQL têm somente estas responsabilidades técnicas:
 | `rass_platform_admin_v1` | Conexão administrativa isolada usada pela API apenas para executar as funções `app.platform_*` autorizadas | Não é um SuperAdmin funcional, não é proprietária das funções e não recebe acesso direto a tabelas financeiras. |
 | `rass_platform_executor_owner_v1` | Proprietária `NOLOGIN` das funções `SECURITY DEFINER` e dos privilégios mínimos de execução dessas rotinas | Não é uma conta de aplicação, não pode fazer login, não pode ser assumida pela runtime e não recebe privilégios além dos objetos administrativos explicitamente necessários. |
 
-`IsolatedPlatformAdministrationService` verifica a permissão funcional do ator antes de abrir a datasource administrativa e não possui fallback para a datasource financeira. As funções `SECURITY DEFINER` previstas na migration fixam `search_path = pg_catalog, app`, removem `PUBLIC EXECUTE` e concedem execução somente a `rass_platform_admin_v1`. Esse mecanismo separa a autorização funcional da identidade técnica, mas depende do provisionamento correto e do sigilo da conexão administrativa.
+`IsolatedPlatformAdministrationService` verifica a permissão funcional do ator antes de abrir a datasource administrativa e não possui fallback para a datasource financeira. As funções `SECURITY DEFINER` fixam `search_path = pg_catalog, app`. A validação remota posterior às migrations 11–17 encontrou `PUBLIC EXECUTE` residual; portanto, a exclusividade de execução pela role administrativa ainda não está homologada.
 
 ### Evidências de autorização no código
 
@@ -131,4 +131,111 @@ Antes de qualquer commit de release, revisar cada artefato e remover do controle
 ## Veredito P0 atualizado
 
 **REPROVADO PARA PRODUCTION.** A arquitetura separa corretamente os papéis funcionais das roles técnicas no código e no desenho das migrations, mas a simulação das seis migrations permanece bloqueada pelo provisionamento inseguro das roles técnicas na branch descartável. A atualização Production só pode voltar à pauta após provisionamento mínimo verificável, validação isolada das migrations e execução dos testes de autorização e RLS listados acima.
+
+## Rodada P0 de desbloqueio — 2026-11-02
+
+### Causa confirmada do provisionamento excessivo
+
+O mecanismo de criação de roles disponível no Neon aceita somente o nome e a opção de login. A criação de `rass_platform_admin_v1` e `rass_platform_executor_owner_v1` pela API do provedor devolveu roles com atributos elevados no catálogo PostgreSQL (`INHERIT`, `CREATEROLE`, `CREATEDB`, `REPLICATION` e `BYPASSRLS`) e membership em `neon_superuser`. Portanto, esse provisionador não é adequado para criar as roles da aplicação por si só.
+
+Uma consulta somente leitura confirmou que a branch descartável `br-flat-rice-b6j99et6` é filha de Production, não primária, e possui as duas roles administrativas; Production não as possui. A existência das roles é isolada por branch no projeto consultado. Isso reduz o risco de uma correção manual na branch descartável afetar Production, mas não autoriza escrita: o operador deve validar novamente a branch no SQL Editor antes de executar qualquer comando.
+
+### Correção local preparada
+
+Foi criada a migration incremental `20261102010000_PlatformAdministrationHardening`. Ela não altera roles de cluster; falha caso as roles ainda tenham atributos ou membership inseguros, reduz grants do executor ao mínimo necessário e remove, ao fim do upgrade, os privilégios temporários usados apenas para transferir ownership das funções.
+
+Também foi corrigido `IsolatedPlatformAdministrationService`: ator, usuário-alvo, justificativa e identificador de atribuição são validados antes da abertura da conexão administrativa. A justificativa é normalizada, obrigatória e limitada a 500 caracteres.
+
+### Procedimento manual mínimo — somente branch descartável
+
+**Pré-condição:** o cabeçalho do SQL Editor deve identificar `validate-checkpoint13-production-upgrade` / `br-flat-rice-b6j99et6` / `neondb`. Interromper se aparecer Production, outra branch ou outra base.
+
+O executor deve ser uma identidade administrativa Neon capaz de `ALTER ROLE` nessa branch. `neondb_owner` usado pela migration não deve ser usado como runtime.
+
+```sql
+-- Somente após conferir branch, database e ausência de sessões/dependências.
+ALTER ROLE rass_platform_executor_owner_v1 NOLOGIN NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOREPLICATION NOBYPASSRLS;
+ALTER ROLE rass_platform_admin_v1 LOGIN NOINHERIT NOSUPERUSER NOCREATEROLE NOCREATEDB NOREPLICATION NOBYPASSRLS;
+REVOKE neon_superuser FROM rass_platform_executor_owner_v1;
+REVOKE neon_superuser FROM rass_platform_admin_v1;
+
+-- Pré-requisitos temporários exclusivos da transferência de ownership da migration 16.
+GRANT rass_platform_executor_owner_v1 TO neondb_owner;
+GRANT CREATE ON SCHEMA app TO rass_platform_executor_owner_v1;
+```
+
+As duas últimas concessões são transitórias. A migration `PlatformAdministrationHardening` as revoga após a migration 16. Não conceder `CREATE` a `rass_app_runtime_v2` ou `rass_platform_admin_v1`; não conceder tabelas financeiras a essas roles.
+
+### Consultas de verificação antes da migration
+
+```sql
+SELECT rolname, rolcanlogin, rolinherit, rolsuper, rolcreaterole, rolcreatedb,
+       rolreplication, rolbypassrls
+FROM pg_roles
+WHERE rolname IN ('rass_app_runtime_v2', 'rass_platform_admin_v1', 'rass_platform_executor_owner_v1');
+
+SELECT member_role.rolname AS member, parent_role.rolname AS granted_role
+FROM pg_auth_members membership
+JOIN pg_roles member_role ON member_role.oid = membership.member
+JOIN pg_roles parent_role ON parent_role.oid = membership.roleid
+WHERE member_role.rolname IN ('rass_app_runtime_v2', 'rass_platform_admin_v1', 'rass_platform_executor_owner_v1')
+   OR parent_role.rolname IN ('rass_platform_executor_owner_v1', 'neon_superuser');
+
+SELECT has_schema_privilege('rass_app_runtime_v2', 'app', 'CREATE') AS runtime_can_create,
+       has_schema_privilege('rass_platform_admin_v1', 'app', 'CREATE') AS admin_can_create,
+       has_schema_privilege('rass_platform_executor_owner_v1', 'app', 'CREATE') AS executor_can_create_temporarily;
+```
+
+Interromper se qualquer role administrativa mantiver `SUPERUSER`, `CREATEROLE`, `CREATEDB`, `REPLICATION`, `BYPASSRLS` ou membership em `neon_superuser`; se a runtime possuir `CREATE`; se a branch não for a descartável; ou se houver dependências/sessões inesperadas que impeçam um ajuste controlado.
+
+### Alternativa se Neon não permitir ALTER ROLE seguro
+
+Não usar o provisionador automático nem tentar contornar os atributos por migration. Solicitar ao suporte/console Neon um mecanismo de criação de role com atributos explícitos na branch, ou manter a administração global indisponível e não aplicar as migrations 15–17. Production permanece inalterada.
+
+### Situação atual
+
+- Migrations 11–16: **PENDENTES** na branch descartável.
+- Migration 17 de hardening: **CRIADA LOCALMENTE, NÃO APLICADA**.
+- Roles administrativas: **REPROVADAS** até o procedimento manual ser executado e validado.
+- Production: **NÃO ALTERADA**.
+
+### Execução autorizada na branch descartável
+
+Em 2026-11-02, antes de qualquer escrita, foram confirmados novamente branch, parent, banco (`neondb`), usuário de conexão (`neondb_owner`), ausência de sessões das roles alvo e ausência de dependências compartilhadas. O lote transacional de `ALTER ROLE`, revogação de `neon_superuser`, grant temporário de membership e `CREATE` no schema foi rejeitado pelo executor Neon com `INVALID_ARGUMENT`, sem SQLSTATE PostgreSQL.
+
+Uma nova consulta somente leitura confirmou que nenhuma alteração parcial ocorreu: as duas roles continuam com atributos excessivos. A execução foi interrompida; migrations 11–17 e grants adicionais não foram aplicados.
+
+## Preparação das migrations 16/17 e scripts operacionais
+
+Os scripts locais em `infra/neon/checkpoint13/` são separados por finalidade:
+
+1. `01-prevalidate-platform-administration.sql` — somente leitura: identidade, atributos, opções da membership (`ADMIN`, `INHERIT`, `SET`), schema, migrations e RLS.
+2. `02-temporary-ownership-permissions.sql` — escrita manual para migrations 16/17: concede ao `neondb_owner` somente `INHERIT FALSE, SET TRUE`, além de `USAGE, CREATE` temporários ao executor. Não usa `ADMIN OPTION`.
+3. `03-post-migration-validation.sql` — somente leitura: histórico, owner/`SECURITY DEFINER`/`search_path`, `EXECUTE`, policies, RLS/FORCE RLS e remoção das permissões temporárias.
+4. `04-diagnose-platform-administration.sql` — somente leitura: sessões, dependências e grants para diagnóstico de bloqueios.
+5. `05-temporary-function-acl-permissions.sql` — escrita manual exclusiva da branch descartável antes da migration 18; restaura somente o `SET` transitório necessário para assumir o owner `NOLOGIN` das funções.
+6. `06-post-function-acl-validation.sql` — somente leitura após a migration 18; exige ausência de `PUBLIC EXECUTE` e da execução pela runtime nas quatro funções.
+
+Fatos verificados: uma membership de `neondb_owner` no executor existe. Ela por si só não prova que a transferência de ownership seja válida. A pré-validação deve confirmar `set_option = true`; a remoção posterior precisa ser limitada ao concedente da concessão temporária, pois memberships de outros concedentes podem permanecer. A script 2 somente é usada depois de validar que as roles possuem os atributos mínimos.
+
+### Correção PostgreSQL 18 — memberships com múltiplos concedentes
+
+Uma validação posterior demonstrou duas concessões para `neondb_owner` → executor: `cloud_admin` concedeu `ADMIN = true, INHERIT = false, SET = false`; `neondb_owner` concedeu `ADMIN = false, INHERIT = false, SET = true`. A tentativa de adicionar `ADMIN OPTION` à própria concessão retornou `0LP01` por concessão administrativa circular. Portanto, a script 2 não tenta mais conceder `ADMIN OPTION`.
+
+O comando temporário mantém somente `INHERIT FALSE, SET TRUE`, necessário para a transferência de ownership da migration 16. A migration 17 usa `REVOKE ... GRANTED BY neondb_owner`, removendo exclusivamente essa concessão temporária sem remover a concessão independente de `cloud_admin`. A pós-validação não trata `MEMBER = true` como erro isolado; exige `SET = false`, `USAGE = false`, ausência de `CREATE` no schema e ausência de uma linha em `pg_auth_members` cujo concedente seja `neondb_owner`.
+
+`PlatformAdministrationIsolation` mantém `SECURITY DEFINER`, `search_path = pg_catalog, app` e políticas específicas para o executor. Na branch de validação, as ACLs efetivas ainda expõem `PUBLIC EXECUTE` após as migrations 16/17. A migration incremental `PlatformFunctionExecuteHardening` (18) assume transitoriamente o owner `NOLOGIN`, revoga `PUBLIC` e runtime, concede somente à role administrativa e falha se qualquer ACL residual permanecer. A migração de Production passa a requerer **18 migrations**; a décima oitava é um forward-fix de segurança, não altera RLS, ownership ou dados financeiros.
+
+O executor consegue operar as funções com `FORCE ROW LEVEL SECURITY` porque as policies da migration 16 são específicas para `rass_platform_executor_owner_v1`; ele não recebe `BYPASSRLS`. A conexão administrativa (`rass_platform_admin_v1`) recebe somente `EXECUTE`; a autorização funcional do ator continua na API, antes da abertura dessa conexão. Como proteção adicional, a API valida e normaliza ator, alvo, justificativa e operação antes de chamar as funções.
+
+O arquivo legado `PlatformAdministrationService.cs` não está registrado para `IPlatformAdministrationService`; a DI usa `IsolatedPlatformAdministrationService`. Ele deve permanecer fora de qualquer novo uso e sua remoção só pode ocorrer após uma revisão de compatibilidade separada.
+
+### Regressão local desta rodada
+
+- API Release: **APROVADO**, sem warnings.
+- Unitários .NET: **50/50 APROVADOS**.
+- Arquitetura .NET: **5/5 APROVADOS**.
+- `flutter analyze`: **APROVADO**.
+- `flutter test`: **23/23 APROVADOS**.
+- Suíte PostgreSQL/API: **PENDENTE**. O utilitário de testes exige explicitamente conexões diretas e o banco dedicado `rass_sprint1_tests`; não foi executada porque a identidade/endpoint atual não foi confirmada como esse ambiente. Esse bloqueio evita conexões acidentais com `neondb` ou Production.
 

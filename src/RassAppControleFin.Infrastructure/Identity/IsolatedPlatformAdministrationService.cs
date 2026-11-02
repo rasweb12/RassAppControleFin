@@ -44,13 +44,15 @@ public sealed class IsolatedPlatformAdministrationService(
 
     public async Task<Result<PlatformRoleView>> GrantSuperAdminAsync(string actor, string targetUserId, string reason, CancellationToken ct)
     {
-        if (actor == targetUserId) return Result<PlatformRoleView>.Failure(Conflict);
-        await using var scope = await OpenAuthorizedAsync(actor, ct);
+        if (!TryValidateRequest(actor, targetUserId, reason, out var normalizedActor, out var normalizedTarget, out var normalizedReason)
+            || normalizedActor == normalizedTarget)
+            return Result<PlatformRoleView>.Failure(Conflict);
+        await using var scope = await OpenAuthorizedAsync(normalizedActor, ct);
         if (scope is null) return Fail<PlatformRoleView>();
         var id = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
         await using var command = new NpgsqlCommand("SELECT * FROM app.platform_grant_superadmin(@id,@auditId,@actor,@userId,@reason,@correlation)", scope.Connection, scope.Transaction);
-        command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("userId", targetUserId); command.Parameters.AddWithValue("actor", actor);
-        command.Parameters.AddWithValue("auditId", Guid.NewGuid()); command.Parameters.AddWithValue("reason", reason.Trim()); command.Parameters.AddWithValue("correlation", Guid.NewGuid().ToString());
+        command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("userId", normalizedTarget); command.Parameters.AddWithValue("actor", normalizedActor);
+        command.Parameters.AddWithValue("auditId", Guid.NewGuid()); command.Parameters.AddWithValue("reason", normalizedReason); command.Parameters.AddWithValue("correlation", Guid.NewGuid().ToString());
         try
         {
             await using var reader = await command.ExecuteReaderAsync(ct);
@@ -62,16 +64,20 @@ public sealed class IsolatedPlatformAdministrationService(
             return Result<PlatformRoleView>.Failure(Conflict);
         }
         await scope.Transaction.CommitAsync(ct);
-        return Result<PlatformRoleView>.Success(new(id, targetUserId, "SuperAdmin", true, actor, now, null, null, reason.Trim()));
+        return Result<PlatformRoleView>.Success(new(id, normalizedTarget, "SuperAdmin", true, normalizedActor, now, null, null, normalizedReason));
     }
 
     public async Task<Result> RevokeSuperAdminAsync(string actor, string targetUserId, Guid assignmentId, string reason, CancellationToken ct)
     {
-        await using var scope = await OpenAuthorizedAsync(actor, ct);
+        if (assignmentId == Guid.Empty
+            || !TryValidateRequest(actor, targetUserId, reason, out var normalizedActor, out var normalizedTarget, out var normalizedReason)
+            || normalizedActor == normalizedTarget)
+            return Result.Failure(Conflict);
+        await using var scope = await OpenAuthorizedAsync(normalizedActor, ct);
         if (scope is null) return administration.IsAvailable ? Result.Failure(Forbidden) : Result.Failure(Unavailable);
         await using var command = new NpgsqlCommand("SELECT app.platform_revoke_superadmin(@auditId,@actor,@userId,@id,@reason,@correlation)", scope.Connection, scope.Transaction);
-        command.Parameters.AddWithValue("auditId", Guid.NewGuid()); command.Parameters.AddWithValue("actor", actor); command.Parameters.AddWithValue("userId", targetUserId);
-        command.Parameters.AddWithValue("id", assignmentId); command.Parameters.AddWithValue("reason", reason.Trim()); command.Parameters.AddWithValue("correlation", Guid.NewGuid().ToString());
+        command.Parameters.AddWithValue("auditId", Guid.NewGuid()); command.Parameters.AddWithValue("actor", normalizedActor); command.Parameters.AddWithValue("userId", normalizedTarget);
+        command.Parameters.AddWithValue("id", assignmentId); command.Parameters.AddWithValue("reason", normalizedReason); command.Parameters.AddWithValue("correlation", Guid.NewGuid().ToString());
         if (await command.ExecuteScalarAsync(ct) is not true) return Result.Failure(Conflict);
         await scope.Transaction.CommitAsync(ct);
         return Result.Success();
@@ -86,6 +92,18 @@ public sealed class IsolatedPlatformAdministrationService(
     }
 
     private Result<T> Fail<T>() => Result<T>.Failure(administration.IsAvailable ? Forbidden : Unavailable);
+
+    private static bool TryValidateRequest(string? actor, string? target, string? reason,
+        out string normalizedActor, out string normalizedTarget, out string normalizedReason)
+    {
+        normalizedActor = actor?.Trim() ?? string.Empty;
+        normalizedTarget = target?.Trim() ?? string.Empty;
+        normalizedReason = reason?.Trim() ?? string.Empty;
+        return normalizedActor.Length is > 0 and <= 256
+            && normalizedTarget.Length is > 0 and <= 256
+            && normalizedReason.Length is > 0 and <= 500;
+    }
+
     private sealed class Scope(NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable
     {
         public NpgsqlConnection Connection { get; } = connection;

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using RassAppControleFin.Application.Features.Finance;
 using RassAppControleFin.Domain.Entities.Finance;
@@ -142,7 +143,7 @@ public sealed class CoreFinanceTests(PostgresFixture fixture)
             goal.Value.Version, 250m, "BRL"), default);
         Assert.True(progress.IsSuccess, progress.Error?.Code);
 
-        var read = new FinanceReadStore(db, factory);
+        var read = new FinanceReadStore(db, factory, NullLogger<FinanceReadStore>.Instance);
         var budgets = await read.BudgetsAsync(new ListBudgetsQuery(), default);
         var goals = await read.GoalsAsync(new ListGoalsQuery(), default);
         Assert.Contains(budgets.Value.Items, x => x.Id == budget.Value.ResourceId && x.Amount == 400m);

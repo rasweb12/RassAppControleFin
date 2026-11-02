@@ -168,6 +168,19 @@ public sealed class PlatformRbacTests(PostgresFixture fixture)
         await using var execute = new NpgsqlCommand("SELECT app.platform_dashboard()", connection);
         var function = await Assert.ThrowsAsync<PostgresException>(() => execute.ExecuteScalarAsync());
         Assert.Equal("42501", function.SqlState);
+
+        await using var grants = new NpgsqlCommand("""
+            SELECT has_function_privilege(current_user, 'app.platform_dashboard()', 'EXECUTE'),
+                   has_function_privilege(current_user, 'app.platform_roles(text)', 'EXECUTE'),
+                   has_function_privilege(current_user, 'app.platform_grant_superadmin(uuid,uuid,text,text,text,text)', 'EXECUTE'),
+                   has_function_privilege(current_user, 'app.platform_revoke_superadmin(uuid,text,text,uuid,text,text)', 'EXECUTE')
+            """, connection);
+        await using var grantReader = await grants.ExecuteReaderAsync();
+        Assert.True(await grantReader.ReadAsync());
+        Assert.False(grantReader.GetBoolean(0));
+        Assert.False(grantReader.GetBoolean(1));
+        Assert.False(grantReader.GetBoolean(2));
+        Assert.False(grantReader.GetBoolean(3));
     }
 
     private async Task<HttpClient> CreateAuthenticatedClientAsync(string subject, string clientRole)

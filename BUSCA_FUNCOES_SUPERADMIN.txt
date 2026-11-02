@@ -1,0 +1,92 @@
+﻿ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Identity\IsolatedPlatformAdministrationService.cs
+LINHA: 25
+CODIGO: await using var command = new NpgsqlCommand("SELECT * FROM app.platform_dashboard()", scope.Connection, scope.Transaction);
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Identity\IsolatedPlatformAdministrationService.cs
+LINHA: 35
+CODIGO: await using var command = new NpgsqlCommand("SELECT * FROM app.platform_roles(@userId)", scope.Connection, scope.Transaction);
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Identity\IsolatedPlatformAdministrationService.cs
+LINHA: 51
+CODIGO: await using var command = new NpgsqlCommand("SELECT * FROM app.platform_grant_superadmin(@id,@auditId,@actor,@userId,@reason,@correlation)", scope.Connection, scope.Transaction);
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Identity\IsolatedPlatformAdministrationService.cs
+LINHA: 72
+CODIGO: await using var command = new NpgsqlCommand("SELECT app.platform_revoke_superadmin(@auditId,@actor,@userId,@id,@reason,@correlation)", scope.Connection, scope.Transaction);
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 51
+CODIGO: CREATE FUNCTION app.platform_dashboard()
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 58
+CODIGO: CREATE FUNCTION app.platform_roles(p_user_id text)
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 64
+CODIGO: CREATE FUNCTION app.platform_grant_superadmin(p_assignment_id uuid, p_audit_id uuid, p_actor text, p_target text, p_reason text, p_correlation text)
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 83
+CODIGO: CREATE FUNCTION app.platform_revoke_superadmin(p_audit_id uuid, p_actor text, p_target text, p_assignment_id uuid, p_reason text, p_correlation text)
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 100
+CODIGO: ALTER FUNCTION app.platform_dashboard() OWNER TO rass_platform_executor_owner_v1;
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 101
+CODIGO: ALTER FUNCTION app.platform_roles(text) OWNER TO rass_platform_executor_owner_v1;
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 102
+CODIGO: ALTER FUNCTION app.platform_grant_superadmin(uuid,uuid,text,text,text,text) OWNER TO rass_platform_executor_owner_v1;
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 103
+CODIGO: ALTER FUNCTION app.platform_revoke_superadmin(uuid,text,text,uuid,text,text) OWNER TO rass_platform_executor_owner_v1;
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 104
+CODIGO: REVOKE ALL ON FUNCTION app.platform_dashboard(), app.platform_roles(text), app.platform_grant_superadmin(uuid,uuid,text,text,text,text), app.platform_revoke_superadmin(uuid,text,text,uuid,text,text) FROM PUBLIC;
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\src\RassAppControleFin.Infrastructure\Persistence\Migrations\20261101100000_PlatformAdministrationIsolation.cs
+LINHA: 105
+CODIGO: GRANT EXECUTE ON FUNCTION app.platform_dashboard(), app.platform_roles(text), app.platform_grant_superadmin(uuid,uuid,text,text,text,text), app.platform_revoke_superadmin(uuid,text,text,uuid,text,text) TO rass_platform_admin_v1;
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\tests\RassAppControleFin.IntegrationTests\Database\PlatformRbacTests.cs
+LINHA: 168
+CODIGO: await using var execute = new NpgsqlCommand("SELECT app.platform_dashboard()", connection);
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\tools\RassAppControleFin.Database\Program.cs
+LINHA: 157
+CODIGO: has_function_privilege(current_user, 'app.platform_dashboard()', 'EXECUTE'),
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\tools\RassAppControleFin.Database\Program.cs
+LINHA: 158
+CODIGO: has_function_privilege(current_user, 'app.platform_roles(text)', 'EXECUTE'),
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\tools\RassAppControleFin.Database\Program.cs
+LINHA: 159
+CODIGO: has_function_privilege(current_user, 'app.platform_grant_superadmin(uuid,uuid,text,text,text,text)', 'EXECUTE'),
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\tools\RassAppControleFin.Database\Program.cs
+LINHA: 160
+CODIGO: has_function_privilege(current_user, 'app.platform_revoke_superadmin(uuid,text,text,uuid,text,text)', 'EXECUTE'),
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\tools\RassAppControleFin.Database\Program.cs
+LINHA: 181
+CODIGO: await using (var dashboard = new NpgsqlCommand("SELECT * FROM app.platform_dashboard()", platformDbConnection))
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\tools\RassAppControleFin.Database\Program.cs
+LINHA: 285
+CODIGO: await using (var identity = new NpgsqlCommand("SELECT current_database(), current_user, has_function_privilege(current_user, 'app.platform_dashboard()', 'EXECUTE')", platformProbe))
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\tools\RassAppControleFin.Database\Program.cs
+LINHA: 295
+CODIGO: await using (var dashboard = new NpgsqlCommand("SELECT * FROM app.platform_dashboard()", platformProbe))
+----------------------------------------
+ARQUIVO: D:\Curso\APP\RassAppControleFin\tools\RassAppControleFin.Database\Program.cs
+LINHA: 312
+CODIGO: await using var grant = new NpgsqlCommand("SELECT * FROM app.platform_grant_superadmin(@id, @audit, @actor, @target, @reason, @correlation)", platformProbe, transaction);
+----------------------------------------
