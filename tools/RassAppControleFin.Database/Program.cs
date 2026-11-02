@@ -14,11 +14,129 @@ const string PlatformAdminRole = "rass_platform_admin_v1";
 const string IsolatedRbacTestHost = "ep-raspy-poetry-b6x8rzs3.c-2.sa-east-1.aws.neon.tech";
 const string IsolatedRbacTestDatabase = "rass_sprint1_tests";
 const string IsolatedRbacTestBranchId = "br-odd-silence-b646inmx";
+const string ProductionDatabase = "neondb";
+const string ProductionMigrationRole = "neondb_owner";
+const string ProductionBranchId = "br-lucky-paper-b6egkr8q";
 
-if (args.Length == 0 || args[0] is not ("migrate" or "bootstrap" or "seed-development" or "probe" or "probe-tests" or "probe-platform-admin-isolated" or "probe-platform-grant-isolated" or "probe-platform-admin-branch" or "probe-upgrade-connections" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated" or "rotate-platform-admin-password-isolated" or "validate-platform-admin-connection" or "validate-rbac-test-sql-phase" or "validate-rbac-test-connections" or "diagnose-rbac-test-credentials" or "bootstrap-rbac-test-schema" or "execute-rbac-test-sql" or "migrate-rbac-test-database"))
+if (args.Length == 0 || args[0] is not ("migrate" or "bootstrap" or "seed-development" or "probe" or "probe-tests" or "probe-platform-admin-isolated" or "probe-platform-grant-isolated" or "probe-platform-admin-branch" or "probe-upgrade-connections" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated" or "rotate-platform-admin-password-isolated" or "validate-platform-admin-connection" or "validate-rbac-test-sql-phase" or "validate-rbac-test-connections" or "diagnose-rbac-test-credentials" or "bootstrap-rbac-test-schema" or "execute-rbac-test-sql" or "migrate-rbac-test-database" or "validate-production-upgrade-connection" or "apply-production-upgrade"))
 {
-    Console.Error.WriteLine("Commands: probe | probe-tests | probe-platform-admin-isolated | probe-platform-grant-isolated | probe-platform-admin-branch --expected-host <direct-host> | probe-upgrade-connections --expected-host <direct-host> | rotate-platform-admin-password-isolated --confirmed-branch-id br-odd-silence-b646inmx --confirm-platform-admin-password-rotation | validate-rbac-test-connections --expected-host ep-raspy-poetry-b6x8rzs3.c-2.sa-east-1.aws.neon.tech --confirmed-branch-id br-odd-silence-b646inmx --confirm-isolated-rbac-tests | diagnose-rbac-test-credentials | bootstrap-rbac-test-schema --expected-host ep-raspy-poetry-b6x8rzs3.c-2.sa-east-1.aws.neon.tech --confirmed-branch-id br-odd-silence-b646inmx --confirm-isolated-rbac-tests | execute-rbac-test-sql --phase <ownership|acl|test-seed|cleanup|post-validation> --expected-host ep-raspy-poetry-b6x8rzs3.c-2.sa-east-1.aws.neon.tech --confirmed-branch-id br-odd-silence-b646inmx --confirm-isolated-rbac-tests | migrate-rbac-test-database --target <migration-id> --expected-host ep-raspy-poetry-b6x8rzs3.c-2.sa-east-1.aws.neon.tech --confirmed-branch-id br-odd-silence-b646inmx --confirm-isolated-rbac-tests | migrate-isolated-tests --confirm-isolated-tests | provision-platform-admin-isolated --confirm-isolated-tests | grant-platform-executor-schema-create-isolated --confirm-isolated-tests | grant-platform-executor-to-migration-owner-isolated --confirm-isolated-tests | migrate | bootstrap | seed-development --confirm-development");
+    Console.Error.WriteLine("Commands include validate-production-upgrade-connection --expected-host <direct-production-host> --confirmed-branch-id br-lucky-paper-b6egkr8q and apply-production-upgrade with --confirm-production-write. Other commands are intentionally restricted to their documented isolated environments.");
     return 2;
+}
+
+if (args[0] is "validate-production-upgrade-connection" or "apply-production-upgrade")
+{
+    var expectedHostIndex = Array.IndexOf(args, "--expected-host");
+    var expectedHost = expectedHostIndex >= 0 && expectedHostIndex + 1 < args.Length ? args[expectedHostIndex + 1] : null;
+    var branchIndex = Array.IndexOf(args, "--confirmed-branch-id");
+    var branchId = branchIndex >= 0 && branchIndex + 1 < args.Length ? args[branchIndex + 1] : null;
+    var apply = args[0] == "apply-production-upgrade";
+    var targetIndex = Array.IndexOf(args, "--target");
+    var target = targetIndex >= 0 && targetIndex + 1 < args.Length ? args[targetIndex + 1] : null;
+    var expectedStartingMigrationCount = target switch
+    {
+        "20261102010000_PlatformAdministrationHardening" => 10,
+        "20261102040000_RuntimeIdentityOperationalAclHardening" => 17,
+        _ => -1
+    };
+
+    if (string.IsNullOrWhiteSpace(expectedHost)
+        || expectedHost.Contains("-pooler", StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(branchId, ProductionBranchId, StringComparison.Ordinal)
+        || (apply && (!args.Contains("--confirm-production-write", StringComparer.Ordinal)
+            || expectedStartingMigrationCount < 0)))
+    {
+        Console.Error.WriteLine("Production upgrade command was rejected by its destination or explicit-write confirmation policy.");
+        return 2;
+    }
+
+    // Production credentials are deliberately process-only. No test variable,
+    // User Secret, application configuration or fallback can reach this path.
+    var rawConnection = Environment.GetEnvironmentVariable("RASS_PRODUCTION_MIGRATIONS_CONNECTION", EnvironmentVariableTarget.Process);
+    if (string.IsNullOrWhiteSpace(rawConnection))
+    {
+        Console.Error.WriteLine("Production migration credential is not configured in the current process.");
+        return 2;
+    }
+
+    NpgsqlConnectionStringBuilder production;
+    try { production = new NpgsqlConnectionStringBuilder(rawConnection); }
+    catch (ArgumentException)
+    {
+        Console.Error.WriteLine("Production migration credential format is invalid.");
+        return 2;
+    }
+
+    if (!string.Equals(production.Host, expectedHost, StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(production.Database, ProductionDatabase, StringComparison.Ordinal)
+        || !string.Equals(production.Username, ProductionMigrationRole, StringComparison.Ordinal)
+        || string.IsNullOrWhiteSpace(production.Password)
+        || production.SslMode != SslMode.VerifyFull
+        || production.Host?.Contains("-pooler", StringComparison.OrdinalIgnoreCase) == true
+        || production.NoResetOnClose || production.Multiplexing)
+    {
+        Console.Error.WriteLine("Production migration credential does not meet the direct TLS destination policy.");
+        return 2;
+    }
+
+    try
+    {
+        await using var connection = new NpgsqlConnection(production.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("""
+            SELECT session_user, current_user, current_database(),
+              (SELECT count(*) FROM app."__EFMigrationsHistory") AS migration_count,
+              EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rass_app_runtime_v2') AS runtime_exists,
+              EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rass_platform_admin_v1') AS platform_admin_exists,
+              EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rass_platform_executor_owner_v1') AS executor_exists;
+            """, connection);
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()
+            || !string.Equals(reader.GetString(0), ProductionMigrationRole, StringComparison.Ordinal)
+            || !string.Equals(reader.GetString(1), ProductionMigrationRole, StringComparison.Ordinal)
+            || !string.Equals(reader.GetString(2), ProductionDatabase, StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine("Production migration identity or database verification failed.");
+            return 1;
+        }
+
+        var migrationCount = reader.GetInt64(3);
+        var rolesReady = reader.GetBoolean(4) && reader.GetBoolean(5) && reader.GetBoolean(6);
+        if ((!apply && migrationCount is not (10 or 17 or 20))
+            || (apply && migrationCount != expectedStartingMigrationCount))
+        {
+            Console.Error.WriteLine("Production migration history is not at the approved stage for this operation.");
+            return 1;
+        }
+        if (!rolesReady)
+        {
+            Console.Error.WriteLine("Production platform roles are not provisioned; no migration was attempted.");
+            return 1;
+        }
+
+        if (!apply)
+        {
+            Console.WriteLine("PASS: production preflight confirmed the approved migration identity, 10-migration baseline, and required role presence.");
+            return 0;
+        }
+
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(production.ConnectionString,
+            postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", "app")).Options;
+        await using var migrationDb = new AppDbContext(options);
+        await migrationDb.Database.GetService<IMigrator>().MigrateAsync(target);
+        Console.WriteLine("PASS: approved production migration stage completed. Run the next documented preflight before proceeding.");
+        return 0;
+    }
+    catch (PostgresException exception)
+    {
+        Console.Error.WriteLine($"Production upgrade command failed (SQLSTATE {exception.SqlState}); details withheld.");
+        return 1;
+    }
+    catch (NpgsqlException)
+    {
+        Console.Error.WriteLine("Production upgrade command could not establish the approved database connection.");
+        return 1;
+    }
 }
 if (args[0] == "validate-rbac-test-sql-phase")
 {
