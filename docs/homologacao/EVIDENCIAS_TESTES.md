@@ -104,6 +104,14 @@ O comando padrão foi executado sem credenciais de banco, URL de API ou flags qu
 - `dotnet test` unitários: **55/55**; arquitetura: **5/5**.
 - A tela não foi validada contra servidor remoto porque `MonetizationFoundation` continua não aplicada. Portanto, o fluxo Free/Premium continua **não homologado**.
 
+## Android Debug isolado — Primeiro Me Pago (2026-11-03)
+
+- `flutter build apk --debug --flavor e2e --dart-define=API_BASE_URL=`: aprovado.
+- Artefato: `mobile/rassapp_controlefin/build/app/outputs/flutter-apk/app-e2e-debug.apk`.
+- SHA-256: `221B6622C4436D113D7E9C7995ABE639AC6A6C05A26D4285ECF53FF7183DFC6B`.
+- Instalação no emulador Android confirmada para o package isolado `com.rassapp.rassapp_controlefin.e2e`. Nenhum dado do package habitual foi removido ou reutilizado.
+- A inspeção automática desta sessão não obteve foco/árvore de UI do emulador após o launch; portanto instalação **não** é evidência de validação visual/manual.
+
 ## Render — inspeção somente leitura (2026-11-03)
 
 O serviço `RassAppControleFin` permaneceu `live` no commit publicado informado anteriormente. Entretanto, os últimos erros recuperáveis do log continham readiness PostgreSQL indisponível em 2026-11-02. Uma consulta HTTP externa aos endpoints públicos expirou no ambiente de auditoria. Isso não comprova indisponibilidade atual, mas impede marcar a API publicada como homologada até coletar uma janela recente de logs e smoke tests HTTP bem-sucedidos.
