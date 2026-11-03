@@ -96,6 +96,14 @@ O comando padrão foi executado sem credenciais de banco, URL de API ou flags qu
 - Na primeira tentativa, os logs locais registraram tentativas de renovação da sessão persistida do pacote base que expiraram. O processo foi encerrado sem limpeza de dados; essa tentativa não é evidência de homologação e não será repetida nesse perfil.
 - A repetição na variante `.e2e`, com `API_BASE_URL` vazia, foi aprovada no emulador Android 16: **1/1** em cerca de sete segundos. O teste prova apenas o bloqueio seguro de configuração; fluxos financeiros, login e sincronização E2E continuam pendentes de API isolada.
 
+## Sprint 16 — tela de direitos do plano (2026-11-03)
+
+- A tela Flutter **Plano e recursos** foi adicionada como leitura autenticada de `/api/v1/monetization/entitlements`. Ela não inicia compra, restauração, troca de plano ou concessão local de Premium.
+- `flutter analyze`: aprovado, sem issues.
+- `flutter test`: **15/15** aprovados nesta execução, incluindo dois testes do contrato de leitura de entitlements.
+- `dotnet test` unitários: **55/55**; arquitetura: **5/5**.
+- A tela não foi validada contra servidor remoto porque `MonetizationFoundation` continua não aplicada. Portanto, o fluxo Free/Premium continua **não homologado**.
+
 ## Render — inspeção somente leitura (2026-11-03)
 
 O serviço `RassAppControleFin` permaneceu `live` no commit publicado informado anteriormente. Entretanto, os últimos erros recuperáveis do log continham readiness PostgreSQL indisponível em 2026-11-02. Uma consulta HTTP externa aos endpoints públicos expirou no ambiente de auditoria. Isso não comprova indisponibilidade atual, mas impede marcar a API publicada como homologada até coletar uma janela recente de logs e smoke tests HTTP bem-sucedidos.
