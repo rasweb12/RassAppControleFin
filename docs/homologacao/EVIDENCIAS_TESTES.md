@@ -49,3 +49,13 @@ Observações: a ferramenta `dotnet-ef` local estava em 10.0.12 enquanto o runti
 | Pós-validação de cleanup | Aprovada: `SET ROLE` transitório removido; runtime/PUBLIC sem ACL administrativa. |
 
 Nenhum dado foi apagado. Nenhum deploy ou alteração de configuração foi realizado no Render. O serviço Render ainda tem último deploy `update_failed` e logs históricos de readiness PostgreSQL indisponível, portanto o banco aprovado não equivale à API publicada/homologada.
+
+## Sprint 16 — fundação de monetização (local)
+
+| Comando/teste | Resultado |
+|---|---|
+| `dotnet test tests/RassAppControleFin.UnitTests/... -c Release --no-restore -m:1` | **53/53** aprovados. Inclui invariantes de plano vitalício e fingerprint de evento de pagamento. |
+| `dotnet test tests/RassAppControleFin.IntegrationTests/... --filter "FullyQualifiedName~RuntimeIdentityAclMigrationTests"` | **4/4** guard tests locais aprovados. Inclui proteção estática da migration de monetização. |
+| Migration `20261103112705_MonetizationFoundation` | Gerada e revisada localmente; não aplicada em banco algum nesta rodada. |
+
+Não executados: integração de compra, validação de recibo Google Play, testes em dispositivo, APK/AAB, API de entitlement e interface Free/Premium. Esses itens são pendentes, não aprovados.

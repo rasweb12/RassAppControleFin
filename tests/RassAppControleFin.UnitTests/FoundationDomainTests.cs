@@ -6,6 +6,24 @@ namespace RassAppControleFin.UnitTests;
 public sealed class FoundationDomainTests
 {
     [Fact]
+    public void Lifetime_subscription_rejects_an_artificial_expiry()
+    {
+        var now = DateTimeOffset.UtcNow;
+        Assert.Throws<ArgumentException>(() => new UserSubscription(Guid.NewGuid(), "subject", SubscriptionPlan.PremiumLifetime,
+            SubscriptionStatus.Active, PaymentProvider.GooglePlay, "purchase", now, now.AddDays(1), now));
+    }
+
+    [Fact]
+    public void Payment_event_requires_a_sha256_fingerprint_and_never_accepts_a_raw_token_shape()
+    {
+        var now = DateTimeOffset.UtcNow;
+        Assert.Throws<ArgumentException>(() => new PaymentEvent(Guid.NewGuid(), PaymentProvider.GooglePlay, "event", "token", "product",
+            PaymentEventStatus.Received, now, now));
+        var eventRecord = new PaymentEvent(Guid.NewGuid(), PaymentProvider.GooglePlay, "event", new string('A', 64), "product",
+            PaymentEventStatus.Received, now, now);
+        Assert.Equal(64, eventRecord.PurchaseFingerprint.Length);
+    }
+    [Fact]
     public void Profile_preserves_opaque_subject_and_advances_explicit_version()
     {
         var tenant = Guid.NewGuid();

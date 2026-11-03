@@ -1226,6 +1226,123 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.PaymentEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ProductId")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ProviderEventId")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("PurchaseFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "ProviderEventId")
+                        .IsUnique();
+
+                    b.HasIndex("Provider", "PurchaseFingerprint")
+                        .IsUnique();
+
+                    b.ToTable("PaymentEvents", "app");
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.PlanDefinition", b =>
+                {
+                    b.Property<string>("Plan")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("OneTime")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("ReferencePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("StoreProductId")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Plan");
+
+                    b.ToTable("PlanDefinitions", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_PlanDefinitions_Price", "\"ReferencePrice\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.PlanEntitlement", b =>
+                {
+                    b.Property<string>("Plan")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Feature")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("Limit")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Plan", "Feature");
+
+                    b.HasIndex("Feature");
+
+                    b.ToTable("PlanEntitlements", "app", t =>
+                        {
+                            t.HasCheckConstraint("CK_PlanEntitlements_Limit", "\"Limit\" IS NULL OR \"Limit\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("RassAppControleFin.Domain.Entities.PlatformRoleAssignment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1348,6 +1465,54 @@ namespace RassAppControleFin.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_UserProfiles_Version", "\"Version\" > 0");
                         });
+                });
+
+            modelBuilder.Entity("RassAppControleFin.Domain.Entities.UserSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalPurchaseId")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Provider")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "ExternalPurchaseId")
+                        .IsUnique()
+                        .HasFilter("\"ExternalPurchaseId\" IS NOT NULL");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("UserSubscriptions", "app");
                 });
 
             modelBuilder.Entity("RassAppControleFin.Infrastructure.Persistence.CardMovementRow", b =>

@@ -47,6 +47,20 @@ public sealed class RuntimeIdentityAclMigrationTests
         Assert.DoesNotContain("TRUNCATE", sql, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Monetization_foundation_keeps_paid_offers_disabled_and_runtime_read_only()
+    {
+        var migration = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "RassAppControleFin.Infrastructure",
+            "Persistence", "Migrations", "20261103112705_MonetizationFoundation.cs"));
+
+        Assert.Contains("('PremiumMonthly','Premium Mensal',14.90,'BRL',false", migration, StringComparison.Ordinal);
+        Assert.Contains("GRANT SELECT ON app.\"PlanDefinitions\", app.\"PlanEntitlements\", app.\"UserSubscriptions\" TO rass_app_runtime_v2", migration, StringComparison.Ordinal);
+        Assert.Contains("ALTER TABLE app.\"PaymentEvents\" FORCE ROW LEVEL SECURITY", migration, StringComparison.Ordinal);
+        Assert.Contains("CREATE POLICY subscription_user_scope", migration, StringComparison.Ordinal);
+        Assert.DoesNotContain("GRANT ALL", migration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TO PUBLIC", migration, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)

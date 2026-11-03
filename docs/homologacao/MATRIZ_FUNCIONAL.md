@@ -10,10 +10,17 @@ Data: 2026-11-03. Estados refletem evidência disponível no commit de trabalho 
 | Cartões, compra, fatura e parcelas | Implementado | Implementado no schema Production 20 | Homologado no ambiente isolado do CP12 | Parcial | APK/dispositivo e smoke do deploy atual. |
 | Planejamento e investimentos | Implementado no domínio/API | Implementado | Testes unitários existentes | Parcial | Cenários funcionais de release. |
 | Primeiro Me Pago | Implementado no domínio/configuração | Implementado | Testes unitários existentes | Parcial | Validação de UX e fluxo completo. |
-| Administração global | Admin.Web + API | Funções isoladas em migrations 15–20 | RBAC 10/10 isolado | Aprovado isolado | Validar menus Admin.Web e deploy atualizado. |
+| Administração global | Painel SuperAdmin com bloqueio visual de acesso direto | Funções isoladas em migrations 15–20 | RBAC 10/10 isolado; guard de navegação local | Parcial | TenantAdmin ainda não possui páginas administrativas próprias; validar no deploy atualizado. |
+| Monetização e entitlements | Sem telas Free/Premium ainda | Fundação local de planos, direitos, assinaturas e eventos de pagamento; migration pendente de aplicação | 2 testes de domínio e 1 guard estático | Parcial | API de entitlement, catálogo Admin, UX Flutter e Google Play Billing ainda não foram implementados/homologados. |
 | Sincronização offline | Flutter/Drift | API sync implementada | Homologação CP12 informada | Parcial | Regressão em APK de release. |
 | Android / Google Play | Flutter Android | Não aplicável | APK/AAB executados apenas quando o SDK/assinatura estiverem configurados | Bloqueado | applicationId final, assinatura, política, exclusão de conta e AAB. |
 | Dívidas e negociação | Não identificado como tela/fluxo Flutter | Não identificado como endpoint dedicado | Sem teste dedicado | Pendente | Confirmar escopo do MVP ou implementar antes de declarar cobertura completa. |
 | Configurações e preferências | Parcial: sessão e armazenamento local | Sem módulo de preferências claramente separado | Sem teste de interface dedicado | Parcial | Validar persistência e navegação em dispositivo. |
 
 Legenda: **Aprovado isolado** não significa aprovado em Production.
+
+## Sprint 16 — atualização local
+
+- A migration `20261103112705_MonetizationFoundation` foi criada apenas no código e **não foi aplicada** em Neon ou Production.
+- Planos pagos permanecem desativados por padrão; não há cobrança, produto Play nem concessão Premium ativa.
+- A funcionalidade SuperAdmin solicitada para uma identidade externa permanece pendente de confirmação da identidade autenticada e de autorização explícita para a concessão funcional em Production.
