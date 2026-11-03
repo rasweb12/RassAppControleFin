@@ -140,3 +140,8 @@ A primeira invocação de `flutter test` com o diretório como argumento encerro
 - Aprovados: build Release, 55/55 unitários .NET, 5/5 arquitetura, higiene de segredos, análise Flutter, 28/28 Flutter e guarda Android E2E isolada.
 - A guarda Android usa `applicationId` `.e2e` e `API_BASE_URL` vazia; comprova o bloqueio antes de rede e não reutiliza o perfil habitual. Não é uma homologação de login, finanças ou sincronização.
 - Permaneceram bloqueados por design: integração PostgreSQL/API sem banco isolado confirmado, APK com API homologada, AAB assinado e smoke HTTP com URL explícita.
+
+## Dependências .NET — auditoria local (2026-11-03)
+
+- `dotnet list RassAppControleFin.slnx package --vulnerable --include-transitive` não identificou pacotes vulneráveis nas fontes NuGet configuradas.
+- O resultado é uma consulta de advisories de dependências; não substitui licença comercial válida do MediatR nem a homologação de runtime/Production.
