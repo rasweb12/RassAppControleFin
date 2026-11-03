@@ -47,6 +47,41 @@ public sealed class InvestmentPlanningTests
     }
 
     [Fact]
+    public void Monthly_suggestion_prefers_received_income_and_warns_when_obligations_are_not_covered()
+    {
+        var strategy = PayYourselfFirstStrategy.Create(.20m, .30m, new DateOnly(2026, 11, 1));
+        var allocations = new[]
+        {
+            new TargetAllocation("Emergency and fixed income", InvestmentAssetClass.FixedIncome, 70m),
+            new TargetAllocation("FIIs", InvestmentAssetClass.RealEstateFund, 20m),
+            new TargetAllocation("Equity", InvestmentAssetClass.Equity, 10m),
+        };
+
+        var projection = PayYourselfFirstMonthlyProjection.Create(strategy, 5000m, 4500m, 3800m, allocations);
+
+        Assert.Equal(4500m, projection.IncomeBasis);
+        Assert.Equal(900m, projection.SuggestedReserve);
+        Assert.Equal(-200m, projection.ProjectedBalanceAfterObligations);
+        Assert.False(projection.IsAffordable);
+        Assert.Equal(900m, projection.Distribution.Values.Sum());
+        Assert.Equal(630m, projection.Distribution["Emergency and fixed income"]);
+    }
+
+    [Fact]
+    public void Monthly_suggestion_uses_expected_income_only_when_no_income_was_received()
+    {
+        var strategy = PayYourselfFirstStrategy.Create(.20m, null, new DateOnly(2026, 11, 1));
+        var allocations = new[] { new TargetAllocation("Reserve", InvestmentAssetClass.FixedIncome, 100m) };
+
+        var projection = PayYourselfFirstMonthlyProjection.Create(strategy, 2000m, 0m, 1200m, allocations);
+
+        Assert.Equal(2000m, projection.IncomeBasis);
+        Assert.Equal(400m, projection.SuggestedReserve);
+        Assert.Equal(400m, projection.ProjectedBalanceAfterObligations);
+        Assert.True(projection.IsAffordable);
+    }
+
+    [Fact]
     public void Projection_without_return_equals_initial_plus_contributions()
     {
         var result = InvestmentProjectionEngine.Project(ProjectionInput.Create(1000m, 100m, 12,

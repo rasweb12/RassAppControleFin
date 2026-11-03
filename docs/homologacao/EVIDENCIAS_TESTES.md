@@ -145,3 +145,10 @@ A primeira invocação de `flutter test` com o diretório como argumento encerro
 
 - `dotnet list RassAppControleFin.slnx package --vulnerable --include-transitive` não identificou pacotes vulneráveis nas fontes NuGet configuradas.
 - O resultado é uma consulta de advisories de dependências; não substitui licença comercial válida do MediatR nem a homologação de runtime/Production.
+
+## Primeiro Me Pago — projeção mensal não mutável (2026-11-03)
+
+- A regra de domínio usa a renda recebida quando existente, ou a renda prevista quando ainda não houve recebimento; calcula reserva planejada, saldo após obrigações e distribuição exata por percentuais.
+- O cálculo não cria transferência, despesa, pagamento ou investimento. Saldo projetado negativo sinaliza insuficiência para o usuário.
+- `InvestmentPlanningTests`: **8/8** aprovados, incluindo arredondamento, distribuição e insuficiência após obrigações.
+- A interface ainda não consome a projeção e não há persistência de histórico mensal; esta entrega é parcial e não é homologação funcional completa.

@@ -20,6 +20,38 @@ public sealed record PayYourselfFirstStrategy(decimal CurrentRate, decimal? Goal
     }
 }
 
+/// <summary>
+/// A non-mutating monthly suggestion. It deliberately separates a saving intention
+/// from an investment transaction: callers must ask for a separate confirmation
+/// before moving any money.
+/// </summary>
+public sealed record PayYourselfFirstMonthlyProjection(
+    decimal ExpectedIncome,
+    decimal ReceivedIncome,
+    decimal EssentialObligations,
+    decimal IncomeBasis,
+    decimal SuggestedReserve,
+    decimal ProjectedBalanceAfterObligations,
+    bool IsAffordable,
+    IReadOnlyDictionary<string, decimal> Distribution)
+{
+    public static PayYourselfFirstMonthlyProjection Create(PayYourselfFirstStrategy strategy,
+        decimal expectedIncome, decimal receivedIncome, decimal essentialObligations,
+        IReadOnlyCollection<TargetAllocation> allocations)
+    {
+        ArgumentNullException.ThrowIfNull(strategy);
+        if (expectedIncome < 0 || receivedIncome < 0 || essentialObligations < 0)
+            throw new ArgumentOutOfRangeException(nameof(expectedIncome), "Monthly values cannot be negative.");
+
+        TargetAllocation.Validate(allocations);
+        var basis = InvestmentMath.Money(receivedIncome > 0 ? receivedIncome : expectedIncome);
+        var suggested = strategy.PlannedAmount(basis);
+        var balance = InvestmentMath.Money(basis - essentialObligations - suggested);
+        return new(expectedIncome, receivedIncome, essentialObligations, basis, suggested, balance,
+            balance >= 0, InvestmentProjectionEngine.Allocate(suggested, allocations));
+    }
+}
+
 public sealed record TargetAllocation(string Key, InvestmentAssetClass AssetClass, decimal Weight)
 {
     public static void Validate(IReadOnlyCollection<TargetAllocation> allocations)
