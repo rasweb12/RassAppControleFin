@@ -152,3 +152,10 @@ A primeira invocação de `flutter test` com o diretório como argumento encerro
 - O cálculo não cria transferência, despesa, pagamento ou investimento. Saldo projetado negativo sinaliza insuficiência para o usuário.
 - `InvestmentPlanningTests`: **8/8** aprovados, incluindo arredondamento, distribuição e insuficiência após obrigações.
 - A interface ainda não consome a projeção e não há persistência de histórico mensal; esta entrega é parcial e não é homologação funcional completa.
+
+## APK Debug isolado — projeção de Primeiro Me Pago (2026-11-03)
+
+- `flutter test`: **29/29** aprovados após a integração da simulação mensal na tela.
+- Artefato: `mobile/rassapp_controlefin/build/app/outputs/flutter-apk/app-e2e-debug.apk`.
+- SHA-256: `9C276A75BD3FBC11E6525A50B60469C9A47806CA92410F82C59A7DAB4C3E8B2C`.
+- A variante usa o identificador isolado `.e2e` e foi compilada com `API_BASE_URL` vazia. Ela não é um APK conectado à API de homologação nem prova os fluxos financeiros remotos.
