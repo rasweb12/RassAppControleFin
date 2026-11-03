@@ -51,6 +51,8 @@ services:
         sync: false
       - key: OTEL_EXPORTER_OTLP_ENDPOINT
         sync: false
+      - key: MediatR__LicenseKey
+        sync: false
   - type: web
     name: rass-controlefin-admin
     plan: starter
