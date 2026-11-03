@@ -92,7 +92,9 @@ O comando padrão foi executado sem credenciais de banco, URL de API ou flags qu
 
 - Foi incluído `integration_test/configuration_guard_test.dart`, que inicia o app sem `API_BASE_URL` e exige a tela de bloqueio antes de qualquer autenticação ou chamada HTTP. O teste é deliberadamente limitado a esse limite de segurança e não representa homologação financeira.
 - Dependências, análise estática e testes de unidade/widget continuaram aprovados após a inclusão (`flutter analyze` sem issues; **24/24** testes).
-- O runner foi compilado e instalado no emulador Android 16, mas não devolveu resultado após a instalação dentro da janela de execução. Portanto o teste em dispositivo está **BLOQUEADO**, não aprovado. A causa deve ser diagnosticada antes de contar esta prova como evidência E2E.
+- A primeira tentativa revelou que o runner usava o `applicationId` base e, por isso, podia reutilizar estado persistente do emulador; ela foi interrompida sem apagar dados. Foi criada a variante `e2e` com sufixo de applicationId próprio.
+- Na primeira tentativa, os logs locais registraram tentativas de renovação da sessão persistida do pacote base que expiraram. O processo foi encerrado sem limpeza de dados; essa tentativa não é evidência de homologação e não será repetida nesse perfil.
+- A repetição na variante `.e2e`, com `API_BASE_URL` vazia, foi aprovada no emulador Android 16: **1/1** em cerca de sete segundos. O teste prova apenas o bloqueio seguro de configuração; fluxos financeiros, login e sincronização E2E continuam pendentes de API isolada.
 
 ## Render — inspeção somente leitura (2026-11-03)
 

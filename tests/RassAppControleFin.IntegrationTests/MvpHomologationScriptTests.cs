@@ -24,6 +24,8 @@ public sealed class MvpHomologationScriptTests
         Assert.Contains("BLOQUEADO", script, StringComparison.Ordinal);
         Assert.Contains("BuildAndroidDebug", script, StringComparison.Ordinal);
         Assert.Contains("HomologationApiBaseUrl", script, StringComparison.Ordinal);
+        Assert.Contains("AndroidDeviceId", script, StringComparison.Ordinal);
+        Assert.Contains("--flavor', 'e2e', '-d', $AndroidDeviceId", script, StringComparison.Ordinal);
         Assert.Contains("--flavor', 'homologation", script, StringComparison.Ordinal);
         Assert.Contains("rassappcontrolefin-1\\.onrender\\.com", script, StringComparison.Ordinal);
         Assert.Contains("Android AAB release", script, StringComparison.Ordinal);

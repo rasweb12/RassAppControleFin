@@ -13,6 +13,9 @@ param(
     [string]$HomologationApiBaseUrl,
     # Release AAB remains separately opt-in because it needs approved signing material.
     [switch]$BuildAndroidRelease,
+    # Device E2E is opt-in. A concrete identifier prevents a test from
+    # silently choosing a desktop/browser or a profile with unrelated state.
+    [string]$AndroidDeviceId,
     # Optional read-only smoke target. It is never inferred from a connection string.
     [ValidatePattern('^https?://')]
     [string]$ApiBaseUrl
@@ -95,10 +98,22 @@ try {
         [void](Invoke-CheckedProcess 'Flutter analyze' $flutter @('analyze') $flutterProject)
         [void](Invoke-CheckedProcess 'Flutter testes unitários e widgets' $flutter @('test') $flutterProject)
         $integrationDirectory = Join-Path $flutterProject 'integration_test'
-        if (Test-Path $integrationDirectory) {
-            [void](Invoke-CheckedProcess 'Flutter integration_test' $flutter @('test', 'integration_test') $flutterProject)
+        if (-not (Test-Path $integrationDirectory)) {
+            Add-Result 'Flutter integration_test' 'BLOQUEADO' 'Não há diretório integration_test; não há evidência E2E de aplicativo/dispositivo.'
         }
-        else { Add-Result 'Flutter integration_test' 'BLOQUEADO' 'Não há diretório integration_test; não há evidência E2E de aplicativo/dispositivo.' }
+        elseif ([string]::IsNullOrWhiteSpace($AndroidDeviceId)) {
+            Add-Result 'Flutter integration_test' 'BLOQUEADO' 'Exige -AndroidDeviceId explícito para não selecionar um perfil de dispositivo implícito.'
+        }
+        else {
+            # E2E uses its own application id, so the emulator cannot reuse
+            # FlutterSecureStorage, Drift, cache, or session state from a
+            # normal/homologation profile. The empty URL validates the
+            # configuration guard before a network-capable flow can start.
+            [void](Invoke-CheckedProcess 'Flutter integration_test' $flutter @(
+                'test', 'integration_test', '--flavor', 'e2e', '-d', $AndroidDeviceId,
+                '--dart-define=API_BASE_URL='
+            ) $flutterProject)
+        }
         if ($BuildAndroidDebug) {
             if ([string]::IsNullOrWhiteSpace($HomologationApiBaseUrl) -or
                 $HomologationApiBaseUrl -match 'rassappcontrolefin-1\.onrender\.com') {
