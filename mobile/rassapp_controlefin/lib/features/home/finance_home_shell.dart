@@ -11,6 +11,7 @@ import '../finance/finance_repository.dart';
 import '../finance/credit_cards_page.dart';
 import '../finance/financial_assistant_page.dart';
 import '../finance/financial_notifications_page.dart';
+import '../finance/pay_yourself_first_page.dart';
 import '../monetization/entitlements_page.dart';
 import 'finance_forms.dart';
 import '../synchronization/finance_sync_service.dart';
@@ -309,6 +310,17 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
           tenantId: tenant.id,
           subject: widget.authController.session.subject,
         ),
+      ),
+    );
+  }
+
+  Future<void> _openPayYourselfFirst() async {
+    final tenant = _tenant;
+    if (tenant == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            PayYourselfFirstPage(repository: _repository, tenantId: tenant.id),
       ),
     );
   }
@@ -933,6 +945,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               onExpenseReductionGoals: _openExpenseReductionGoals,
               onNotifications: _openNotifications,
               onFinancialAssistant: _openFinancialAssistant,
+              onPayYourselfFirst: _openPayYourselfFirst,
               onPlanAndFeatures: _openPlanAndFeatures,
               onSecurity: _openAccountSecurity,
             ),
@@ -2176,6 +2189,7 @@ class _Menu extends StatelessWidget {
     required this.onExpenseReductionGoals,
     required this.onNotifications,
     required this.onFinancialAssistant,
+    required this.onPayYourselfFirst,
     required this.onPlanAndFeatures,
     required this.onSecurity,
   });
@@ -2192,6 +2206,7 @@ class _Menu extends StatelessWidget {
   final Future<void> Function() onExpenseReductionGoals;
   final Future<void> Function() onNotifications;
   final Future<void> Function() onFinancialAssistant;
+  final Future<void> Function() onPayYourselfFirst;
   final Future<void> Function() onPlanAndFeatures;
   final Future<void> Function() onSecurity;
 
@@ -2253,6 +2268,13 @@ class _Menu extends StatelessWidget {
         subtitle: const Text('Pergunte sobre dados autorizados.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onFinancialAssistant,
+      ),
+      _MenuItem(
+        leading: const Icon(Icons.savings_outlined),
+        title: const Text('Primeiro Me Pago'),
+        subtitle: const Text('Planeje a reserva antes dos demais gastos.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onPayYourselfFirst,
       ),
       _MenuItem(
         leading: const Icon(Icons.notifications_outlined),

@@ -74,6 +74,31 @@ class DashboardMetric {
       );
 }
 
+class PayYourselfFirstPlanSummary {
+  const PayYourselfFirstPlanSummary({
+    required this.id,
+    required this.currentRate,
+    required this.goalRate,
+    required this.effectiveFrom,
+    required this.version,
+  });
+
+  final String id;
+  final num currentRate;
+  final num? goalRate;
+  final DateTime effectiveFrom;
+  final int version;
+
+  factory PayYourselfFirstPlanSummary.fromJson(Map<String, dynamic> json) =>
+      PayYourselfFirstPlanSummary(
+        id: json['id'] as String,
+        currentRate: json['currentRate'] as num,
+        goalRate: json['goalRate'] as num?,
+        effectiveFrom: DateTime.parse(json['effectiveFrom'] as String),
+        version: json['version'] as int,
+      );
+}
+
 class AccountSummary {
   const AccountSummary({
     required this.id,
@@ -583,6 +608,72 @@ class FinanceRepository {
     parser: GoalSummary.fromJson,
     pageSize: '100',
   );
+
+  Future<PayYourselfFirstPlanSummary?> payYourselfFirstPlan(
+    String tenantId,
+  ) async {
+    try {
+      final data = await _auth.getAuthenticated(
+        '/api/v1/investments/pay-yourself-first',
+        tenantId: tenantId,
+      );
+      if (data == null) return null;
+      if (data is! Map<String, dynamic>) {
+        throw const ApiException(
+          ApiFailure.unexpected,
+          'Não foi possível carregar o planejamento de reserva.',
+        );
+      }
+      await (await _store).cacheOne(tenantId, 'payYourselfFirstPlan', data);
+      return PayYourselfFirstPlanSummary.fromJson(data);
+    } on ApiException catch (error) {
+      if (!_canReadOffline(error)) rethrow;
+      final cached = await (await _store).cached(
+        tenantId,
+        'payYourselfFirstPlan',
+      );
+      return cached.isEmpty
+          ? null
+          : PayYourselfFirstPlanSummary.fromJson(cached.first);
+    }
+  }
+
+  Future<FinanceWriteState> configurePayYourselfFirstPlan({
+    required String tenantId,
+    PayYourselfFirstPlanSummary? existing,
+    required num currentRate,
+    num? goalRate,
+    required DateTime effectiveFrom,
+  }) {
+    final operationId = _newOperationId();
+    final localId = existing?.id ?? 'local-$operationId';
+    final effectiveDay = DateTime.utc(
+      effectiveFrom.year,
+      effectiveFrom.month,
+      effectiveFrom.day,
+      12,
+    );
+    return _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/investments/pay-yourself-first',
+      entityType: 'payYourselfFirstPlan',
+      entityId: localId,
+      payload: {
+        'operationId': operationId,
+        'version': existing?.version,
+        'currentRate': currentRate,
+        'goalRate': goalRate,
+        'effectiveFrom': effectiveDay.toIso8601String(),
+      },
+      localResource: {
+        'id': localId,
+        'currentRate': currentRate,
+        'goalRate': goalRate,
+        'effectiveFrom': effectiveDay.toIso8601String(),
+        'version': existing == null ? 0 : existing.version + 1,
+      },
+    );
+  }
 
   Future<List<ExpenseReductionGoalSummary>> expenseReductionGoals(
     String tenantId,
