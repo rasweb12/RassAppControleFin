@@ -35,3 +35,17 @@ Ambiente: branch Neon `br-frosty-cherry-b6b841fl`; banco dedicado de testes `ras
 | Pós-validação RLS/FORCE RLS | Aprovada nas quatro tabelas críticas verificadas. |
 
 Observações: a ferramenta `dotnet-ef` local estava em 10.0.12 enquanto o runtime EF estava em 10.0.13; o aviso não impediu builds ou migrations. Os testes exibiram aviso de licença do MediatR, permitido em desenvolvimento/teste, que permanece pendência de licenciamento antes de uso comercial em Production.
+
+## Checkpoint 14 — execução controlada em Production
+
+| Evidência | Resultado |
+|---|---|
+| Produção, migrations 11–17 | Aplicadas com sucesso. |
+| Pós-validação de etapa intermediária | Aprovada: 17 migrations, funções protegidas e RLS/FORCE RLS preservados. |
+| Pré-estágio da migration 20 | Aprovado: somente o `SELECT` legado no histórico EF foi revogado para a runtime. |
+| Produção, migrations 18–20 | Aplicadas com sucesso. |
+| Histórico EF Production | 20/20 exatas; sem migrations inesperadas. |
+| Testes negativos reais da runtime | Escrita administrativa com GUC forjado e execução de função administrativa negadas. |
+| Pós-validação de cleanup | Aprovada: `SET ROLE` transitório removido; runtime/PUBLIC sem ACL administrativa. |
+
+Nenhum dado foi apagado. Nenhum deploy ou alteração de configuração foi realizado no Render. O serviço Render ainda tem último deploy `update_failed` e logs históricos de readiness PostgreSQL indisponível, portanto o banco aprovado não equivale à API publicada/homologada.

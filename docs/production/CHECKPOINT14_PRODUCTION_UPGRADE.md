@@ -1,6 +1,6 @@
 # Checkpoint 14 — Upgrade controlado de Production
 
-Status: **PREPARADO, NÃO AUTORIZADO PARA ESCRITA EM PRODUCTION**
+Status: **BANCO ATUALIZADO; DEPLOY RENDER AINDA BLOQUEADO**
 Escopo: branch Neon `br-lucky-paper-b6egkr8q`, database `neondb`.
 
 ## Inventário do delta
@@ -83,7 +83,7 @@ Não execute downgrade das migrations 16–20. Em falha, interrompa a API/deploy
 
 ## GO / NO-GO atual
 
-**NO-GO para escrita em Production.** A simulação completa 10→20 foi aprovada em branch isolada; ainda falta executar o dry run com a credencial de Production, revisar a janela de mudança e obter autorização explícita para cada operação de escrita em Production.
+**NO-GO para deploy em Production.** O upgrade de banco foi concluído e pós-validado. Falta corrigir/validar o deploy Render, configurar a conexão administrativa isolada de runtime no serviço e executar smoke tests públicos pós-deploy.
 
 ## Evidência de provisionamento inicial — 2026-11-03
 
@@ -113,4 +113,20 @@ Resultados comprovados no banco dedicado:
 - RLS e `FORCE ROW LEVEL SECURITY` preservados nas quatro tabelas críticas verificadas;
 - o `SET ROLE` temporário de `neondb_owner` foi revogado e a pós-validação confirmou ausência de herança ou `SET` residual.
 
-Durante a simulação, a migration 20 recusou corretamente um `SELECT` legado da runtime em `app."__EFMigrationsHistory"`. O grant foi removido por `neondb_owner` no banco isolado antes da reaplicação da migration 20. O script `04-final-hardening-prestage.sql` formaliza esse mesmo pré-estágio controlado para uma futura operação autorizada em Production. Nenhuma migration, grant, dado de aplicação ou configuração Render foi alterada em Production; ela foi reconsultada ao fim e permaneceu em **10 migrations**.
+Durante a simulação, a migration 20 recusou corretamente um `SELECT` legado da runtime em `app."__EFMigrationsHistory"`. O grant foi removido por `neondb_owner` no banco isolado antes da reaplicação da migration 20. O script `04-final-hardening-prestage.sql` formaliza esse mesmo pré-estágio controlado para uma futura operação autorizada em Production.
+
+## Execução Production — 2026-11-03
+
+Após autorização explícita, a sequência incremental foi executada em `br-lucky-paper-b6egkr8q` / `neondb`, usando `neondb_owner` e endpoint direto com TLS `VerifyFull`:
+
+- migrations 11–17 aplicadas e pós-validadas;
+- pré-estágio controlado revogou apenas o `SELECT` legado da runtime em `app."__EFMigrationsHistory"` e concedeu `SET ROLE` transitório sem herança;
+- migrations 18–20 aplicadas;
+- histórico final: **20/20**, último ID `20261102040000_RuntimeIdentityOperationalAclHardening`;
+- quatro funções administrativas são `SECURITY DEFINER`, pertencem ao executor, usam `search_path=pg_catalog, app` e só permitem `EXECUTE` ao Platform Admin;
+- runtime e `PUBLIC` não executam funções administrativas; runtime mantém `USAGE` e não tem `CREATE` nem leitura do histórico EF;
+- RLS/FORCE RLS e ACLs mínimas de identidade foram validadas;
+- teste negativo com runtime real negou tanto a escrita administrativa com GUC forjado quanto a execução de `platform_dashboard()`;
+- migration 18 removeu o `SET ROLE` transitório; pós-validação confirmou ausência de herança e `SET` residual.
+
+Dados existentes não foram apagados. Não houve deploy, alteração de secrets ou configuração do Render. A observação posterior do Render mostrou que o último deploy de `main` (`a78e86e`, status `update_failed`) continua com readiness PostgreSQL indisponível; esse é o bloqueador atual para disponibilizar a API compatível com o schema novo.
