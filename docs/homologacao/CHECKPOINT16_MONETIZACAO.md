@@ -13,6 +13,7 @@ O Admin.Web possuía somente painel global de SuperAdmin. A API continua sendo a
 - `UserSubscription`: estado do acesso e validade, sem validade artificial para vitalício.
 - `PaymentEvent`: idempotência/auditoria por evento do provedor, com fingerprint SHA-256 em vez de token de compra bruto.
 - Migration `20261103112705_MonetizationFoundation`: RLS/FORCE RLS e ACL mínima. Runtime somente lê catálogo e a própria assinatura; não lê nem escreve eventos de pagamento; `PUBLIC` não recebe grants.
+- `GET /api/v1/monetization/entitlements`: leitura autenticada dos direitos efetivos do próprio usuário, calculados pelo backend sob RLS. Não cria assinatura, não recebe token de compra e não concede Premium.
 
 Preços de referência cadastrados na migration: Free R$ 0, Premium Mensal R$ 14,90, Premium Anual R$ 119,90 e Premium Vitalício R$ 299,90. As três ofertas pagas iniciam **desabilitadas** e sem `StoreProductId`; o banco não cria produto, preço ou cobrança na Google Play.
 

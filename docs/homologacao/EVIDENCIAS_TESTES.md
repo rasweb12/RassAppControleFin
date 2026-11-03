@@ -54,7 +54,7 @@ Nenhum dado foi apagado. Nenhum deploy ou alteração de configuração foi real
 
 | Comando/teste | Resultado |
 |---|---|
-| `dotnet test tests/RassAppControleFin.UnitTests/... -c Release --no-restore -m:1` | **53/53** aprovados. Inclui invariantes de plano vitalício e fingerprint de evento de pagamento. |
+| `dotnet test tests/RassAppControleFin.UnitTests/... -c Release --no-restore -m:1` | **54/54** aprovados. Inclui invariantes de plano vitalício, plano efetivo e fingerprint de evento de pagamento. |
 | `dotnet test tests/RassAppControleFin.IntegrationTests/... --filter "FullyQualifiedName~RuntimeIdentityAclMigrationTests"` | **4/4** guard tests locais aprovados. Inclui proteção estática da migration de monetização. |
 | Migration `20261103112705_MonetizationFoundation` | Gerada e revisada localmente; não aplicada em banco algum nesta rodada. |
 

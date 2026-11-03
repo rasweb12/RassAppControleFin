@@ -100,3 +100,27 @@ public sealed class PaymentEvent
     public DateTimeOffset OccurredAt { get; private set; }
     public DateTimeOffset RecordedAt { get; private set; }
 }
+
+public static class SubscriptionEntitlementResolver
+{
+    public static SubscriptionPlan EffectivePlan(IEnumerable<UserSubscription> subscriptions, DateTimeOffset now)
+    {
+        if (now.Offset != TimeSpan.Zero) throw new ArgumentException("Timestamp must be UTC.", nameof(now));
+
+        return subscriptions
+            .Where(subscription => subscription.Status == SubscriptionStatus.Active
+                && (subscription.ExpiresAt is null || subscription.ExpiresAt > now))
+            .OrderByDescending(subscription => subscription.UpdatedAt)
+            .ThenByDescending(subscription => Rank(subscription.Plan))
+            .Select(subscription => subscription.Plan)
+            .FirstOrDefault(SubscriptionPlan.Free);
+    }
+
+    private static int Rank(SubscriptionPlan plan) => plan switch
+    {
+        SubscriptionPlan.PremiumLifetime => 3,
+        SubscriptionPlan.PremiumAnnual => 2,
+        SubscriptionPlan.PremiumMonthly => 1,
+        _ => 0
+    };
+}

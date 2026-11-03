@@ -6,6 +6,19 @@ namespace RassAppControleFin.UnitTests;
 public sealed class FoundationDomainTests
 {
     [Fact]
+    public void Effective_plan_ignores_expired_and_uses_the_current_subscription()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var expired = new UserSubscription(Guid.NewGuid(), "subject", SubscriptionPlan.PremiumAnnual,
+            SubscriptionStatus.Active, PaymentProvider.GooglePlay, "expired", now.AddDays(-31), now.AddDays(-1), now.AddDays(-1));
+        var active = new UserSubscription(Guid.NewGuid(), "subject", SubscriptionPlan.PremiumMonthly,
+            SubscriptionStatus.Active, PaymentProvider.GooglePlay, "active", now.AddDays(-1), now.AddDays(29), now);
+
+        Assert.Equal(SubscriptionPlan.PremiumMonthly,
+            SubscriptionEntitlementResolver.EffectivePlan([expired, active], now));
+    }
+
+    [Fact]
     public void Lifetime_subscription_rejects_an_artificial_expiry()
     {
         var now = DateTimeOffset.UtcNow;
