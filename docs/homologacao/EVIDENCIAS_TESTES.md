@@ -121,3 +121,15 @@ O comando padrão foi executado sem credenciais de banco, URL de API ou flags qu
 ## Render — inspeção somente leitura (2026-11-03)
 
 O serviço `RassAppControleFin` permaneceu `live` no commit publicado informado anteriormente. Entretanto, os últimos erros recuperáveis do log continham readiness PostgreSQL indisponível em 2026-11-02. Uma consulta HTTP externa aos endpoints públicos expirou no ambiente de auditoria. Isso não comprova indisponibilidade atual, mas impede marcar a API publicada como homologada até coletar uma janela recente de logs e smoke tests HTTP bem-sucedidos.
+
+## Regressão local posterior — 2026-11-03
+
+| Comando | Resultado |
+|---|---|
+| `dotnet build RassAppControleFin.slnx -c Release --no-restore` | Aprovado, 0 warnings. |
+| Testes unitários .NET | **55/55** aprovados. |
+| Testes de arquitetura .NET | **5/5** aprovados. |
+| `flutter analyze` | Aprovado, sem issues. |
+| `flutter test` a partir da raiz do app | **28/28** aprovados. |
+
+A primeira invocação de `flutter test` com o diretório como argumento encerrou antes de iniciar os testes por uma falha de listagem em um artefato transitório de `build/flutter_secure_storage`. A repetição a partir da raiz do app foi aprovada e não exigiu limpeza, alteração de código ou acesso remoto. Os logs `RASS_HTTP_FAILURE` pertencem aos cenários negativos mockados.
