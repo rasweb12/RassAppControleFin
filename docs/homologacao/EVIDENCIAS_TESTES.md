@@ -112,6 +112,12 @@ O comando padrão foi executado sem credenciais de banco, URL de API ou flags qu
 - Instalação no emulador Android confirmada para o package isolado `com.rassapp.rassapp_controlefin.e2e`. Nenhum dado do package habitual foi removido ou reutilizado.
 - A inspeção automática desta sessão não obteve foco/árvore de UI do emulador após o launch; portanto instalação **não** é evidência de validação visual/manual.
 
+## Primeiro Me Pago — persistência offline (2026-11-03)
+
+- O planejamento percentual agora possui tela Flutter, confirmação explícita e não realiza transferência, despesa ou aplicação automaticamente.
+- Teste de armazenamento offline: **11/11**. A perda de rede cria somente a operação pendente `ConfigurePayYourselfFirstPlanCommand`, mantém percentual/meta no cache do tenant e não cria transação financeira.
+- Esta evidência não cobre previsão por receita, distribuição entre classes de investimento, disponibilidade de saldo, obrigações essenciais ou homologação contra API isolada; esses requisitos permanecem pendentes.
+
 ## Render — inspeção somente leitura (2026-11-03)
 
 O serviço `RassAppControleFin` permaneceu `live` no commit publicado informado anteriormente. Entretanto, os últimos erros recuperáveis do log continham readiness PostgreSQL indisponível em 2026-11-02. Uma consulta HTTP externa aos endpoints públicos expirou no ambiente de auditoria. Isso não comprova indisponibilidade atual, mas impede marcar a API publicada como homologada até coletar uma janela recente de logs e smoke tests HTTP bem-sucedidos.
