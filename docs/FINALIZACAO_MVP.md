@@ -1,6 +1,6 @@
 # Finalização do MVP — RassFin
 
-Data: 2026-11-03  
+Data: 2026-11-03
 Estado: **REPROVADO PARA PUBLICAÇÃO; evidências históricas de Production devem ser lidas em `docs/homologacao/`**
 
 ## Diagnóstico executivo
