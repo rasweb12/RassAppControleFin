@@ -65,7 +65,7 @@ Não executados: integração de compra, validação de recibo Google Play, test
 | Comando | Resultado |
 |---|---|
 | `flutter analyze` | Aprovado; sem falha de análise reportada. |
-| `flutter test --reporter compact` | **23/23** aprovados. Os logs HTTP exibidos exercitam casos negativos esperados. |
+| `flutter test --reporter compact` | **24/24** aprovados. Inclui a proteção contra fallback não configurado para Production; os logs HTTP exibidos exercitam casos negativos esperados. |
 | `flutter build apk --debug --flavor homologation` | **BLOQUEADO**: o executor encerrou a captura durante a etapa Gradle e não foi produzido APK novo verificável. |
 | Guard tests de `Invoke-MvpHomologation.ps1` | **2/2** aprovados; Debug de homologação e AAB Release agora possuem flags separadas. |
 | Parser PowerShell 5.1 | Aprovado para `Invoke-MvpHomologation.ps1`. |
