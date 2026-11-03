@@ -70,3 +70,24 @@ Não executados: integração de compra, validação de recibo Google Play, test
 | Guard tests de `Invoke-MvpHomologation.ps1` | **2/2** aprovados; Debug de homologação e AAB Release agora possuem flags separadas. |
 | Parser PowerShell 5.1 | Aprovado para `Invoke-MvpHomologation.ps1`. |
 | Instalação Android do APK `homologation` | Aprovada no emulador Android 16; variante `.homologation` coexistiu com o pacote base e abriu sem credenciais pré-preenchidas. Nenhuma conexão remota foi realizada. |
+
+## Checkpoint 15 — execução local segura (2026-11-03)
+
+O comando padrão foi executado sem credenciais de banco, URL de API ou flags que habilitem operações de integração. O relatório sanitizado foi gerado em `artifacts/homologacao/` e não é versionado.
+
+| Etapa | Resultado |
+|---|---|
+| Build .NET Release (`RassAppControleFin.slnx`) | Aprovado, 0 warnings. |
+| Testes unitários .NET | **55/55** aprovados. |
+| Testes de arquitetura .NET | **5/5** aprovados. |
+| Higiene de segredos | Aprovada. |
+| `flutter analyze` | Aprovado, sem issues. |
+| `flutter test` | **24/24** aprovados. Os registros de falha HTTP pertencem aos casos negativos esperados. |
+| Integração PostgreSQL/API, RLS e RBAC | **BLOQUEADO**: nenhuma branch/banco isolado foi confirmada nesta execução. |
+| `integration_test` Flutter | **BLOQUEADO**: diretório e infraestrutura E2E de dispositivo ainda não existem. |
+| APK Debug remoto e AAB Release | **BLOQUEADOS**: exigem URL de homologação explícita e assinatura Release aprovada, respectivamente. |
+| Smoke HTTP | **BLOQUEADO**: o orquestrador não aceita inferir uma URL de Production. |
+
+## Render — inspeção somente leitura (2026-11-03)
+
+O serviço `RassAppControleFin` permaneceu `live` no commit publicado informado anteriormente. Entretanto, os últimos erros recuperáveis do log continham readiness PostgreSQL indisponível em 2026-11-02. Uma consulta HTTP externa aos endpoints públicos expirou no ambiente de auditoria. Isso não comprova indisponibilidade atual, mas impede marcar a API publicada como homologada até coletar uma janela recente de logs e smoke tests HTTP bem-sucedidos.
