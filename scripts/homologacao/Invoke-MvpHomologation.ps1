@@ -7,8 +7,12 @@ param(
     [ValidatePattern('^br-[a-z0-9-]+$')]
     [string]$ExpectedTestBranchId,
     [switch]$NeonTestBranchConfirmed,
-    # Android artifacts require an installed SDK and release signing material.
-    [switch]$BuildAndroid,
+    # Debug homologation needs an explicit non-Production API target.
+    [switch]$BuildAndroidDebug,
+    [ValidatePattern('^https?://')]
+    [string]$HomologationApiBaseUrl,
+    # Release AAB remains separately opt-in because it needs approved signing material.
+    [switch]$BuildAndroidRelease,
     # Optional read-only smoke target. It is never inferred from a connection string.
     [ValidatePattern('^https?://')]
     [string]$ApiBaseUrl
@@ -95,11 +99,24 @@ try {
             [void](Invoke-CheckedProcess 'Flutter integration_test' $flutter @('test', 'integration_test') $flutterProject)
         }
         else { Add-Result 'Flutter integration_test' 'BLOQUEADO' 'Não há diretório integration_test; não há evidência E2E de aplicativo/dispositivo.' }
-        if ($BuildAndroid) {
-            [void](Invoke-CheckedProcess 'Android APK debug' $flutter @('build', 'apk', '--debug') $flutterProject)
+        if ($BuildAndroidDebug) {
+            if ([string]::IsNullOrWhiteSpace($HomologationApiBaseUrl) -or
+                $HomologationApiBaseUrl -match 'rassappcontrolefin-1\.onrender\.com') {
+                Add-Result 'Android APK debug de homologação' 'BLOQUEADO' 'Exige URL explícita que não seja Production.'
+            }
+            else {
+                [void](Invoke-CheckedProcess 'Android APK debug de homologação' $flutter @(
+                    'build', 'apk', '--debug', '--flavor', 'homologation',
+                    "--dart-define=API_BASE_URL=$HomologationApiBaseUrl"
+                ) $flutterProject)
+            }
+        }
+        else { Add-Result 'Android APK debug de homologação' 'BLOQUEADO' 'Use -BuildAndroidDebug com -HomologationApiBaseUrl explícita e não-Production.' }
+
+        if ($BuildAndroidRelease) {
             [void](Invoke-CheckedProcess 'Android AAB release' $flutter @('build', 'appbundle', '--release') $flutterProject)
         }
-        else { Add-Result 'Android APK/AAB' 'BLOQUEADO' 'Use -BuildAndroid após configurar SDK e assinatura release.' }
+        else { Add-Result 'Android AAB release' 'BLOQUEADO' 'Requer -BuildAndroidRelease, assinatura aprovada e aceite manual.' }
     }
 
     if ($IncludeIntegration) {

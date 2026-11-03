@@ -59,3 +59,13 @@ Nenhum dado foi apagado. Nenhum deploy ou alteração de configuração foi real
 | Migration `20261103112705_MonetizationFoundation` | Gerada e revisada localmente; não aplicada em banco algum nesta rodada. |
 
 Não executados: integração de compra, validação de recibo Google Play, testes em dispositivo, APK/AAB, API de entitlement e interface Free/Premium. Esses itens são pendentes, não aprovados.
+
+## Sprint 17 — regressão Flutter local
+
+| Comando | Resultado |
+|---|---|
+| `flutter analyze` | Aprovado; sem falha de análise reportada. |
+| `flutter test --reporter compact` | **23/23** aprovados. Os logs HTTP exibidos exercitam casos negativos esperados. |
+| `flutter build apk --debug --flavor homologation` | **BLOQUEADO**: o executor encerrou a captura durante a etapa Gradle e não foi produzido APK novo verificável. |
+| Guard tests de `Invoke-MvpHomologation.ps1` | **2/2** aprovados; Debug de homologação e AAB Release agora possuem flags separadas. |
+| Parser PowerShell 5.1 | Aprovado para `Invoke-MvpHomologation.ps1`. |
