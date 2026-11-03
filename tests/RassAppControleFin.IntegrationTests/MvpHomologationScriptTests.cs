@@ -13,6 +13,7 @@ public sealed class MvpHomologationScriptTests
         Assert.Contains("rass_sprint1_tests", script, StringComparison.Ordinal);
         Assert.Contains("ep-square-rain-b6i4dhum", script, StringComparison.Ordinal);
         Assert.Contains("The command never executes migrations", script, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("git -C $repositoryRoot rev-parse --short HEAD", script, StringComparison.Ordinal);
         Assert.DoesNotContain("database update", script, StringComparison.OrdinalIgnoreCase);
     }
 

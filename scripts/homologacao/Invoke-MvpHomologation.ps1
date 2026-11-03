@@ -157,7 +157,9 @@ finally {
     Pop-Location -ErrorAction SilentlyContinue
     $go = ($results.Count -gt 0) -and -not ($results.Status -contains 'REPROVADO') -and -not ($results.Status -contains 'BLOQUEADO')
     $verdict = if ($go) { 'GO' } else { 'NO-GO' }
-    $lines = @('# Checkpoint 15 — relatório automático', '', "Data: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')", "Commit: $((git rev-parse --short HEAD 2>$null))", "Veredito: **$verdict**", '', '| Etapa | Resultado | Evidência |', '|---|---|---|')
+    $commit = (& git -C $repositoryRoot rev-parse --short HEAD 2>$null | Select-Object -First 1).Trim()
+    if ([string]::IsNullOrWhiteSpace($commit)) { $commit = 'indisponível' }
+    $lines = @('# Checkpoint 15 — relatório automático', '', "Data: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')", "Commit: $commit", "Veredito: **$verdict**", '', '| Etapa | Resultado | Evidência |', '|---|---|---|')
     foreach ($result in $results) { $lines += "| $($result.Name) | $($result.Status) | $($result.Evidence.Replace('|','/')) |" }
     $lines += '', '> The command never executes migrations, deploys or Production writes. Testes integrados exigem banco isolado explicitamente confirmado.'
     Set-Content -LiteralPath $reportPath -Value ($lines -join [Environment]::NewLine) -Encoding UTF8
