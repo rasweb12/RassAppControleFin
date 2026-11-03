@@ -88,6 +88,12 @@ O comando padrão foi executado sem credenciais de banco, URL de API ou flags qu
 | APK Debug remoto e AAB Release | **BLOQUEADOS**: exigem URL de homologação explícita e assinatura Release aprovada, respectivamente. |
 | Smoke HTTP | **BLOQUEADO**: o orquestrador não aceita inferir uma URL de Production. |
 
+## Android E2E — guarda de configuração (2026-11-03)
+
+- Foi incluído `integration_test/configuration_guard_test.dart`, que inicia o app sem `API_BASE_URL` e exige a tela de bloqueio antes de qualquer autenticação ou chamada HTTP. O teste é deliberadamente limitado a esse limite de segurança e não representa homologação financeira.
+- Dependências, análise estática e testes de unidade/widget continuaram aprovados após a inclusão (`flutter analyze` sem issues; **24/24** testes).
+- O runner foi compilado e instalado no emulador Android 16, mas não devolveu resultado após a instalação dentro da janela de execução. Portanto o teste em dispositivo está **BLOQUEADO**, não aprovado. A causa deve ser diagnosticada antes de contar esta prova como evidência E2E.
+
 ## Render — inspeção somente leitura (2026-11-03)
 
 O serviço `RassAppControleFin` permaneceu `live` no commit publicado informado anteriormente. Entretanto, os últimos erros recuperáveis do log continham readiness PostgreSQL indisponível em 2026-11-02. Uma consulta HTTP externa aos endpoints públicos expirou no ambiente de auditoria. Isso não comprova indisponibilidade atual, mas impede marcar a API publicada como homologada até coletar uma janela recente de logs e smoke tests HTTP bem-sucedidos.
