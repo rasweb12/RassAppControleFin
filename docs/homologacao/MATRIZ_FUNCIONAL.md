@@ -24,4 +24,4 @@ Legenda: **Aprovado isolado** não significa aprovado em Production.
 
 - A migration `20261103112705_MonetizationFoundation` foi criada apenas no código e **não foi aplicada** em Neon ou Production.
 - Planos pagos permanecem desativados por padrão; não há cobrança, produto Play nem concessão Premium ativa.
-- A funcionalidade SuperAdmin solicitada para uma identidade externa permanece pendente de confirmação da identidade autenticada e de autorização explícita para a concessão funcional em Production.
+- A concessão SuperAdmin solicitada permanece bloqueada: a consulta somente leitura ao Neon Auth de Production não localizou uma identidade verificada correspondente. Após o cadastro/verificação, será necessária confirmação explícita antes da atribuição funcional.

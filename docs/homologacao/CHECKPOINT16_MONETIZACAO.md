@@ -43,6 +43,10 @@ Existe `POST /api/v1/tenants/members`, protegido por `Memberships.Manage`, mas a
 - A concessão de SuperAdmin para `okisegu@gmail.com` exige localizar e confirmar a identidade verificada no Neon Auth e uma autorização específica antes de qualquer escrita em Production.
 - A migration 21 é local e não foi aplicada a Neon ou Production.
 
+### Verificação de identidade em Production (somente leitura, 2026-11-03)
+
+Foi consultado o diretório Neon Auth da branch Production explicitamente identificada. Não foi encontrada identidade com o e-mail solicitado; portanto não há `subject` verificado a ser associado, não houve alteração de papel e a concessão permanece bloqueada. O próximo passo é concluir cadastro/verificação da conta e repetir a consulta limitada antes de solicitar a confirmação de escrita funcional.
+
 ## Estado
 
 Sprint 16: **PARCIAL / NO-GO**. A fundação está pronta para revisão; não há cobrança real, oferta Premium ativa ou acesso administrativo concedido.
