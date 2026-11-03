@@ -84,3 +84,16 @@ Não execute downgrade das migrations 16–20. Em falha, interrompa a API/deploy
 ## GO / NO-GO atual
 
 **NO-GO para escrita em Production.** Falta criar/verificar a branch de recuperação, provisionar as roles técnicas com atributos mínimos em escopo comprovado, executar o dry run com credencial de Production e fazer a simulação atualizada de 10→20 contra clone recente de Production.
+
+## Evidência de provisionamento inicial — 2026-11-03
+
+Após autorização explícita, as roles técnicas foram criadas exclusivamente em Production (`br-lucky-paper-b6egkr8q` / `neondb`) por SQL administrativo direto. Nenhuma migration, grant de schema, alteração de RLS, dado de aplicação ou configuração Render foi executada.
+
+| Role | LOGIN | INHERIT | SUPERUSER / CREATEROLE / CREATEDB / BYPASSRLS | Schema `app` |
+|---|---:|---:|---:|---|
+| `rass_platform_executor_owner_v1` | não | não | todos não | sem `USAGE`, sem `CREATE` |
+| `rass_platform_admin_v1` | sim | não | todos não | sem `USAGE`, sem `CREATE` |
+
+O Neon registrou memberships independentes, concedidas por `cloud_admin`, de `neondb_owner` para ambas as roles. A verificação efetiva confirmou `INHERIT = false`, `SET = false` e `USAGE = false`; portanto, `neondb_owner` não herda nem pode assumir essas roles neste estado. A associação não foi removida, pois ela não é uma concessão temporária da aplicação e a sua remoção exigiria decisão de segurança específica.
+
+O próximo bloqueio é a criação de uma branch de recuperação e a concessão transitória, controlada e revisada, necessária somente durante as migrations 16 e 18. Production continua **NO-GO** até a simulação atualizada, aplicação em etapas, pós-validação e smoke tests.
