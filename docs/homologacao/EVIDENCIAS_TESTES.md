@@ -133,3 +133,10 @@ O serviço `RassAppControleFin` permaneceu `live` no commit publicado informado 
 | `flutter test` a partir da raiz do app | **28/28** aprovados. |
 
 A primeira invocação de `flutter test` com o diretório como argumento encerrou antes de iniciar os testes por uma falha de listagem em um artefato transitório de `build/flutter_secure_storage`. A repetição a partir da raiz do app foi aprovada e não exigiu limpeza, alteração de código ou acesso remoto. Os logs `RASS_HTTP_FAILURE` pertencem aos cenários negativos mockados.
+
+## Checkpoint 15 — execução central local segura (2026-11-03)
+
+- Relatório sanitizado: `artifacts/homologacao/mvp-homologation-20261103-151031.md`, commit `5350df7`.
+- Aprovados: build Release, 55/55 unitários .NET, 5/5 arquitetura, higiene de segredos, análise Flutter, 28/28 Flutter e guarda Android E2E isolada.
+- A guarda Android usa `applicationId` `.e2e` e `API_BASE_URL` vazia; comprova o bloqueio antes de rede e não reutiliza o perfil habitual. Não é uma homologação de login, finanças ou sincronização.
+- Permaneceram bloqueados por design: integração PostgreSQL/API sem banco isolado confirmado, APK com API homologada, AAB assinado e smoke HTTP com URL explícita.

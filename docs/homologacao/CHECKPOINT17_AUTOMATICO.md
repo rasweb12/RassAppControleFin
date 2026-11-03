@@ -18,3 +18,9 @@ Cobertura atual: build .NET, testes de domínio/arquitetura, guardas de seguran�
 - A variante Android `e2e` usa `applicationIdSuffix = ".e2e"`; ela não compartilha FlutterSecureStorage, Drift, cache ou sessões com os pacotes base e `homologation`.
 - `integration_test/configuration_guard_test.dart` foi executado em Android 16 com `API_BASE_URL` vazia: **1/1** aprovado. A evidência comprova somente o bloqueio pré-rede de binários não configurados.
 - O comando central foi exercitado com `-AndroidDeviceId emulator-5554`. Build, testes .NET, higiene, análise Flutter, testes Flutter e E2E foram aprovados. Banco isolado, APK de homologação com API real, AAB Release e smoke HTTP ficaram deliberadamente **BLOQUEADOS** por ausência de parâmetros/infraestrutura autorizados; o resultado consolidado segue **NO-GO**.
+
+## Execução central repetida — 2026-11-03
+
+- O modo local seguro do orquestrador produziu o relatório sanitizado `artifacts/homologacao/mvp-homologation-20261103-151031.md` no commit `5350df7`.
+- Build Release, 55 testes unitários .NET, 5 testes de arquitetura, higiene de segredos, `flutter analyze`, 28 testes Flutter e a guarda `integration_test` da variante Android isolada foram aprovados.
+- Integração PostgreSQL/API, APK apontado para API de homologação, AAB assinado e smoke HTTP permaneceram bloqueados de forma explícita. Nenhuma URL, conexão de banco, migration, deploy ou escrita remota foi inferida pelo comando.
