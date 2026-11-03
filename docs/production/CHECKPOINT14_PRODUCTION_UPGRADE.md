@@ -18,7 +18,7 @@ Production foi auditada em modo somente leitura com 10 migrations, terminando em
 | 17 | `20261102010000_PlatformAdministrationHardening` | Remove grants temporários e reduz ACLs administrativas. |
 | 18 | `20261102020000_PlatformFunctionExecuteHardening` | Corrige `PUBLIC EXECUTE`; exige temporariamente `SET ROLE` do owner. |
 | 19 | `20261102030000_RuntimeSchemaUsageHardening` | Concede somente `USAGE` no schema `app` à runtime. |
-| 20 | `20261102040000_RuntimeIdentityOperationalAclHardening` | Declara as ACLs mínimas de identidade/sessão e remove DELETE/histórico EF da runtime. |
+| 20 | `20261102040000_RuntimeIdentityOperationalAclHardening` | Declara as ACLs mínimas de identidade/sessão e remove DELETE da runtime; requer que qualquer `SELECT` legado no histórico EF seja revogado no pré-estágio final. |
 
 Nenhuma migration de subida faz `DROP TABLE`, `TRUNCATE` ou `DELETE`. Há locks curtos esperados em `CreditCards`/`CardMovements` durante FKs, colunas, constraints e índices. As migrations 16–20 são forward-only; recuperação é por forward-fix ou branch de recuperação, nunca por `Down` automático.
 
@@ -41,7 +41,7 @@ Não usar o provisionador Neon se ele não puder garantir esses atributos sem me
 3. Provisionar e verificar as duas roles técnicas pelo procedimento manual supervisionado. Interromper se houver atributo elevado, `neon_superuser`, `BYPASSRLS` ou dúvida sobre escopo de role.
 4. Em uma janela controlada, executar apenas a etapa 1 (migrations 11–17). A migration 17 remove o `SET ROLE` transitório.
 5. Executar `infra/neon/production/03-production-post-stage-validation.sql`. Conferir 17 migrations, RLS/FORCE RLS e nenhum `PUBLIC EXECUTE` ainda aceito como estado final.
-6. Conceder transitoriamente somente `SET ROLE` para `neondb_owner` conforme comentário no script 02; executar a etapa 2 (migrations 18–20). A migration 18 remove esse grant.
+6. Conceder transitoriamente somente `SET ROLE` para `neondb_owner` conforme comentário no script 02. Executar `infra/neon/production/04-final-hardening-prestage.sql`, revisado na simulação, para revogar exclusivamente o `SELECT` legado da runtime em `app."__EFMigrationsHistory"`; então executar a etapa 2 (migrations 18–20). A migration 18 remove o grant transitório.
 7. Executar novamente o script 03 e os smoke tests de API: `/health/live`, `/health/ready`, autenticação, tenant, transação, cartão, compra/fatura/pagamento e endpoints Platform protegidos.
 8. Conferir que a connection string de runtime do Render aponta à branch Production, role runtime e TLS `VerifyFull`, sem revelar valor. Somente então autorizar deploy compatível.
 
@@ -83,7 +83,7 @@ Não execute downgrade das migrations 16–20. Em falha, interrompa a API/deploy
 
 ## GO / NO-GO atual
 
-**NO-GO para escrita em Production.** Falta criar/verificar a branch de recuperação, provisionar as roles técnicas com atributos mínimos em escopo comprovado, executar o dry run com credencial de Production e fazer a simulação atualizada de 10→20 contra clone recente de Production.
+**NO-GO para escrita em Production.** A simulação completa 10→20 foi aprovada em branch isolada; ainda falta executar o dry run com a credencial de Production, revisar a janela de mudança e obter autorização explícita para cada operação de escrita em Production.
 
 ## Evidência de provisionamento inicial — 2026-11-03
 
@@ -96,4 +96,21 @@ Após autorização explícita, as roles técnicas foram criadas exclusivamente 
 
 O Neon registrou memberships independentes, concedidas por `cloud_admin`, de `neondb_owner` para ambas as roles. A verificação efetiva confirmou `INHERIT = false`, `SET = false` e `USAGE = false`; portanto, `neondb_owner` não herda nem pode assumir essas roles neste estado. A associação não foi removida, pois ela não é uma concessão temporária da aplicação e a sua remoção exigiria decisão de segurança específica.
 
-O próximo bloqueio é a criação de uma branch de recuperação e a concessão transitória, controlada e revisada, necessária somente durante as migrations 16 e 18. Production continua **NO-GO** até a simulação atualizada, aplicação em etapas, pós-validação e smoke tests.
+Os bloqueadores remanescentes são o dry run com a credencial de Production, a aprovação explícita da janela de mudança e os smoke tests pós-upgrade. Production continua **NO-GO** até essas etapas autorizadas.
+
+## Simulação integral — 2026-11-03
+
+Uma branch de recuperação foi criada a partir de Production: `br-muddy-king-b6fsb52l` (`recovery-checkpoint14-production-20261103`). A simulação foi executada exclusivamente em `br-frosty-cherry-b6b841fl` (`validate-checkpoint14-production-upgrade-20261103`), usando o banco clonado `neondb` para validar 10→20 e o banco dedicado `rass_sprint1_tests` para a suíte que escreve dados sintéticos.
+
+Resultados comprovados no banco dedicado:
+
+- migrations **20/20**, sem IDs inesperados;
+- `PlatformRbacTests` **10/10** aprovados;
+- integração PostgreSQL/API **132/132** aprovada;
+- quatro funções `SECURITY DEFINER`, com owner `rass_platform_executor_owner_v1` e `search_path=pg_catalog, app`;
+- `EXECUTE` somente para `rass_platform_admin_v1`; sem `EXECUTE` para runtime ou `PUBLIC`;
+- runtime com `USAGE`, sem `CREATE`, sem leitura do histórico EF e sem `DELETE` nos objetos de identidade protegidos;
+- RLS e `FORCE ROW LEVEL SECURITY` preservados nas quatro tabelas críticas verificadas;
+- o `SET ROLE` temporário de `neondb_owner` foi revogado e a pós-validação confirmou ausência de herança ou `SET` residual.
+
+Durante a simulação, a migration 20 recusou corretamente um `SELECT` legado da runtime em `app."__EFMigrationsHistory"`. O grant foi removido por `neondb_owner` no banco isolado antes da reaplicação da migration 20. O script `04-final-hardening-prestage.sql` formaliza esse mesmo pré-estágio controlado para uma futura operação autorizada em Production. Nenhuma migration, grant, dado de aplicação ou configuração Render foi alterada em Production; ela foi reconsultada ao fim e permaneceu em **10 migrations**.

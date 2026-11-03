@@ -18,4 +18,11 @@ SELECT has_schema_privilege('rass_app_runtime_v2', 'app', 'USAGE') AS runtime_us
        has_table_privilege('rass_app_runtime_v2', 'app."Tenants"', 'DELETE') AS runtime_tenant_delete,
        has_table_privilege('rass_app_runtime_v2', 'app."UserProfiles"', 'DELETE') AS runtime_profile_delete,
        has_table_privilege('rass_app_runtime_v2', 'app."__EFMigrationsHistory"', 'SELECT') AS runtime_migration_history_read,
-       has_schema_privilege('PUBLIC', 'app', 'USAGE') AS public_schema_usage;
+       EXISTS (
+           SELECT 1
+           FROM pg_namespace schema
+           CROSS JOIN LATERAL aclexplode(COALESCE(schema.nspacl, acldefault('n', schema.nspowner))) privilege
+           WHERE schema.nspname = 'app'
+             AND privilege.grantee = 0
+             AND privilege.privilege_type = 'USAGE'
+       ) AS public_schema_usage;

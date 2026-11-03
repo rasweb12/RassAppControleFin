@@ -10,6 +10,9 @@ using RassAppControleFin.Infrastructure.Persistence.Seed;
 const string IsolatedPlatformAdminPasswordHost = "ep-raspy-poetry-b6x8rzs3.c-2.sa-east-1.aws.neon.tech";
 const string IsolatedPlatformAdminPasswordDatabase = "rass_sprint1_tests";
 const string IsolatedPlatformAdminPasswordBranchId = "br-odd-silence-b646inmx";
+const string SimulationPlatformAdminPasswordHost = "ep-old-firefly-b64y6pba.c-2.sa-east-1.aws.neon.tech";
+const string SimulationPlatformAdminPasswordDatabase = "rass_sprint1_tests";
+const string SimulationPlatformAdminPasswordBranchId = "br-frosty-cherry-b6b841fl";
 const string PlatformAdminRole = "rass_platform_admin_v1";
 const string IsolatedRbacTestHost = "ep-raspy-poetry-b6x8rzs3.c-2.sa-east-1.aws.neon.tech";
 const string IsolatedRbacTestDatabase = "rass_sprint1_tests";
@@ -18,7 +21,7 @@ const string ProductionDatabase = "neondb";
 const string ProductionMigrationRole = "neondb_owner";
 const string ProductionBranchId = "br-lucky-paper-b6egkr8q";
 
-if (args.Length == 0 || args[0] is not ("migrate" or "bootstrap" or "seed-development" or "probe" or "probe-tests" or "probe-platform-admin-isolated" or "probe-platform-grant-isolated" or "probe-platform-admin-branch" or "probe-upgrade-connections" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated" or "rotate-platform-admin-password-isolated" or "validate-platform-admin-connection" or "validate-rbac-test-sql-phase" or "validate-rbac-test-connections" or "diagnose-rbac-test-credentials" or "bootstrap-rbac-test-schema" or "execute-rbac-test-sql" or "migrate-rbac-test-database" or "validate-production-upgrade-connection" or "apply-production-upgrade"))
+if (args.Length == 0 || args[0] is not ("migrate" or "bootstrap" or "seed-development" or "probe" or "probe-tests" or "probe-platform-admin-isolated" or "probe-platform-grant-isolated" or "probe-platform-admin-branch" or "probe-upgrade-connections" or "migrate-isolated-tests" or "provision-platform-admin-isolated" or "grant-platform-executor-schema-create-isolated" or "grant-platform-executor-to-migration-owner-isolated" or "rotate-platform-admin-password-isolated" or "rotate-platform-admin-password-simulation" or "validate-platform-admin-connection" or "validate-rbac-test-sql-phase" or "validate-rbac-test-connections" or "diagnose-rbac-test-credentials" or "bootstrap-rbac-test-schema" or "execute-rbac-test-sql" or "migrate-rbac-test-database" or "validate-production-upgrade-connection" or "apply-production-upgrade"))
 {
     Console.Error.WriteLine("Commands include validate-production-upgrade-connection --expected-host <direct-production-host> --confirmed-branch-id br-lucky-paper-b6egkr8q and apply-production-upgrade with --confirm-production-write. Other commands are intentionally restricted to their documented isolated environments.");
     return 2;
@@ -516,8 +519,12 @@ try
             return 1;
         }
     }
-    if (args[0] == "rotate-platform-admin-password-isolated")
+    if (args[0] is "rotate-platform-admin-password-isolated" or "rotate-platform-admin-password-simulation")
     {
+        var simulation = args[0] == "rotate-platform-admin-password-simulation";
+        var expectedHost = simulation ? SimulationPlatformAdminPasswordHost : IsolatedPlatformAdminPasswordHost;
+        var expectedDatabase = simulation ? SimulationPlatformAdminPasswordDatabase : IsolatedPlatformAdminPasswordDatabase;
+        var expectedBranchId = simulation ? SimulationPlatformAdminPasswordBranchId : IsolatedPlatformAdminPasswordBranchId;
         const string confirmationFlag = "--confirm-platform-admin-password-rotation";
         const string branchFlag = "--confirmed-branch-id";
         var branchIndex = Array.IndexOf(args, branchFlag);
@@ -525,7 +532,7 @@ try
             ? args[branchIndex + 1]
             : null;
         if (!args.Contains(confirmationFlag, StringComparer.Ordinal)
-            || !string.Equals(confirmedBranchId, IsolatedPlatformAdminPasswordBranchId, StringComparison.Ordinal))
+            || !string.Equals(confirmedBranchId, expectedBranchId, StringComparison.Ordinal))
         {
             Console.Error.WriteLine("Password rotation requires an explicit confirmation of the approved isolated Neon branch.");
             return 2;
@@ -562,8 +569,8 @@ try
             && !value.NoResetOnClose
             && !value.Multiplexing;
 
-        if (!IsDirectVerifyFull(owner, IsolatedPlatformAdminPasswordHost, IsolatedPlatformAdminPasswordDatabase, "neondb_owner")
-            || !IsDirectVerifyFull(platform, IsolatedPlatformAdminPasswordHost, IsolatedPlatformAdminPasswordDatabase, PlatformAdminRole)
+        if (!IsDirectVerifyFull(owner, expectedHost, expectedDatabase, "neondb_owner")
+            || !IsDirectVerifyFull(platform, expectedHost, expectedDatabase, PlatformAdminRole)
             || string.IsNullOrWhiteSpace(platform.Password)
             || platform.Password.Length < 32)
         {
@@ -571,7 +578,7 @@ try
             return 2;
         }
 
-        static async Task<(bool Valid, bool ServerAddressAvailable)> VerifyOwnerAndRoleSafetyAsync(NpgsqlConnection connection)
+        async Task<(bool Valid, bool ServerAddressAvailable)> VerifyOwnerAndRoleSafetyAsync(NpgsqlConnection connection)
         {
             await using var command = new NpgsqlCommand("""
                 SELECT current_database(),
@@ -591,7 +598,7 @@ try
             await using var reader = await command.ExecuteReaderAsync();
             await reader.ReadAsync();
             return (
-                reader.GetString(0) == IsolatedPlatformAdminPasswordDatabase
+                reader.GetString(0) == expectedDatabase
                 && reader.GetString(1) == "neondb_owner"
                 && !reader.IsDBNull(3) && reader.GetBoolean(3)
                 && reader.GetBoolean(4),
@@ -636,14 +643,14 @@ try
             await using var identity = new NpgsqlCommand("SELECT current_database(), current_user, inet_server_addr() IS NOT NULL", platformDbConnection);
             await using var identityReader = await identity.ExecuteReaderAsync();
             await identityReader.ReadAsync();
-            if (identityReader.GetString(0) != IsolatedPlatformAdminPasswordDatabase
+            if (identityReader.GetString(0) != expectedDatabase
                 || identityReader.GetString(1) != PlatformAdminRole)
             {
                 Console.Error.WriteLine("The rotated platform-administration credential did not authenticate to the approved isolated database.");
                 return 1;
             }
 
-            Console.WriteLine($"Platform administration password rotated and authenticated with VerifyFull. Database '{IsolatedPlatformAdminPasswordDatabase}', owner 'neondb_owner', role '{PlatformAdminRole}', server address available: {before.ServerAddressAvailable && identityReader.GetBoolean(2)}.");
+            Console.WriteLine($"Platform administration password rotated and authenticated with VerifyFull. Database '{expectedDatabase}', owner 'neondb_owner', role '{PlatformAdminRole}', server address available: {before.ServerAddressAvailable && identityReader.GetBoolean(2)}.");
             return 0;
         }
         catch (PostgresException exception)
