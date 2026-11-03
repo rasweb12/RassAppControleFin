@@ -66,6 +66,6 @@ Não executados: integração de compra, validação de recibo Google Play, test
 |---|---|
 | `flutter analyze` | Aprovado; sem falha de análise reportada. |
 | `flutter test --reporter compact` | **24/24** aprovados. Inclui a proteção contra fallback não configurado para Production; os logs HTTP exibidos exercitam casos negativos esperados. |
-| `flutter build apk --debug --flavor homologation` | **BLOQUEADO**: o executor encerrou a captura durante a etapa Gradle e não foi produzido APK novo verificável. |
+| `flutter build apk --debug --flavor homologation --dart-define=API_BASE_URL=https://homologation.invalid` | APK Debug compilado em 2026-11-03; SHA-256 `E1E56B13FFBCEDE3251BBF01F33504CFFF6C500004B399A2A39C590C24836E0C`. Não equivale a homologação funcional remota. |
 | Guard tests de `Invoke-MvpHomologation.ps1` | **2/2** aprovados; Debug de homologação e AAB Release agora possuem flags separadas. |
 | Parser PowerShell 5.1 | Aprovado para `Invoke-MvpHomologation.ps1`. |
