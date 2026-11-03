@@ -1,11 +1,11 @@
 # Finalização do MVP — RassFin
 
-Data: 2026-11-01  
-Estado: **REPROVADO PARA PRODUCTION E PUBLICAÇÃO**
+Data: 2026-11-03  
+Estado: **REPROVADO PARA PUBLICAÇÃO; evidências históricas de Production devem ser lidas em `docs/homologacao/`**
 
 ## Diagnóstico executivo
 
-O código compila e a regressão local disponível está verde, mas a versão publicada não pode ser promovida enquanto Production tiver somente 10 migrations e a simulação das seis migrations pendentes estiver bloqueada pelo provisionamento inseguro de roles técnicas no Neon. A funcionalidade financeira não deve ser considerada completamente homologada apenas pelos builds e testes abaixo.
+O código compila e a regressão local disponível está verde, mas a funcionalidade financeira não deve ser considerada completamente homologada apenas pelos builds e testes. Este documento preserva o diagnóstico de MVP; os bloqueadores de migrations 10→20 foram tratados nos Checkpoints 13 e 14 e não devem ser interpretados como estado atual de Production.
 
 ## Matriz de funcionalidades
 
@@ -17,11 +17,11 @@ O código compila e a regressão local disponível está verde, mas a versão pu
 | Extrato, filtros e edição | Implementado | Implementado | Transações/RLS | Flutter | Manual histórica | Validar em APK atual | Parcial |
 | Exclusão/estorno de transação | Parcial | Endpoint ainda se chama `cancel` | Auditoria/ledger | Não reexecutado | Não comprovada nesta rodada | Revisar distinção excluir x estornar | Pendente |
 | Vencimentos, recorrências e parcelamentos gerais | Parcial | Parcial | Migration/contratos a confirmar | Não comprovado | Não comprovada | Cobertura funcional insuficiente | Pendente |
-| Cartões, compra, fatura e pagamento | Implementado | Implementado | Requer 3 tabelas ausentes em Production | Fluxo isolado homologado anteriormente | Parcial isolada | Production sem migrations 11–16 | Bloqueado |
+| Cartões, compra, fatura e pagamento | Implementado | Implementado | Schema 20 migrations relatado como aplicado | Fluxo isolado homologado anteriormente | Parcial isolada | Retestar no APK atual e smoke do deploy | Parcial |
 | Sincronização offline e reconciliação | Implementado | Implementado | Outbox/inbox | 8 testes Flutter de store/sync | Cartão isolado histórico | Retestar no APK atual | Parcial |
 | Metas, orçamentos e redução de despesas | Implementado | Implementado | RLS | Não reexecutado | Histórico parcial | Fluxos de arquivo/reativação ainda exigem roteiro | Parcial |
 | Investimentos e Primeiro me pago | Contratos e endpoints existem | Implementado | `InvestmentPlanningCore` | Não reexecutado ponta a ponta | Não comprovada | UX e regras de negócio exigem homologação | Pendente |
-| RBAC tenant/global | Implementado | Policies `Permissions`/`Platform.*` | RLS e `PlatformRoleAssignments` após migration | Testes isolados históricos | Não em Production | Migrations e provisionamento técnico bloqueados | Bloqueado |
+| RBAC tenant/global | Implementado | Policies `Permissions`/`Platform.*` | RLS e `PlatformRoleAssignments` | Testes isolados históricos | Aprovado isolado; smoke Production pendente | Regressão/smoke do deploy atual | Parcial |
 | Admin Web | Implementado parcialmente | API é autoridade | Sem acesso financeiro direto | Build Release | Não comprovada | Bloqueio visual por perfil funcional ausente | Parcial |
 | Android Release | Configurado | N/A | N/A | Debug gerado | Não | Assinatura, AAB e checklist Play pendentes | Bloqueado |
 
@@ -29,10 +29,10 @@ O código compila e a regressão local disponível está verde, mas a versão pu
 
 ### P0
 
-1. Provisionar as roles técnicas da branch descartável com menor privilégio, por procedimento Neon supervisionado; não usar roles com `BYPASSRLS`, `CREATEROLE`, `CREATEDB`, `REPLICATION` ou herança indevida.
-2. Simular as migrations 11–16 em `validate-checkpoint13-production-upgrade`; validar 27 tabelas, RLS/FORCE RLS, grants e funções `SECURITY DEFINER`.
-3. Reexecutar a suíte PostgreSQL somente em `rass_sprint1_tests`, com segredos de teste apontando ao banco correto.
-4. Homologar no APK atual: compra, pagamento de fatura, transação, transferência, exclusão/estorno e sincronização após reinicialização.
+1. Homologar no APK atual: compra, pagamento de fatura, transação, transferência, exclusão/estorno e sincronização após reinicialização.
+2. Executar smoke atual do deploy e validar readiness PostgreSQL em janela recente.
+3. Aplicar e testar a migration de monetização apenas em ambiente isolado; não habilitar produtos ou cobrança.
+4. Implementar o fluxo Flutter completo de Primeiro Me Pago antes de anunciá-lo como recurso do MVP.
 
 ### P1
 
