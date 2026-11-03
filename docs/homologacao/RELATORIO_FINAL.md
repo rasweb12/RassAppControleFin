@@ -9,4 +9,4 @@
 
 O maior nível comprovável é a homologação do RBAC e da integração PostgreSQL em banco isolado, seguida da validação estrutural de 20 migrations em Production. O Render ativo está no commit `a78e86e`; ele não contém automaticamente os commits posteriores da branch `codex/checkpoint14-production-plan`.
 
-Os bloqueadores P0/P1 para publicação são: integração API/Flutter em dispositivo ainda ausente, ausência de evidência de APK/AAB recém-gerados e instalados, assinatura release e metadados Play pendentes, Data Protection sem armazenamento persistente confirmado e ausência de smoke completo do deploy do código atual.
+Os bloqueadores P0/P1 para publicação são: integração API/Flutter em dispositivo ainda ausente, ausência de evidência de APK/AAB recém-gerados e instalados, assinatura release e metadados Play pendentes, Data Protection persistente do Admin.Web ainda não comprovado no serviço Render e ausência de smoke completo do deploy do código atual.

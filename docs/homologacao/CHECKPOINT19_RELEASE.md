@@ -2,7 +2,9 @@
 
 Estado: **NO-GO**.
 
-Pré-requisitos: correção de Data Protection, licença MediatR válida para uso comercial, aprovação manual do Checkpoint 18, `applicationId` confirmado, assinatura release fora do Git, APK/AAB recém-gerados, política de privacidade, exclusão de conta, metadados e produtos Play configurados.
+Pré-requisitos: comprovação de Data Protection persistente no Admin.Web após provisionamento do disco Render, licença MediatR válida para uso comercial, aprovação manual do Checkpoint 18, `applicationId` confirmado, assinatura release fora do Git, APK/AAB recém-gerados, política de privacidade, exclusão de conta, metadados e produtos Play configurados.
+
+O Admin.Web ainda não aparece como serviço provisionado no workspace Render observado em 2026-11-03. A declaração em `render.yaml` não substitui uma implantação verificada; a criação do serviço e a configuração de suas variáveis permanecem uma operação externa pendente.
 
 Não criar chave definitiva, não publicar AAB e não ativar preços/cobrança sem autorização específica do proprietário.
 

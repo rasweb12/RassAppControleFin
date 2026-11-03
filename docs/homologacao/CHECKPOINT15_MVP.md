@@ -25,7 +25,7 @@ O Neon Production está no schema de 20 migrations segundo a validação do Chec
 - Há um `integration_test` Flutter de guarda de configuração executado em emulador Android 16. Fluxos financeiros E2E continuam pendentes de API e autenticação isoladas.
 - AAB release requer assinatura configurada fora do repositório.
 - `applicationId`, versão, política de privacidade, exclusão de conta e metadados Play exigem definição final.
-- Data Protection no Render indicou armazenamento de chaves não persistente; requer configuração antes de lançamento comercial.
+- O Admin.Web está configurado localmente para persistir chaves Data Protection e tickets em `/var/data`, com disco Render declarado. Falta comprovar provisionamento, continuidade de sessão após reinício e proteção operacional no serviço Admin antes do lançamento comercial.
 - A licença do MediatR deve ser confirmada antes de uso comercial.
 
 Resultado inicial do Checkpoint 15: **NO-GO**, até que todas as etapas obrigatórias tenham evidência real.

@@ -33,6 +33,8 @@ Os entitlements são um catálogo; a aplicação ainda não os aplica a cada flu
 
 A rota global `/platform` agora redireciona qualquer identidade que não seja SuperAdmin antes de renderizar controles globais. O backend mantém as políticas `Platform.*`. Não há ainda telas de TenantAdmin para administração restrita ao tenant; esse requisito continua **PENDENTE**.
 
+O `render.yaml` declara o serviço Admin.Web com disco persistente para sessões, porém a inspeção somente leitura do workspace Render em 2026-11-03 encontrou somente o serviço API provisionado. Assim, o painel não está homologado nem publicamente disponível; criar/provisionar o serviço exige uma etapa de infraestrutura e deploy autorizados separadamente.
+
 ### Achado P1 — administração por TenantAdmin
 
 Existe `POST /api/v1/tenants/members`, protegido por `Memberships.Manage`, mas a policy RLS histórica `membership_insert` só permite inserir membros quando o ator é o proprietário do tenant. Também não há convite verificável nem consulta segura de membros do tenant. Criar uma tela agora faria a interface prometer uma operação que pode ser recusada pelo banco e abriria o risco de convidar identificadores opacos não confirmados. A correção precisa de desenho explícito de convite/aceite, autorização do proprietário/TenantAdmin e policy RLS revisada com testes entre tenants; permanece **PENDENTE**, sem flexibilização de RLS.
