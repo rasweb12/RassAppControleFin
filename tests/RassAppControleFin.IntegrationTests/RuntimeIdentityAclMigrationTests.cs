@@ -35,6 +35,18 @@ public sealed class RuntimeIdentityAclMigrationTests
         Assert.DoesNotContain("GRANT ", sql, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Production_final_hardening_prestage_revokes_only_legacy_history_read()
+    {
+        var sql = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "infra", "neon", "production",
+            "04-final-hardening-prestage.sql"));
+
+        Assert.Contains("REVOKE SELECT ON TABLE app.\"__EFMigrationsHistory\" FROM rass_app_runtime_v2", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("GRANT ", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TRUNCATE", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
