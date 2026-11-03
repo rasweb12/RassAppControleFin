@@ -283,6 +283,43 @@ void main() {
     },
   );
 
+  test(
+    'queues an offline pay-yourself-first plan without financial movement',
+    () async {
+      final database = OfflineDatabase(NativeDatabase.memory());
+      final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
+      final controller = AuthController(
+        ApiClient(
+          client: MockClient((_) => throw const SocketException('offline')),
+        ),
+        _MemorySessionStore(_session()),
+      );
+      await controller.restore();
+      final repository = FinanceRepository(
+        controller,
+        store: Future.value(store),
+      );
+
+      final state = await repository.configurePayYourselfFirstPlan(
+        tenantId: 'tenant-a',
+        currentRate: .2,
+        goalRate: .3,
+        effectiveFrom: DateTime(2026, 11, 3),
+      );
+
+      expect(state, FinanceWriteState.pending);
+      final pending = await store.pending('tenant-a');
+      expect(pending, hasLength(1));
+      expect(pending.single.endpoint, '/api/v1/investments/pay-yourself-first');
+      expect(pending.single.entityType, 'payYourselfFirstPlan');
+      final cached = await store.cached('tenant-a', 'payYourselfFirstPlan');
+      expect(cached.single['currentRate'], .2);
+      expect(cached.single['goalRate'], .3);
+      expect(await store.cached('tenant-a', 'transaction'), isEmpty);
+      await database.close();
+    },
+  );
+
   test('keeps a pending transaction when a remote page is empty', () async {
     final database = OfflineDatabase(NativeDatabase.memory());
     final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
@@ -314,51 +351,57 @@ void main() {
     await database.close();
   });
 
-  test('reconciles a created local card with the server identity atomically', () async {
-    final database = OfflineDatabase(NativeDatabase.memory());
-    final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
-    const operationId = 'create-card-1';
-    const localCardId = 'local-card-1';
+  test(
+    'reconciles a created local card with the server identity atomically',
+    () async {
+      final database = OfflineDatabase(NativeDatabase.memory());
+      final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
+      const operationId = 'create-card-1';
+      const localCardId = 'local-card-1';
 
-    await store.cacheOne('tenant-a', 'card', {
-      'id': localCardId,
-      'name': 'Cartão local',
-      'version': 0,
-      'currency': 'BRL',
-    });
-    await store.cacheOne('tenant-a', 'card', {
-      'id': 'card-existing',
-      'name': 'Cartão existente',
-      'version': 3,
-      'currency': 'BRL',
-    });
-    await store.enqueue(
-      tenantId: 'tenant-a',
-      endpoint: '/api/v1/credit-cards',
-      payload: const {'operationId': operationId},
-      entityType: 'card',
-      entityId: localCardId,
-      operationType: 'create',
-    );
+      await store.cacheOne('tenant-a', 'card', {
+        'id': localCardId,
+        'name': 'Cartão local',
+        'version': 0,
+        'currency': 'BRL',
+      });
+      await store.cacheOne('tenant-a', 'card', {
+        'id': 'card-existing',
+        'name': 'Cartão existente',
+        'version': 3,
+        'currency': 'BRL',
+      });
+      await store.enqueue(
+        tenantId: 'tenant-a',
+        endpoint: '/api/v1/credit-cards',
+        payload: const {'operationId': operationId},
+        entityType: 'card',
+        entityId: localCardId,
+        operationType: 'create',
+      );
 
-    final operation = (await store.pending('tenant-a')).single;
-    await store.reconcileCreatedCard(
-      operation: operation,
-      resourceId: 'card-server',
-      version: 1,
-    );
+      final operation = (await store.pending('tenant-a')).single;
+      await store.reconcileCreatedCard(
+        operation: operation,
+        resourceId: 'card-server',
+        version: 1,
+      );
 
-    final cards = await store.cached('tenant-a', 'card');
-    expect(cards, hasLength(2));
-    expect(cards.map((item) => item['id']), containsAll(['card-server', 'card-existing']));
-    expect(cards.map((item) => item['id']), isNot(contains(localCardId)));
-    expect(
-      cards.singleWhere((item) => item['id'] == 'card-server')['version'],
-      1,
-    );
-    expect(await store.pendingCount('tenant-a'), 0);
-    await database.close();
-  });
+      final cards = await store.cached('tenant-a', 'card');
+      expect(cards, hasLength(2));
+      expect(
+        cards.map((item) => item['id']),
+        containsAll(['card-server', 'card-existing']),
+      );
+      expect(cards.map((item) => item['id']), isNot(contains(localCardId)));
+      expect(
+        cards.singleWhere((item) => item['id'] == 'card-server')['version'],
+        1,
+      );
+      expect(await store.pendingCount('tenant-a'), 0);
+      await database.close();
+    },
+  );
 
   test(
     'keeps cached accounts when a remote page is unexpectedly empty',
