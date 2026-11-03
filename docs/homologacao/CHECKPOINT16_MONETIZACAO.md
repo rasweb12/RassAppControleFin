@@ -14,6 +14,7 @@ O Admin.Web possuía somente painel global de SuperAdmin. A API continua sendo a
 - `PaymentEvent`: idempotência/auditoria por evento do provedor, com fingerprint SHA-256 em vez de token de compra bruto.
 - Migration `20261103112705_MonetizationFoundation`: RLS/FORCE RLS e ACL mínima. Runtime somente lê catálogo e a própria assinatura; não lê nem escreve eventos de pagamento; `PUBLIC` não recebe grants.
 - `GET /api/v1/monetization/entitlements`: leitura autenticada dos direitos efetivos do próprio usuário, calculados pelo backend sob RLS. Não cria assinatura, não recebe token de compra e não concede Premium.
+- Flutter: a tela **Plano e recursos** consulta somente esse endpoint autenticado e apresenta a decisão do servidor. Ela não oferece compra, restauração, alteração de plano nem cache que possa conceder acesso offline.
 
 Preços de referência cadastrados na migration: Free R$ 0, Premium Mensal R$ 14,90, Premium Anual R$ 119,90 e Premium Vitalício R$ 299,90. As três ofertas pagas iniciam **desabilitadas** e sem `StoreProductId`; o banco não cria produto, preço ou cobrança na Google Play.
 
@@ -43,7 +44,7 @@ Existe `POST /api/v1/tenants/members`, protegido por `Memberships.Manage`, mas a
 
 - Google Play Billing requer produtos configurados, credenciais de verificação server-side e ambiente de teste autorizado.
 - A concessão de SuperAdmin para `okisegu@gmail.com` exige localizar e confirmar a identidade verificada no Neon Auth e uma autorização específica antes de qualquer escrita em Production.
-- A migration 21 é local e não foi aplicada a Neon ou Production.
+- A migration 21 é local e não foi aplicada a Neon ou Production; por isso a nova tela Flutter ainda não foi homologada contra um servidor remoto.
 
 ### Verificação de identidade em Production (somente leitura, 2026-11-03)
 
@@ -51,4 +52,4 @@ Foi consultado o diretório Neon Auth da branch Production explicitamente identi
 
 ## Estado
 
-Sprint 16: **PARCIAL / NO-GO**. A fundação está pronta para revisão; não há cobrança real, oferta Premium ativa ou acesso administrativo concedido.
+Sprint 16: **PARCIAL / NO-GO**. A fundação e a visualização somente leitura estão prontas para revisão; não há cobrança real, oferta Premium ativa ou acesso administrativo concedido.

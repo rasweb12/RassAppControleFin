@@ -11,6 +11,7 @@ import '../finance/finance_repository.dart';
 import '../finance/credit_cards_page.dart';
 import '../finance/financial_assistant_page.dart';
 import '../finance/financial_notifications_page.dart';
+import '../monetization/entitlements_page.dart';
 import 'finance_forms.dart';
 import '../synchronization/finance_sync_service.dart';
 
@@ -324,6 +325,12 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
       ),
     );
   }
+
+  Future<void> _openPlanAndFeatures() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => EntitlementsPage(authController: widget.authController),
+    ),
+  );
 
   Future<void> _openAccountSecurity() async {
     final session = widget.authController.session;
@@ -926,6 +933,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               onExpenseReductionGoals: _openExpenseReductionGoals,
               onNotifications: _openNotifications,
               onFinancialAssistant: _openFinancialAssistant,
+              onPlanAndFeatures: _openPlanAndFeatures,
               onSecurity: _openAccountSecurity,
             ),
           };
@@ -2168,6 +2176,7 @@ class _Menu extends StatelessWidget {
     required this.onExpenseReductionGoals,
     required this.onNotifications,
     required this.onFinancialAssistant,
+    required this.onPlanAndFeatures,
     required this.onSecurity,
   });
   final TenantSummary tenant;
@@ -2183,6 +2192,7 @@ class _Menu extends StatelessWidget {
   final Future<void> Function() onExpenseReductionGoals;
   final Future<void> Function() onNotifications;
   final Future<void> Function() onFinancialAssistant;
+  final Future<void> Function() onPlanAndFeatures;
   final Future<void> Function() onSecurity;
 
   @override
@@ -2250,6 +2260,13 @@ class _Menu extends StatelessWidget {
         subtitle: const Text('Alertas e avisos financeiros.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onNotifications,
+      ),
+      _MenuItem(
+        leading: const Icon(Icons.workspace_premium_outlined),
+        title: const Text('Plano e recursos'),
+        subtitle: const Text('Consulte os recursos liberados para sua conta.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onPlanAndFeatures,
       ),
       _MenuItem(
         leading: const Icon(Icons.sync_outlined),
