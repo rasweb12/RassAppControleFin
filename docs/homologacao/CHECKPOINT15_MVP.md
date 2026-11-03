@@ -18,7 +18,7 @@ Ele nunca aplica migrations, altera Render, publica artefatos ou escreve em Prod
 
 ## Ambiente em produção
 
-O Neon Production está no schema de 20 migrations segundo a validação do Checkpoint 14. O deploy Render atualmente ativo continua associado a `a78e86e` (MVP6), enquanto a preparação do Checkpoint 14 está na branch de trabalho adiante desse commit. Essa divergência impede tratar o deploy ativo como release do código de homologação até merge autorizado, novo deploy e smoke tests efetivos.
+O Neon Production está no schema de 20 migrations segundo a validação do Checkpoint 14. Em 2026-11-03, o serviço Render `RassAppControleFin` foi confirmado como `live`, em `main`, no commit `a78e86e` (MVP6); a preparação do Checkpoint 14 está na branch de trabalho adiante desse commit. A consulta externa de leitura para `/health/ready` expirou e, portanto, não é evidência suficiente de readiness HTTP. Essa divergência impede tratar o deploy ativo como release do código de homologação até merge autorizado, novo deploy e smoke tests efetivos.
 
 ## Bloqueadores conhecidos
 
