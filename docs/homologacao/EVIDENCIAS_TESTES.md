@@ -159,3 +159,9 @@ A primeira invocação de `flutter test` com o diretório como argumento encerro
 - Artefato: `mobile/rassapp_controlefin/build/app/outputs/flutter-apk/app-e2e-debug.apk`.
 - SHA-256: `9C276A75BD3FBC11E6525A50B60469C9A47806CA92410F82C59A7DAB4C3E8B2C`.
 - A variante usa o identificador isolado `.e2e` e foi compilada com `API_BASE_URL` vazia. Ela não é um APK conectado à API de homologação nem prova os fluxos financeiros remotos.
+
+## APK Debug isolado — estorno auditável (2026-11-03)
+
+- O artefato `.e2e` foi recompilado após a correção do rótulo de estorno de lançamento.
+- SHA-256 atual: `B3554FA6B20E47B4E0B75E5C3EFD52318BF9C3F7E049A7B34375376A5B80F266`.
+- O build permaneceu com `API_BASE_URL` vazia e não contém credenciais nem destino remoto configurado.
