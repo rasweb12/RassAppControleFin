@@ -1771,7 +1771,7 @@ Future<_TransactionDetailAction?> _showTransactionDetails(
                     context: context,
                     useRootNavigator: true,
                     builder: (dialog) => AlertDialog(
-                      title: const Text('Cancelar lançamento?'),
+                      title: const Text('Estornar lançamento?'),
                       content: const Text(
                         'O valor será estornado e o histórico será preservado.',
                       ),
@@ -1788,7 +1788,7 @@ Future<_TransactionDetailAction?> _showTransactionDetails(
                             dialog,
                             rootNavigator: true,
                           ).pop(true),
-                          child: const Text('Cancelar'),
+                          child: const Text('Voltar'),
                         ),
                       ],
                     ),
@@ -1803,7 +1803,7 @@ Future<_TransactionDetailAction?> _showTransactionDetails(
                   }
                 },
                 icon: const Icon(Icons.cancel_outlined),
-                label: const Text('Cancelar lançamento'),
+                label: const Text('Estornar lançamento'),
               ),
             ],
           ],
