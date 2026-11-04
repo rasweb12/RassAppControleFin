@@ -166,3 +166,10 @@ A primeira invocação de `flutter test` com o diretório como argumento encerro
 - SHA-256 atual: `B3554FA6B20E47B4E0B75E5C3EFD52318BF9C3F7E049A7B34375376A5B80F266`.
 - O build permaneceu com `API_BASE_URL` vazia e não contém credenciais nem destino remoto configurado.
 - A instalação de atualização (`adb install -r`) foi aprovada no emulador Android para `com.rassapp.rassapp_controlefin.e2e`; a `MainActivity` ficou visível e em primeiro plano. O pacote habitual não foi modificado.
+- Validação visual: a tela exibiu “Este aplicativo precisa ser compilado com API_BASE_URL”, sem autenticação, dados pré-carregados ou tráfego de API. Captura sanitizada: `C:/Users/RASS/.codex/visualizations/2026/10/02/01a0fd84-ea0c-7f41-99d7-ba985724f476/rass-e2e-config.png`.
+
+## API existente — health check público (2026-11-03)
+
+- `https://rassappcontrolefin-1.onrender.com/health/live`: HTTP 200.
+- `https://rassappcontrolefin-1.onrender.com/health/ready`: HTTP 200.
+- Esta consulta foi somente leitura. Ela comprova disponibilidade no momento da consulta, não autoriza nem executa escrita de dados sintéticos no ambiente publicado.
