@@ -21,6 +21,8 @@ public interface IFinanceUnit : IAsyncDisposable
     Task<ExpenseReductionGoal?> ExpenseReductionGoalAsync(Guid id, CancellationToken ct);
     Task<FinancialNotification?> NotificationAsync(Guid id, CancellationToken ct);
     Task<PayYourselfFirstPlan?> PayYourselfFirstPlanAsync(CancellationToken ct);
+    Task<PayYourselfFirstPlanRevision?> PayYourselfFirstPlanRevisionAsync(Guid planId, DateOnly effectiveFrom,
+        CancellationToken ct);
     Task<EmergencyFundPlan?> EmergencyFundPlanAsync(CancellationToken ct);
     Task<InvestmentAsset?> InvestmentAssetAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<TargetPortfolioAllocation>> TargetPortfolioAllocationsAsync(CancellationToken ct);

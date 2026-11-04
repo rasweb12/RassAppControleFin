@@ -70,7 +70,14 @@ public sealed class InvestmentMutationHandlers(IFinanceUnitFactory factory, IUse
             try { plan.Change(c.CurrentRate, c.GoalRate, c.EffectiveFrom); }
             catch (ArgumentException) { return Fail("PAY_YOURSELF_FIRST_INVALID", "Percentuais ou vigencia invalidos."); }
         }
-        unit.Add(PayYourselfFirstPlanRevision.Record(Guid.NewGuid(), plan, now));
+        // There is one monthly-history row for each effective date.  Saving a
+        // correction on the same civil day updates that row instead of trying
+        // to insert a duplicate into the unique plan/date index.
+        var revision = await unit.PayYourselfFirstPlanRevisionAsync(plan.Id, plan.EffectiveFrom, ct);
+        if (revision is null)
+            unit.Add(PayYourselfFirstPlanRevision.Record(Guid.NewGuid(), plan, now));
+        else
+            revision.Revise(plan);
         return Result<MutationReceipt>.Success(new(plan.Id, c.OperationId, plan.Version));
     }, ct);
 
