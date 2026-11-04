@@ -165,3 +165,4 @@ A primeira invocação de `flutter test` com o diretório como argumento encerro
 - O artefato `.e2e` foi recompilado após a correção do rótulo de estorno de lançamento.
 - SHA-256 atual: `B3554FA6B20E47B4E0B75E5C3EFD52318BF9C3F7E049A7B34375376A5B80F266`.
 - O build permaneceu com `API_BASE_URL` vazia e não contém credenciais nem destino remoto configurado.
+- A instalação de atualização (`adb install -r`) foi aprovada no emulador Android para `com.rassapp.rassapp_controlefin.e2e`; a `MainActivity` ficou visível e em primeiro plano. O pacote habitual não foi modificado.
