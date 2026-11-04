@@ -77,6 +77,9 @@ internal sealed class FinanceUnit(AppDbContext db, ITenantTransaction transactio
         => db.FinancialNotifications.AsTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<PayYourselfFirstPlan?> PayYourselfFirstPlanAsync(CancellationToken ct)
         => db.PayYourselfFirstPlans.AsTracking().SingleOrDefaultAsync(ct);
+    public Task<PayYourselfFirstPlanRevision?> PayYourselfFirstPlanRevisionAsync(Guid planId, DateOnly effectiveFrom,
+        CancellationToken ct)
+        => db.PayYourselfFirstPlanRevisions.AsTracking().SingleOrDefaultAsync(x => x.PlanId == planId && x.EffectiveFrom == effectiveFrom, ct);
     public Task<EmergencyFundPlan?> EmergencyFundPlanAsync(CancellationToken ct)
         => db.EmergencyFundPlans.AsTracking().SingleOrDefaultAsync(ct);
     public Task<InvestmentAsset?> InvestmentAssetAsync(Guid id, CancellationToken ct)

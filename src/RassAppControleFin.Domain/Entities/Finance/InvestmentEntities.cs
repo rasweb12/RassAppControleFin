@@ -32,6 +32,15 @@ public sealed class PayYourselfFirstPlanRevision : FinancialAggregate
     public DateOnly EffectiveFrom { get; private set; }
     public static PayYourselfFirstPlanRevision Record(Guid id, PayYourselfFirstPlan plan, DateTimeOffset now)
         => new(id, plan.TenantId, plan.UserId, now) { PlanId = plan.Id, CurrentRate = plan.CurrentRate, GoalRate = plan.GoalRate, EffectiveFrom = plan.EffectiveFrom };
+    public void Revise(PayYourselfFirstPlan plan)
+    {
+        if (plan.Id != PlanId || plan.TenantId != TenantId || plan.UserId != UserId)
+            throw new ArgumentException("Revision scope does not match the plan.");
+        CurrentRate = plan.CurrentRate;
+        GoalRate = plan.GoalRate;
+        EffectiveFrom = plan.EffectiveFrom;
+        Version = checked(Version + 1);
+    }
 }
 
 public sealed class EmergencyFundPlan : FinancialAggregate
