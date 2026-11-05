@@ -27,6 +27,7 @@ class FinanceSyncService {
     'CreateBudgetCommand',
     'ArchiveBudgetCommand',
     'CreateGoalCommand',
+    'UpdateGoalCommand',
     'AddGoalProgressCommand',
     'ArchiveGoalCommand',
     'CreateExpenseReductionGoalCommand',

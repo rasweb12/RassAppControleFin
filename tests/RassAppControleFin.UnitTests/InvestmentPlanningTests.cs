@@ -12,6 +12,30 @@ namespace RassAppControleFin.UnitTests;
 public sealed class InvestmentPlanningTests
 {
     [Fact]
+    public async Task Goal_edit_rejects_stale_version_without_overwriting_progress_or_committing()
+    {
+        var fixture = PlanFixture.Create();
+        var tenantId = Guid.NewGuid();
+        var goal = Goal.Create(Guid.NewGuid(), tenantId, "user-1", "Sintética",
+            RassAppControleFin.Domain.ValueObjects.Money.Create(200m, "BRL"), null, DateTimeOffset.UtcNow);
+        goal.AddProgress(RassAppControleFin.Domain.ValueObjects.Money.Create(41m, "BRL"));
+        fixture.Unit.Goal = goal;
+        var handler = new FinanceMutationHandlers(new TestFinanceUnitFactory(fixture.Unit),
+            new TestUser("user-1"), new TestTenant(tenantId));
+        var originalVersion = goal.Version;
+        var first = await handler.Handle(new UpdateGoalCommand(Guid.NewGuid(), goal.Id,
+            originalVersion, "Primeira edição", 250m, "BRL", null), CancellationToken.None);
+        var stale = await handler.Handle(new UpdateGoalCommand(Guid.NewGuid(), goal.Id,
+            originalVersion, "Edição desatualizada", 300m, "BRL", null), CancellationToken.None);
+        Assert.True(first.IsSuccess);
+        Assert.Equal("VERSION_CONFLICT", stale.Error!.Code);
+        Assert.Equal(1, fixture.Unit.CommitCount);
+        Assert.Equal(originalVersion + 1, goal.Version);
+        Assert.Equal("Primeira edição", goal.Name);
+        Assert.Equal(250m, goal.TargetAmount);
+        Assert.Equal(41m, goal.CurrentAmount);
+    }
+    [Fact]
     public void Same_day_plan_correction_updates_the_existing_monthly_revision()
     {
         var now = new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
@@ -232,6 +256,8 @@ public sealed class InvestmentPlanningTests
 
     private sealed class TestFinanceUnit(PayYourselfFirstPlan plan, PayYourselfFirstPlanRevision revision) : IFinanceUnit
     {
+        public Goal? Goal { get; set; }
+        public int CommitCount { get; private set; }
         public List<PayYourselfFirstPlanRevision> Revisions { get; } = [revision];
 
         public Task<Result<ReceiptLookup>> ClaimAsync(Guid operationId, string payloadHash, CancellationToken ct)
@@ -244,7 +270,10 @@ public sealed class InvestmentPlanningTests
             if (resource is PayYourselfFirstPlanRevision added) Revisions.Add(added);
         }
         public Task<Result> CommitAsync(Guid operationId, string payloadHash, MutationReceipt receipt, string action, CancellationToken ct)
-            => Task.FromResult(Result.Success());
+        {
+            CommitCount++;
+            return Task.FromResult(Result.Success());
+        }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
         public Task<Account?> AccountAsync(Guid id, CancellationToken ct) => Task.FromResult<Account?>(null);
@@ -254,7 +283,7 @@ public sealed class InvestmentPlanningTests
         public Task<CreditCardInvoice?> CreditCardInvoiceAsync(Guid cardId, DateOnly competence, CancellationToken ct) => Task.FromResult<CreditCardInvoice?>(null);
         public Task<FinancialTransaction?> TransactionAsync(Guid id, CancellationToken ct) => Task.FromResult<FinancialTransaction?>(null);
         public Task<Budget?> BudgetAsync(Guid id, CancellationToken ct) => Task.FromResult<Budget?>(null);
-        public Task<Goal?> GoalAsync(Guid id, CancellationToken ct) => Task.FromResult<Goal?>(null);
+        public Task<Goal?> GoalAsync(Guid id, CancellationToken ct) => Task.FromResult(Goal?.Id == id ? Goal : null);
         public Task<ExpenseReductionGoal?> ExpenseReductionGoalAsync(Guid id, CancellationToken ct) => Task.FromResult<ExpenseReductionGoal?>(null);
         public Task<FinancialNotification?> NotificationAsync(Guid id, CancellationToken ct) => Task.FromResult<FinancialNotification?>(null);
         public Task<EmergencyFundPlan?> EmergencyFundPlanAsync(CancellationToken ct) => Task.FromResult<EmergencyFundPlan?>(null);

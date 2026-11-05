@@ -11,6 +11,7 @@ import '../finance/finance_repository.dart';
 import '../finance/credit_cards_page.dart';
 import '../finance/financial_assistant_page.dart';
 import '../finance/financial_notifications_page.dart';
+import '../finance/goal_progress_dialog.dart';
 import '../finance/pay_yourself_first_page.dart';
 import '../monetization/entitlements_page.dart';
 import 'finance_forms.dart';
@@ -288,8 +289,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
             await _load();
             return _expenseReductionGoals;
           },
-          onOpportunities: () =>
-              _repository.expenseReductionOpportunities(tenant.id),
+          onOpportunities: (months) => _repository
+              .expenseReductionOpportunities(tenant.id, months: months),
           onCreate: (categoryId, reference, target) => _mutate(
             () => _repository.createExpenseReductionGoal(
               tenantId: tenant.id,
@@ -416,36 +417,11 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   Future<void> _addGoalProgress(GoalSummary goal) async {
     final tenant = _tenant;
     if (tenant == null || goal.id.startsWith('local-')) return;
-    final controller = TextEditingController();
     final amount = await showDialog<num>(
       context: context,
       useRootNavigator: true,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Adicionar à meta ${goal.name}'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Valor (R\$)'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext, rootNavigator: true).pop(),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final value = _parseAmount(controller.text);
-              if (value == null || value <= 0) return;
-              Navigator.of(dialogContext, rootNavigator: true).pop(value);
-            },
-            child: const Text('Adicionar'),
-          ),
-        ],
-      ),
+      builder: (_) => GoalProgressDialog(goalName: goal.name),
     );
-    controller.dispose();
     if (amount == null || !mounted) return;
     await _mutate(
       () => _repository.addGoalProgress(
@@ -1981,7 +1957,7 @@ class _ExpenseReductionGoalsPage extends StatefulWidget {
   final List<ExpenseReductionGoalSummary> goals;
   final List<CategorySummary> categories;
   final Future<List<ExpenseReductionGoalSummary>> Function() onRefresh;
-  final Future<List<ExpenseReductionOpportunitySummary>> Function()
+  final Future<List<ExpenseReductionOpportunitySummary>> Function(int months)
   onOpportunities;
   final Future<void> Function(String? categoryId, num reference, num target)
   onCreate;
@@ -1998,20 +1974,21 @@ class _ExpenseReductionGoalsPageState
   List<ExpenseReductionOpportunitySummary> _opportunities = const [];
   bool _loadingOpportunities = false;
   String? _opportunitiesError;
+  int _historicalMonths = 3;
   bool _showArchived = false;
 
   Future<void> _refresh() async {
-    final results = await Future.wait<Object>([
-      widget.onRefresh(),
-      widget.onOpportunities(),
-    ]);
-    if (mounted) {
-      setState(() {
-        _goals = results[0] as List<ExpenseReductionGoalSummary>;
-        _opportunities = results[1] as List<ExpenseReductionOpportunitySummary>;
-        _opportunitiesError = null;
-      });
+    try {
+      final goals = await widget.onRefresh();
+      if (mounted) setState(() => _goals = goals);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível atualizar as metas.')),
+        );
+      }
     }
+    if (mounted) await _loadOpportunities();
   }
 
   @override
@@ -2021,9 +1998,10 @@ class _ExpenseReductionGoalsPageState
   }
 
   Future<void> _loadOpportunities() async {
+    final months = _historicalMonths;
     setState(() => _loadingOpportunities = true);
     try {
-      final opportunities = await widget.onOpportunities();
+      final opportunities = await widget.onOpportunities(months);
       if (mounted) {
         setState(() {
           _opportunities = opportunities;
@@ -2169,6 +2147,36 @@ class _ExpenseReductionGoalsPageState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Redução de despesas'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(84),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: DropdownButtonFormField<int>(
+              initialValue: _historicalMonths,
+              decoration: const InputDecoration(
+                labelText: 'Meses por período comparado',
+                helperText: 'Somente despesas realizadas; previsões excluídas.',
+              ),
+              items: List.generate(
+                12,
+                (index) => DropdownMenuItem(
+                  value: index + 1,
+                  child: Text('${index + 1} mês(es)'),
+                ),
+              ),
+              onChanged: _loadingOpportunities
+                  ? null
+                  : (months) {
+                      if (months == null) return;
+                      setState(() {
+                        _historicalMonths = months;
+                        _opportunities = const [];
+                      });
+                      _loadOpportunities();
+                    },
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: _showArchived ? 'Ocultar arquivadas' : 'Exibir arquivadas',
@@ -2784,7 +2792,10 @@ class _GoalsPageState extends State<_GoalsPage> {
                               else
                                 IconButton(
                                   tooltip: 'Editar meta',
-                                  onPressed: () => widget.onEdit(goal),
+                                  onPressed: () async {
+                                    await widget.onEdit(goal);
+                                    if (mounted) await _refresh();
+                                  },
                                   icon: const Icon(Icons.edit_outlined),
                                 ),
                               if (!localOnly)
