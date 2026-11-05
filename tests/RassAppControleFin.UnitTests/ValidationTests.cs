@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using RassAppControleFin.Application.Behaviors;
 using RassAppControleFin.Application.Features.Identity;
+using RassAppControleFin.Application.Features.Finance;
 using RassAppControleFin.SharedKernel.Results;
 using Xunit;
 
@@ -79,5 +80,25 @@ public sealed class ValidationTests
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, error => error.PropertyName == "Token");
         Assert.Contains(result.Errors, error => error.PropertyName == "NewPassword");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(13)]
+    public void Expense_reduction_opportunities_rejects_periods_outside_twelve_months(int months)
+    {
+        var result = new ListExpenseReductionOpportunitiesValidator()
+            .Validate(new ListExpenseReductionOpportunitiesQuery(months));
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public void Expense_reduction_opportunities_accepts_a_valid_historical_window()
+    {
+        var result = new ListExpenseReductionOpportunitiesValidator()
+            .Validate(new ListExpenseReductionOpportunitiesQuery(12));
+
+        Assert.True(result.IsValid);
     }
 }

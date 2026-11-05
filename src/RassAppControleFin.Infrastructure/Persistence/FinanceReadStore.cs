@@ -154,6 +154,35 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
             x.Currency, x.PeriodStart, x.PeriodEnd, x.Version, x.IsArchived)).ToListAsync(ct);
         return new Page<ExpenseReductionGoalView>(rows.Skip((q.Page - 1) * q.PageSize).Take(q.PageSize).ToList(), rows.Count, q.Page, q.PageSize);
     }, ct);
+    public Task<Result<IReadOnlyList<ExpenseReductionOpportunityView>>> ExpenseReductionOpportunitiesAsync(ListExpenseReductionOpportunitiesQuery q, CancellationToken ct) => Read(async () =>
+    {
+        var recentEnd = new DateTimeOffset(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(1);
+        var recentStart = recentEnd.AddMonths(-q.Months);
+        var previousStart = recentStart.AddMonths(-q.Months);
+        var rows = await (
+            from transaction in db.Transactions.AsNoTracking()
+            join category in db.Categories.AsNoTracking() on transaction.CategoryId equals category.Id
+            where transaction.Status == TransactionStatus.Posted
+                && transaction.Flow == FinancialFlow.Expense
+                && transaction.OccurredAt >= previousStart
+                && transaction.OccurredAt < recentEnd
+            group transaction by new { category.Id, category.Name, transaction.Currency } into grouped
+            select new
+            {
+                grouped.Key.Id,
+                grouped.Key.Name,
+                grouped.Key.Currency,
+                Recent = grouped.Where(x => x.OccurredAt >= recentStart).Sum(x => x.Amount),
+                Previous = grouped.Where(x => x.OccurredAt < recentStart).Sum(x => x.Amount)
+            }).ToListAsync(ct);
+        return (IReadOnlyList<ExpenseReductionOpportunityView>)rows
+            .Select(x => new ExpenseReductionOpportunityView(x.Id, x.Name, x.Currency, x.Recent, x.Previous,
+                Math.Max(0m, x.Recent - x.Previous), Math.Max(0m, x.Recent - x.Previous)))
+            .Where(x => x.Increase > 0m)
+            .OrderByDescending(x => x.Increase)
+            .ThenBy(x => x.Category, StringComparer.Ordinal)
+            .ToList();
+    }, ct);
     public Task<Result<Page<FinancialNotificationView>>> NotificationsAsync(ListNotificationsQuery q, CancellationToken ct) => Read(() => PageAsync(
         db.FinancialNotifications.AsNoTracking().OrderBy(x => x.ReadAt != null).ThenByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
             .Select(x => new FinancialNotificationView(x.Id, x.Type, x.Title, x.Message, x.CreatedAt, x.ReadAt, x.Version)),

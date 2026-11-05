@@ -137,6 +137,16 @@ public sealed class AddGoalProgressValidator : MutationValidator<AddGoalProgress
         RuleFor(x => x).Must(x => Money.IsValid(x.Amount, x.Currency));
     }
 }
+public sealed class UpdateGoalValidator : MutationValidator<UpdateGoalCommand>
+{
+    public UpdateGoalValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty(); RuleFor(x => x.Version).GreaterThan(0);
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
+        RuleFor(x => x).Must(x => Money.IsValid(x.TargetAmount, x.Currency));
+        RuleFor(x => x.TargetDate).Must(x => !x.HasValue || x.Value.Offset == TimeSpan.Zero);
+    }
+}
 public sealed class ArchiveGoalValidator : MutationValidator<ArchiveGoalCommand>
 {
     public ArchiveGoalValidator() { RuleFor(x => x.Id).NotEmpty(); RuleFor(x => x.Version).GreaterThan(0); }

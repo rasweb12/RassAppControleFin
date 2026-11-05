@@ -47,6 +47,7 @@ public sealed record CreateBudgetRequest(Guid OperationId, Guid? CategoryId, dec
 public sealed record VersionedOperationRequest(Guid OperationId, long Version);
 public sealed record ArchiveResourceRequest(Guid OperationId, long Version, bool Archive = true);
 public sealed record CreateGoalRequest(Guid OperationId, string Name, decimal TargetAmount, string Currency, DateTimeOffset? TargetDate);
+public sealed record UpdateGoalRequest(Guid OperationId, long Version, string Name, decimal TargetAmount, string Currency, DateTimeOffset? TargetDate);
 public sealed record AddGoalProgressRequest(Guid OperationId, long Version, decimal Amount, string Currency);
 public sealed record BudgetDto(Guid Id, Guid? CategoryId, decimal Amount, decimal Spent, string Currency,
     DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
@@ -56,6 +57,8 @@ public sealed record CreateExpenseReductionGoalRequest(Guid OperationId, Guid? C
     decimal TargetAmount, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd);
 public sealed record ExpenseReductionGoalDto(Guid Id, Guid? CategoryId, decimal ReferenceAmount, decimal TargetAmount,
     decimal ActualExpense, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
+public sealed record ExpenseReductionOpportunityDto(Guid CategoryId, string Category, string Currency,
+    decimal RecentExpense, decimal PreviousExpense, decimal Increase, decimal SuggestedReduction);
 public sealed record FinancialNotificationDto(Guid Id, string Type, string Title, string Message, DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt, long Version);
 public sealed record ConfigurePayYourselfFirstPlanRequest(Guid OperationId, long? Version, decimal CurrentRate,

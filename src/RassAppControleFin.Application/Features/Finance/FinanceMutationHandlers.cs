@@ -28,6 +28,7 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
     IRequestHandler<CreateBudgetCommand, Result<MutationReceipt>>,
     IRequestHandler<ArchiveBudgetCommand, Result<MutationReceipt>>,
     IRequestHandler<CreateGoalCommand, Result<MutationReceipt>>,
+    IRequestHandler<UpdateGoalCommand, Result<MutationReceipt>>,
     IRequestHandler<AddGoalProgressCommand, Result<MutationReceipt>>,
     IRequestHandler<ArchiveGoalCommand, Result<MutationReceipt>>
     , IRequestHandler<CreateExpenseReductionGoalCommand, Result<MutationReceipt>>
@@ -386,6 +387,16 @@ public sealed class FinanceMutationHandlers(IFinanceUnitFactory factory, IUserCo
             c.TargetDate, DateTimeOffset.UtcNow);
         unit.Add(goal);
         return Task.FromResult(Result<MutationReceipt>.Success(new(goal.Id, c.OperationId, goal.Version)));
+    }, ct);
+
+    public Task<Result<MutationReceipt>> Handle(UpdateGoalCommand c, CancellationToken ct) => Execute(c, async unit =>
+    {
+        var goal = await unit.GoalAsync(c.Id, ct);
+        if (goal is null) return Missing();
+        if (goal.Version != c.Version) return Conflict();
+        if (!goal.Edit(c.Name, Money.Create(c.TargetAmount, c.Currency), c.TargetDate))
+            return Fail("GOAL_UPDATE_INVALID", "O alvo não pode ser menor que o valor já acumulado.");
+        return Result<MutationReceipt>.Success(new(goal.Id, c.OperationId, goal.Version));
     }, ct);
 
     public Task<Result<MutationReceipt>> Handle(AddGoalProgressCommand c, CancellationToken ct) => Execute(c, async unit =>
