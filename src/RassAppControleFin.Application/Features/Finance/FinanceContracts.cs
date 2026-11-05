@@ -62,6 +62,8 @@ public sealed record GoalView(Guid Id, string Name, decimal TargetAmount, decima
     DateTimeOffset? TargetDate, string Status, long Version);
 public sealed record ExpenseReductionGoalView(Guid Id, Guid? CategoryId, decimal ReferenceAmount, decimal TargetAmount,
     decimal ActualExpense, string Currency, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd, long Version, bool IsArchived);
+public sealed record ExpenseReductionOpportunityView(Guid CategoryId, string Category, string Currency,
+    decimal RecentExpense, decimal PreviousExpense, decimal Increase, decimal SuggestedReduction);
 public sealed record FinancialNotificationView(Guid Id, string Type, string Title, string Message, DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt, long Version);
 public sealed record PayYourselfFirstPlanView(Guid Id, decimal CurrentRate, decimal? GoalRate, DateOnly EffectiveFrom, long Version);
@@ -96,6 +98,9 @@ public sealed record ArchiveBudgetCommand(Guid OperationId, Guid Id, long Versio
 { public string Permission => Permissions.TransactionsWrite; }
 public sealed record CreateGoalCommand(Guid OperationId, string Name, decimal TargetAmount, string Currency,
     DateTimeOffset? TargetDate) : IFinanceMutation
+{ public string Permission => Permissions.TransactionsWrite; }
+public sealed record UpdateGoalCommand(Guid OperationId, Guid Id, long Version, string Name, decimal TargetAmount,
+    string Currency, DateTimeOffset? TargetDate) : IFinanceMutation
 { public string Permission => Permissions.TransactionsWrite; }
 public sealed record AddGoalProgressCommand(Guid OperationId, Guid Id, long Version, decimal Amount, string Currency) : IFinanceMutation
 { public string Permission => Permissions.TransactionsWrite; }
@@ -134,6 +139,7 @@ public sealed record SetTargetPortfolioCommand(Guid OperationId, IReadOnlyList<T
 public sealed record ListBudgetsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<BudgetView>>>, IPageQuery;
 public sealed record ListGoalsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<GoalView>>>, IPageQuery;
 public sealed record ListExpenseReductionGoalsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<ExpenseReductionGoalView>>>, IPageQuery;
+public sealed record ListExpenseReductionOpportunitiesQuery(int Months = 3) : IRequest<Result<IReadOnlyList<ExpenseReductionOpportunityView>>>;
 public sealed record ListNotificationsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<FinancialNotificationView>>>, IPageQuery;
 public sealed record GetPayYourselfFirstPlanQuery : IRequest<Result<PayYourselfFirstPlanView?>>;
 public sealed record GetEmergencyFundPlanQuery : IRequest<Result<EmergencyFundPlanView?>>;

@@ -162,6 +162,16 @@ public sealed class FinanceDomainTests
     }
 
     [Fact]
+    public void Goal_edit_preserves_progress_and_rejects_a_target_below_it()
+    {
+        var goal = Goal.Create(Guid.NewGuid(), Guid.NewGuid(), "user", "Reserva", Money.Create(100m, "BRL"), null, DateTimeOffset.UtcNow);
+        Assert.True(goal.AddProgress(Money.Create(40m, "BRL")));
+        Assert.False(goal.Edit("Reserva revisada", Money.Create(39m, "BRL"), null));
+        Assert.True(goal.Edit("Reserva revisada", Money.Create(200m, "BRL"), DateTimeOffset.UtcNow));
+        Assert.Equal("Reserva revisada", goal.Name); Assert.Equal(40m, goal.CurrentAmount); Assert.Equal("Active", goal.Status);
+    }
+
+    [Fact]
     public void Expense_reduction_goal_requires_a_lower_target_and_valid_period()
     {
         var now = DateTimeOffset.UtcNow;

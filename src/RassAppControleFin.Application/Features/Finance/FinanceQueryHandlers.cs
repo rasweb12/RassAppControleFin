@@ -18,6 +18,7 @@ public sealed class FinanceQueryHandlers(IFinanceReadStore store, IUserContext u
     IRequestHandler<ListBudgetsQuery, Result<Page<BudgetView>>>,
     IRequestHandler<ListGoalsQuery, Result<Page<GoalView>>>,
     IRequestHandler<ListExpenseReductionGoalsQuery, Result<Page<ExpenseReductionGoalView>>>,
+    IRequestHandler<ListExpenseReductionOpportunitiesQuery, Result<IReadOnlyList<ExpenseReductionOpportunityView>>>,
     IRequestHandler<ListNotificationsQuery, Result<Page<FinancialNotificationView>>>,
     IRequestHandler<DashboardQuery, Result<DashboardView>>
 {
@@ -45,6 +46,8 @@ public sealed class FinanceQueryHandlers(IFinanceReadStore store, IUserContext u
         => Read(Permissions.TransactionsRead, () => store.GoalsAsync(q, ct));
     public Task<Result<Page<ExpenseReductionGoalView>>> Handle(ListExpenseReductionGoalsQuery q, CancellationToken ct)
         => Read(Permissions.TransactionsRead, () => store.ExpenseReductionGoalsAsync(q, ct));
+    public Task<Result<IReadOnlyList<ExpenseReductionOpportunityView>>> Handle(ListExpenseReductionOpportunitiesQuery q, CancellationToken ct)
+        => Read(Permissions.TransactionsRead, () => store.ExpenseReductionOpportunitiesAsync(q, ct));
     public Task<Result<Page<FinancialNotificationView>>> Handle(ListNotificationsQuery q, CancellationToken ct)
         => Read(Permissions.TransactionsRead, () => store.NotificationsAsync(q, ct));
     public Task<Result<DashboardView>> Handle(DashboardQuery q, CancellationToken ct)
@@ -82,6 +85,10 @@ public sealed class ListTransactionsValidator : PageValidator<ListTransactionsQu
 public sealed class ListBudgetsValidator : PageValidator<ListBudgetsQuery>;
 public sealed class ListGoalsValidator : PageValidator<ListGoalsQuery>;
 public sealed class ListExpenseReductionGoalsValidator : PageValidator<ListExpenseReductionGoalsQuery>;
+public sealed class ListExpenseReductionOpportunitiesValidator : AbstractValidator<ListExpenseReductionOpportunitiesQuery>
+{
+    public ListExpenseReductionOpportunitiesValidator() => RuleFor(x => x.Months).InclusiveBetween(1, 12);
+}
 public sealed class ListNotificationsValidator : PageValidator<ListNotificationsQuery>;
 public sealed class DashboardValidator : AbstractValidator<DashboardQuery>
 {

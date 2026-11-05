@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import 'finance_repository.dart';
 
 class FinancialNotificationsPage extends StatefulWidget {
@@ -80,11 +81,27 @@ class _FinancialNotificationsPageState
                 onTap: item.isRead
                     ? null
                     : () async {
-                        await widget.repository.markNotificationRead(
-                          tenantId: widget.tenantId,
-                          notification: item,
-                        );
-                        if (mounted) _refresh();
+                        try {
+                          await widget.repository.markNotificationRead(
+                            tenantId: widget.tenantId,
+                            notification: item,
+                          );
+                          if (mounted) _refresh();
+                        } on ApiException catch (error) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(error.message)),
+                          );
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Não foi possível atualizar a notificação.',
+                              ),
+                            ),
+                          );
+                        }
                       },
               ),
             );

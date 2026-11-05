@@ -25,6 +25,14 @@ public sealed class Goal : FinancialAggregate
         if (CurrentAmount == TargetAmount) Status = "Completed";
         Version = checked(Version + 1); return true;
     }
+    public bool Edit(string name, Money target, DateTimeOffset? targetDate)
+    {
+        if (target.Currency != Currency || target.Amount < CurrentAmount
+            || (targetDate is { } date && date.Offset != TimeSpan.Zero)) return false;
+        Name = NameValue(name); TargetAmount = target.Amount; TargetDate = targetDate;
+        if (Status != "Archived") Status = CurrentAmount == TargetAmount ? "Completed" : "Active";
+        Version = checked(Version + 1); return true;
+    }
     public void Archive() { if (Status != "Archived") { Status = "Archived"; Version = checked(Version + 1); } }
     public void Reactivate()
     {

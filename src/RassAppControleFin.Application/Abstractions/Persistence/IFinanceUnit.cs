@@ -47,6 +47,7 @@ public interface IFinanceReadStore
     Task<Result<Page<BudgetView>>> BudgetsAsync(ListBudgetsQuery query, CancellationToken ct);
     Task<Result<Page<GoalView>>> GoalsAsync(ListGoalsQuery query, CancellationToken ct);
     Task<Result<Page<ExpenseReductionGoalView>>> ExpenseReductionGoalsAsync(ListExpenseReductionGoalsQuery query, CancellationToken ct);
+    Task<Result<IReadOnlyList<ExpenseReductionOpportunityView>>> ExpenseReductionOpportunitiesAsync(ListExpenseReductionOpportunitiesQuery query, CancellationToken ct);
     Task<Result<Page<FinancialNotificationView>>> NotificationsAsync(ListNotificationsQuery query, CancellationToken ct);
     Task<Result<PayYourselfFirstPlanView?>> PayYourselfFirstPlanAsync(CancellationToken ct);
     Task<Result<EmergencyFundPlanView?>> EmergencyFundPlanAsync(CancellationToken ct);

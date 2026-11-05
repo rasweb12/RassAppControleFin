@@ -130,6 +130,9 @@ public static class FinanceEndpoints
         finance.MapPost("/goals", (CreateGoalRequest r, ISender s, HttpContext h, CancellationToken ct)
             => Send(s, new CreateGoalCommand(r.OperationId, r.Name, r.TargetAmount, r.Currency, r.TargetDate), h, ct))
             .RequireAuthorization(Permissions.TransactionsWrite);
+        finance.MapPut("/goals/{id:guid}", (Guid id, UpdateGoalRequest r, ISender s, HttpContext h, CancellationToken ct)
+            => Send(s, new UpdateGoalCommand(r.OperationId, id, r.Version, r.Name, r.TargetAmount, r.Currency, r.TargetDate), h, ct))
+            .RequireAuthorization(Permissions.TransactionsWrite);
         finance.MapPost("/goals/{id:guid}/progress", (Guid id, AddGoalProgressRequest r, ISender s, HttpContext h, CancellationToken ct)
             => Send(s, new AddGoalProgressCommand(r.OperationId, id, r.Version, r.Amount, r.Currency), h, ct))
             .RequireAuthorization(Permissions.TransactionsWrite);
@@ -144,6 +147,8 @@ public static class FinanceEndpoints
             => Send(s, new ArchiveExpenseReductionGoalCommand(r.OperationId, id, r.Version, r.Archive), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
         finance.MapGet("/expense-reduction-goals", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => ExpenseReductionGoals(s, new ListExpenseReductionGoalsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
+        finance.MapGet("/expense-reduction-opportunities", (int? months, ISender s, HttpContext h, CancellationToken ct)
+            => ExpenseReductionOpportunities(s, new ListExpenseReductionOpportunitiesQuery(months ?? 3), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
         finance.MapGet("/notifications", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => Notifications(s, new ListNotificationsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
         finance.MapPost("/notifications/{id:guid}/read", (Guid id, VersionedOperationRequest r, ISender s, HttpContext h, CancellationToken ct)
@@ -227,6 +232,14 @@ public static class FinanceEndpoints
             new ExpenseReductionGoalDto(x.Id, x.CategoryId, x.ReferenceAmount, x.TargetAmount, x.ActualExpense, x.Currency,
                 x.PeriodStart, x.PeriodEnd, x.Version, x.IsArchived)).ToArray(), result.Value.Total, result.Value.PageNumber,
             result.Value.PageSize)) : Result<PageDto<ExpenseReductionGoalDto>>.Failure(result.Error!)).ToHttp(context);
+    }
+    private static async Task<IResult> ExpenseReductionOpportunities(ISender sender, ListExpenseReductionOpportunitiesQuery query, HttpContext context, CancellationToken ct)
+    {
+        var result = await sender.Send(query, ct);
+        return (result.IsSuccess ? Result<IReadOnlyList<ExpenseReductionOpportunityDto>>.Success(result.Value.Select(x =>
+            new ExpenseReductionOpportunityDto(x.CategoryId, x.Category, x.Currency, x.RecentExpense, x.PreviousExpense,
+                x.Increase, x.SuggestedReduction)).ToArray())
+            : Result<IReadOnlyList<ExpenseReductionOpportunityDto>>.Failure(result.Error!)).ToHttp(context);
     }
     private static async Task<IResult> Notifications(ISender sender, ListNotificationsQuery query, HttpContext context, CancellationToken ct)
     {
