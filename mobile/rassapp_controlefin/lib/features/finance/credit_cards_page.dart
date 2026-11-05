@@ -23,6 +23,7 @@ class CreditCardsPage extends StatefulWidget {
 class _CreditCardsPageState extends State<CreditCardsPage> {
   List<CreditCardSummary> _cards = const [];
   bool _loading = true;
+  bool _creating = false;
   String? _error;
 
   @override
@@ -47,9 +48,11 @@ class _CreditCardsPageState extends State<CreditCardsPage> {
   }
 
   Future<void> _createCard() async {
+    if (_creating) return;
     final input = await _showCardForm(context);
     if (input == null || !mounted) return;
     try {
+      setState(() => _creating = true);
       final state = await widget.repository.createCreditCard(
         tenantId: widget.tenantId,
         name: input.name,
@@ -72,12 +75,20 @@ class _CreditCardsPageState extends State<CreditCardsPage> {
         ),
       );
       await _load();
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Não foi possível criar o cartão.')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _creating = false);
     }
   }
 
@@ -94,7 +105,7 @@ class _CreditCardsPageState extends State<CreditCardsPage> {
       ],
     ),
     floatingActionButton: FloatingActionButton.extended(
-      onPressed: _createCard,
+      onPressed: _creating ? null : _createCard,
       icon: const Icon(Icons.add_card_outlined),
       label: const Text('Novo cartão'),
     ),
@@ -619,6 +630,7 @@ class _CardFormDialogState extends State<_CardFormDialog> {
   late final TextEditingController _limit;
   late final TextEditingController _closing;
   late final TextEditingController _due;
+  String? _validationError;
 
   @override
   void initState() {
@@ -658,6 +670,10 @@ class _CardFormDialogState extends State<_CardFormDialog> {
         close > 31 ||
         dueDay < 1 ||
         dueDay > 31) {
+      setState(() {
+        _validationError =
+            'Informe nome, instituição, limite maior que zero e dias entre 1 e 31.';
+      });
       return;
     }
 
@@ -718,6 +734,13 @@ class _CardFormDialogState extends State<_CardFormDialog> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Dia de vencimento'),
             ),
+            if (_validationError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _validationError!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
           ],
         ),
       ),

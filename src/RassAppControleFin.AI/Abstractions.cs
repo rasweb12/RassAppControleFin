@@ -14,7 +14,7 @@ public interface IAiProvider
 
 public interface IFinanceContextService
 {
-    Task<Result<FinanceContext>> GetAsync(string period, CancellationToken cancellationToken);
+    Task<Result<FinanceContext>> GetAsync(string question, string period, CancellationToken cancellationToken);
 }
 
 public interface IPromptBuilder

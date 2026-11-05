@@ -109,8 +109,20 @@ class OfflineFinanceStore {
             ))
             .get();
     final pendingIds = pendingLocalIds.map((row) => row.entityId).toSet();
+    // A target portfolio is submitted as one atomic PUT but cached as several
+    // allocations.  Keep all local rows while that command is pending; after
+    // acknowledgement the next server snapshot replaces them normally.
+    final hasPendingTargetPortfolio = entityType == 'targetPortfolioAllocation' &&
+        pendingLocalIds.any(
+          (row) =>
+              row.entityType == 'targetPortfolioAllocation' &&
+              row.entityId == 'target-portfolio',
+        );
     final localResources = existing
-        .where((row) => pendingIds.contains(row.entityId))
+        .where(
+          (row) =>
+              hasPendingTargetPortfolio || pendingIds.contains(row.entityId),
+        )
         .map((row) => jsonDecode(row.payloadJson) as Map<String, dynamic>)
         .toList(growable: false);
     await (_database.delete(_database.cachedResources)..where(

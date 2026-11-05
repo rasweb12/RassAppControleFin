@@ -312,13 +312,81 @@ void main() {
       expect(pending, hasLength(1));
       expect(pending.single.endpoint, '/api/v1/investments/pay-yourself-first');
       expect(pending.single.entityType, 'payYourselfFirstPlan');
+      expect(pending.single.payload['effectiveFrom'], '2026-11-03');
       final cached = await store.cached('tenant-a', 'payYourselfFirstPlan');
       expect(cached.single['currentRate'], .2);
       expect(cached.single['goalRate'], .3);
+      expect(cached.single['effectiveFrom'], '2026-11-03');
       expect(await store.cached('tenant-a', 'transaction'), isEmpty);
       await database.close();
     },
   );
+
+  test('queues one complete offline target portfolio without duplicate allocations', () async {
+    final database = OfflineDatabase(NativeDatabase.memory());
+    final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
+    final controller = AuthController(
+      ApiClient(
+        client: MockClient((_) => throw const SocketException('offline')),
+      ),
+      _MemorySessionStore(_session()),
+    );
+    await controller.restore();
+    final repository = FinanceRepository(
+      controller,
+      store: Future.value(store),
+    );
+    final allocations = [
+      const TargetPortfolioAllocationSummary(
+        id: 'local-fixed-income',
+        investmentAssetId: null,
+        key: 'Reserva e renda fixa',
+        assetClass: 'FixedIncome',
+        weight: 70,
+        version: 0,
+      ),
+      const TargetPortfolioAllocationSummary(
+        id: 'local-reit',
+        investmentAssetId: null,
+        key: 'Fundos imobiliários',
+        assetClass: 'RealEstateFund',
+        weight: 20,
+        version: 0,
+      ),
+      const TargetPortfolioAllocationSummary(
+        id: 'local-equity',
+        investmentAssetId: null,
+        key: 'Renda variável',
+        assetClass: 'Equity',
+        weight: 10,
+        version: 0,
+      ),
+    ];
+
+    final state = await repository.setTargetPortfolio(
+      tenantId: 'tenant-a',
+      allocations: allocations,
+    );
+
+    expect(state, FinanceWriteState.pending);
+    final pending = await store.pending('tenant-a');
+    expect(pending, hasLength(1));
+    expect(pending.single.endpoint, '/api/v1/investments/target-portfolio');
+    expect(pending.single.operationType, 'put');
+    expect(pending.single.entityId, 'target-portfolio');
+    expect((pending.single.payload['allocations'] as List), hasLength(3));
+    final cached = await store.cached('tenant-a', 'targetPortfolioAllocation');
+    expect(cached, hasLength(3));
+    expect(
+      cached.fold<num>(0, (sum, item) => sum + (item['weight'] as num)),
+      100,
+    );
+    await expectLater(
+      repository.setTargetPortfolio(tenantId: 'tenant-a', allocations: allocations),
+      throwsA(isA<ApiException>()),
+    );
+    await database.close();
+  });
 
   test('keeps a pending transaction when a remote page is empty', () async {
     final database = OfflineDatabase(NativeDatabase.memory());
@@ -446,6 +514,34 @@ void main() {
       await database.close();
     },
   );
+
+  test('reads the cached profile while the network is unavailable', () async {
+    final database = OfflineDatabase(NativeDatabase.memory());
+    final store = OfflineFinanceStore.forTesting(database, subject: 'alice');
+    await store.cacheOne('tenant-a', 'profile', const {
+      'id': 'profile-a',
+      'displayName': 'Alice Offline',
+      'version': 2,
+    });
+    final controller = AuthController(
+      ApiClient(
+        client: MockClient((_) => throw const SocketException('offline')),
+      ),
+      _MemorySessionStore(_session()),
+    );
+    await controller.restore();
+    final repository = FinanceRepository(
+      controller,
+      store: Future.value(store),
+    );
+
+    final profile = await repository.profile('tenant-a');
+
+    expect(profile.id, 'profile-a');
+    expect(profile.displayName, 'Alice Offline');
+    expect(profile.version, 2);
+    await database.close();
+  });
 }
 
 class _MemorySessionStore extends SessionStore {

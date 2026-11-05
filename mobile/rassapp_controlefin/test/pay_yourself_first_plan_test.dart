@@ -33,4 +33,24 @@ void main() {
     expect(projection.isAffordable, isFalse);
     expect(projection.distribution.values.reduce((a, b) => a + b), 900);
   });
+
+  test('uses the persisted allocation weights without creating movement', () {
+    final projection = PayYourselfFirstProjection.calculate(
+      expectedIncome: 1000,
+      receivedIncome: 0,
+      essentialObligations: 100,
+      rate: .2,
+      allocationWeights: const {
+        'Reserva e renda fixa': 50,
+        'Fundos imobiliários': 30,
+        'Renda variável': 20,
+      },
+    );
+
+    expect(projection.suggestedReserve, 200);
+    expect(projection.distribution['Reserva e renda fixa'], 100);
+    expect(projection.distribution['Fundos imobiliários'], 60);
+    expect(projection.distribution['Renda variável'], 40);
+    expect(projection.distribution.values.reduce((a, b) => a + b), 200);
+  });
 }
