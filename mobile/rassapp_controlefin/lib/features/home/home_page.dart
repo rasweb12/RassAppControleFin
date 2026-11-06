@@ -82,7 +82,7 @@ class _Dashboard extends StatelessWidget {
           ),
           SizedBox(width: 12),
           Expanded(
-            child: _MetricCard(title: 'Despesas', value: 'R\$ --'),
+            child: _MetricCard(title: 'Despesas', value: 'R\$ -.-'),
           ),
         ],
       ),
