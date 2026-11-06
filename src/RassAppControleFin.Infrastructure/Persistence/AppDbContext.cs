@@ -31,6 +31,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<InvestmentTransaction> InvestmentTransactions => Set<InvestmentTransaction>();
     public DbSet<TargetPortfolioAllocation> TargetPortfolioAllocations => Set<TargetPortfolioAllocation>();
     public DbSet<PlatformRoleAssignment> PlatformRoleAssignments => Set<PlatformRoleAssignment>();
+    public DbSet<PlanDefinition> PlanDefinitions => Set<PlanDefinition>();
+    public DbSet<PlanEntitlement> PlanEntitlements => Set<PlanEntitlement>();
+    public DbSet<UserSubscription> UserSubscriptions => Set<UserSubscription>();
+    public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
 
     internal void Authorize(Guid tenantId, string userId)
     {

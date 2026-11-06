@@ -13,6 +13,7 @@ public sealed class MvpHomologationScriptTests
         Assert.Contains("rass_sprint1_tests", script, StringComparison.Ordinal);
         Assert.Contains("ep-square-rain-b6i4dhum", script, StringComparison.Ordinal);
         Assert.Contains("The command never executes migrations", script, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("git -C $repositoryRoot rev-parse --short HEAD", script, StringComparison.Ordinal);
         Assert.DoesNotContain("database update", script, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -22,6 +23,12 @@ public sealed class MvpHomologationScriptTests
         var script = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "scripts", "homologacao", "Invoke-MvpHomologation.ps1"));
         Assert.Contains("Flutter integration_test", script, StringComparison.Ordinal);
         Assert.Contains("BLOQUEADO", script, StringComparison.Ordinal);
+        Assert.Contains("BuildAndroidDebug", script, StringComparison.Ordinal);
+        Assert.Contains("HomologationApiBaseUrl", script, StringComparison.Ordinal);
+        Assert.Contains("AndroidDeviceId", script, StringComparison.Ordinal);
+        Assert.Contains("--flavor', 'e2e', '-d', $AndroidDeviceId", script, StringComparison.Ordinal);
+        Assert.Contains("--flavor', 'homologation", script, StringComparison.Ordinal);
+        Assert.Contains("rassappcontrolefin-1\\.onrender\\.com", script, StringComparison.Ordinal);
         Assert.Contains("Android AAB release", script, StringComparison.Ordinal);
     }
 

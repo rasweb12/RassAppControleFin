@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject PlatformClient Client
 @inject AdminAccessClient Access
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <PageTitle>Administração da plataforma</PageTitle>
@@ -53,6 +54,7 @@
         {
             _access = await Access.ResolveAsync(_lifetime.Token);
             if (_access == AdminAccessLevel.SuperAdmin) await RefreshAsync();
+            else Navigation.NavigateTo("/", replace: true);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         finally { _loading = false; }

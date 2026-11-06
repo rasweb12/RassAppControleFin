@@ -74,6 +74,74 @@ class DashboardMetric {
       );
 }
 
+class PayYourselfFirstPlanSummary {
+  const PayYourselfFirstPlanSummary({
+    required this.id,
+    required this.currentRate,
+    required this.goalRate,
+    required this.effectiveFrom,
+    required this.version,
+  });
+
+  final String id;
+  final num currentRate;
+  final num? goalRate;
+  final DateTime effectiveFrom;
+  final int version;
+
+  factory PayYourselfFirstPlanSummary.fromJson(Map<String, dynamic> json) =>
+      PayYourselfFirstPlanSummary(
+        id: json['id'] as String,
+        currentRate: json['currentRate'] as num,
+        goalRate: json['goalRate'] as num?,
+        effectiveFrom: DateTime.parse(json['effectiveFrom'] as String),
+        version: json['version'] as int,
+      );
+}
+
+/// A persisted allocation used by the non-mutating "Primeiro Me Pago"
+/// simulation.  It is backed by the existing target-portfolio API rather
+/// than a second, divergent investment configuration.
+class TargetPortfolioAllocationSummary {
+  const TargetPortfolioAllocationSummary({
+    required this.id,
+    required this.investmentAssetId,
+    required this.key,
+    required this.assetClass,
+    required this.weight,
+    required this.version,
+  });
+
+  final String id;
+  final String? investmentAssetId;
+  final String key;
+  final String assetClass;
+  final num weight;
+  final int version;
+
+  bool get isPendingLocal => id.startsWith('local-');
+
+  factory TargetPortfolioAllocationSummary.fromJson(
+    Map<String, dynamic> json,
+  ) => TargetPortfolioAllocationSummary(
+    id: json['id'] as String,
+    investmentAssetId: json['investmentAssetId'] as String?,
+    key: json['key'] as String,
+    assetClass: json['assetClass'] as String,
+    weight: json['weight'] as num,
+    version: json['version'] as int,
+  );
+
+  Map<String, dynamic> toRequestJson() => {
+    'id': isPendingLocal ? null : id,
+    'version': isPendingLocal ? null : version,
+    'investmentAssetId': investmentAssetId,
+    'key': key,
+    'assetClass': assetClass,
+    'weight': weight,
+  };
+}
+
 class AccountSummary {
   const AccountSummary({
     required this.id,
@@ -316,6 +384,37 @@ class ExpenseReductionGoalSummary {
       );
 }
 
+class ExpenseReductionOpportunitySummary {
+  const ExpenseReductionOpportunitySummary({
+    required this.categoryId,
+    required this.category,
+    required this.currency,
+    required this.recentExpense,
+    required this.previousExpense,
+    required this.increase,
+    required this.suggestedReduction,
+  });
+  final String categoryId;
+  final String category;
+  final String currency;
+  final num recentExpense;
+  final num previousExpense;
+  final num increase;
+  final num suggestedReduction;
+
+  factory ExpenseReductionOpportunitySummary.fromJson(
+    Map<String, dynamic> json,
+  ) => ExpenseReductionOpportunitySummary(
+    categoryId: json['categoryId'] as String,
+    category: json['category'] as String,
+    currency: json['currency'] as String,
+    recentExpense: json['recentExpense'] as num,
+    previousExpense: json['previousExpense'] as num,
+    increase: json['increase'] as num,
+    suggestedReduction: json['suggestedReduction'] as num,
+  );
+}
+
 class FinancialNotificationSummary {
   const FinancialNotificationSummary({
     required this.id,
@@ -411,6 +510,18 @@ class FinanceRepository {
     (store) => FinanceSyncService(_auth, store),
   );
 
+  // A target date is displayed back in the device time zone. Noon UTC keeps
+  // its civil day stable in supported Brazilian time zones; UTC midnight would
+  // render as the previous date there.
+  static DateTime? _civilDateUtc(DateTime? value) => value == null
+      ? null
+      : DateTime.utc(value.year, value.month, value.day, 12);
+
+  // Period boundaries are comparison instants, not display dates. They must
+  // stay at UTC midnight so the first day of a month is fully included.
+  static DateTime _periodBoundaryUtc(DateTime value) =>
+      DateTime.utc(value.year, value.month, value.day);
+
   Future<List<TenantSummary>> tenants() async {
     try {
       final data = await _auth.getAuthenticated('/api/v1/tenants');
@@ -460,17 +571,25 @@ class FinanceRepository {
   }
 
   Future<ProfileSummary> profile(String tenantId) async {
-    final data = await _auth.getAuthenticated(
-      '/api/v1/profile',
-      tenantId: tenantId,
-    );
-    if (data is! Map<String, dynamic>) {
-      throw const ApiException(
-        ApiFailure.unexpected,
-        'Não foi possível carregar seu perfil.',
+    try {
+      final data = await _auth.getAuthenticated(
+        '/api/v1/profile',
+        tenantId: tenantId,
       );
+      if (data is! Map<String, dynamic>) {
+        throw const ApiException(
+          ApiFailure.unexpected,
+          'Não foi possível carregar seu perfil.',
+        );
+      }
+      await (await _store).cacheOne(tenantId, 'profile', data);
+      return ProfileSummary.fromJson(data);
+    } on ApiException catch (error) {
+      if (!_canReadOffline(error)) rethrow;
+      final cached = await (await _store).cached(tenantId, 'profile');
+      if (cached.isEmpty) rethrow;
+      return ProfileSummary.fromJson(cached.first);
     }
-    return ProfileSummary.fromJson(data);
   }
 
   Future<List<AccountSummary>> accounts(String tenantId) async {
@@ -584,6 +703,189 @@ class FinanceRepository {
     pageSize: '100',
   );
 
+  Future<PayYourselfFirstPlanSummary?> payYourselfFirstPlan(
+    String tenantId, {
+    bool allowCachedFallback = true,
+  }) async {
+    try {
+      final data = await _auth.getAuthenticated(
+        '/api/v1/investments/pay-yourself-first',
+        tenantId: tenantId,
+      );
+      if (data == null) return null;
+      if (data is! Map<String, dynamic>) {
+        throw const ApiException(
+          ApiFailure.unexpected,
+          'Não foi possível carregar o planejamento de reserva.',
+        );
+      }
+      await (await _store).cacheOne(tenantId, 'payYourselfFirstPlan', data);
+      return PayYourselfFirstPlanSummary.fromJson(data);
+    } on ApiException catch (error) {
+      // A cached plan is suitable for a read-only simulation, but never for
+      // an optimistic-concurrency token immediately before a write.
+      if (!allowCachedFallback || !_canReadOffline(error)) rethrow;
+      final cached = await (await _store).cached(
+        tenantId,
+        'payYourselfFirstPlan',
+      );
+      return cached.isEmpty
+          ? null
+          : PayYourselfFirstPlanSummary.fromJson(cached.first);
+    }
+  }
+
+  Future<FinanceWriteState> configurePayYourselfFirstPlan({
+    required String tenantId,
+    PayYourselfFirstPlanSummary? existing,
+    required num currentRate,
+    num? goalRate,
+    required DateTime effectiveFrom,
+  }) {
+    final operationId = _newOperationId();
+    final localId = existing?.id ?? 'local-$operationId';
+    // The API contract uses .NET DateOnly. Preserve the civil date selected
+    // by the user; sending an ISO timestamp makes model binding reject it.
+    final effectiveDay =
+        '${effectiveFrom.year.toString().padLeft(4, '0')}-'
+        '${effectiveFrom.month.toString().padLeft(2, '0')}-'
+        '${effectiveFrom.day.toString().padLeft(2, '0')}';
+    if (kDebugMode) {
+      debugPrint(
+        'RASS_PYP_SAVE_REQUEST: existing=${existing != null} '
+        'version=${existing?.version} effectiveDay=$effectiveDay',
+      );
+    }
+    return _postOrQueue(
+      tenantId: tenantId,
+      endpoint: '/api/v1/investments/pay-yourself-first',
+      entityType: 'payYourselfFirstPlan',
+      entityId: localId,
+      payload: {
+        'operationId': operationId,
+        'version': existing?.version,
+        'currentRate': currentRate,
+        'goalRate': goalRate,
+        'effectiveFrom': effectiveDay,
+      },
+      localResource: {
+        'id': localId,
+        'currentRate': currentRate,
+        'goalRate': goalRate,
+        'effectiveFrom': effectiveDay,
+        'version': existing == null ? 0 : existing.version + 1,
+      },
+    );
+  }
+
+  Future<List<TargetPortfolioAllocationSummary>> targetPortfolio(
+    String tenantId,
+  ) async {
+    const entityType = 'targetPortfolioAllocation';
+    try {
+      final data = await _auth.getAuthenticated(
+        '/api/v1/investments/target-portfolio',
+        tenantId: tenantId,
+      );
+      if (data is! List) {
+        throw const ApiException(
+          ApiFailure.unexpected,
+          'Não foi possível carregar a distribuição planejada.',
+        );
+      }
+      final resources = data
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList(growable: false);
+      await (await _store).cacheAll(tenantId, entityType, resources);
+      return (await (await _store).cached(
+        tenantId,
+        entityType,
+      )).map(TargetPortfolioAllocationSummary.fromJson).toList(growable: false);
+    } on ApiException catch (error) {
+      if (!_canReadOffline(error)) rethrow;
+      return (await (await _store).cached(
+        tenantId,
+        entityType,
+      )).map(TargetPortfolioAllocationSummary.fromJson).toList(growable: false);
+    }
+  }
+
+  /// Writes the whole target portfolio as one idempotent command.  Offline
+  /// changes remain as a single pending command, so a reconnect cannot create
+  /// duplicate allocations.
+  Future<FinanceWriteState> setTargetPortfolio({
+    required String tenantId,
+    required List<TargetPortfolioAllocationSummary> allocations,
+  }) async {
+    const entityType = 'targetPortfolioAllocation';
+    const entityId = 'target-portfolio';
+    final total = allocations.fold<num>(0, (sum, item) => sum + item.weight);
+    if (allocations.isEmpty || (total - 100).abs() > .001) {
+      throw const ApiException(
+        ApiFailure.validation,
+        'A distribuição precisa totalizar 100%.',
+      );
+    }
+    if (allocations.any((item) => item.weight < 0 || item.key.trim().isEmpty)) {
+      throw const ApiException(
+        ApiFailure.validation,
+        'Informe percentuais válidos para a distribuição.',
+      );
+    }
+
+    final store = await _store;
+    final pending = await store.pending(tenantId);
+    if (pending.any(
+      (operation) =>
+          operation.entityType == entityType && operation.entityId == entityId,
+    )) {
+      throw const ApiException(
+        ApiFailure.validation,
+        'A distribuição anterior ainda aguarda sincronização.',
+      );
+    }
+
+    final operationId = _newOperationId();
+    final payload = <String, dynamic>{
+      'operationId': operationId,
+      'allocations': allocations.map((item) => item.toRequestJson()).toList(),
+    };
+    try {
+      await _auth.putAuthenticated(
+        '/api/v1/investments/target-portfolio',
+        payload,
+        tenantId: tenantId,
+      );
+      return FinanceWriteState.applied;
+    } on ApiException catch (error) {
+      if (!_canQueueOffline(error)) rethrow;
+      await store.enqueue(
+        tenantId: tenantId,
+        endpoint: '/api/v1/investments/target-portfolio',
+        payload: payload,
+        entityType: entityType,
+        entityId: entityId,
+        operationType: 'put',
+      );
+      final localResources = allocations
+          .map(
+            (item) => <String, dynamic>{
+              'id': item.isPendingLocal
+                  ? item.id
+                  : 'local-$operationId-${item.key}',
+              'investmentAssetId': item.investmentAssetId,
+              'key': item.key,
+              'assetClass': item.assetClass,
+              'weight': item.weight,
+              'version': 0,
+            },
+          )
+          .toList(growable: false);
+      await store.cacheAll(tenantId, entityType, localResources);
+      return FinanceWriteState.pending;
+    }
+  }
+
   Future<List<ExpenseReductionGoalSummary>> expenseReductionGoals(
     String tenantId,
   ) => _loadPage(
@@ -593,6 +895,19 @@ class FinanceRepository {
     parser: ExpenseReductionGoalSummary.fromJson,
     pageSize: '100',
   );
+  Future<List<ExpenseReductionOpportunitySummary>>
+  expenseReductionOpportunities(String tenantId, {int months = 3}) => _auth
+      .getAuthenticated(
+        '/api/v1/expense-reduction-opportunities',
+        tenantId: tenantId,
+        queryParameters: {'months': '$months'},
+      )
+      .then(
+        (data) => (data as List)
+            .cast<Map<String, dynamic>>()
+            .map(ExpenseReductionOpportunitySummary.fromJson)
+            .toList(growable: false),
+      );
   Future<List<FinancialNotificationSummary>> notifications(String tenantId) =>
       _loadPage(
         tenantId: tenantId,
@@ -634,8 +949,8 @@ class FinanceRepository {
         'referenceAmount': referenceAmount,
         'targetAmount': targetAmount,
         'currency': currency,
-        'periodStart': periodStart.toUtc().toIso8601String(),
-        'periodEnd': periodEnd.toUtc().toIso8601String(),
+        'periodStart': _periodBoundaryUtc(periodStart).toIso8601String(),
+        'periodEnd': _periodBoundaryUtc(periodEnd).toIso8601String(),
       },
       localResource: {
         'id': 'local-$operationId',
@@ -644,8 +959,8 @@ class FinanceRepository {
         'targetAmount': targetAmount,
         'actualExpense': 0,
         'currency': currency,
-        'periodStart': periodStart.toUtc().toIso8601String(),
-        'periodEnd': periodEnd.toUtc().toIso8601String(),
+        'periodStart': _periodBoundaryUtc(periodStart).toIso8601String(),
+        'periodEnd': _periodBoundaryUtc(periodEnd).toIso8601String(),
         'version': 0,
         'isArchived': false,
       },
@@ -787,7 +1102,7 @@ class FinanceRepository {
         'name': name,
         'targetAmount': targetAmount,
         'currency': currency,
-        'targetDate': targetDate?.toUtc().toIso8601String(),
+        'targetDate': _civilDateUtc(targetDate)?.toIso8601String(),
       },
       localResource: {
         'id': 'local-$operationId',
@@ -795,12 +1110,39 @@ class FinanceRepository {
         'targetAmount': targetAmount,
         'currentAmount': 0,
         'currency': currency,
-        'targetDate': targetDate?.toUtc().toIso8601String(),
+        'targetDate': _civilDateUtc(targetDate)?.toIso8601String(),
         'status': 'Active',
         'version': 0,
       },
     );
   }
+
+  Future<FinanceWriteState> updateGoal({
+    required String tenantId,
+    required GoalSummary goal,
+    required String name,
+    required num targetAmount,
+    DateTime? targetDate,
+  }) => _writeOrQueue(
+    tenantId: tenantId,
+    endpoint: '/api/v1/goals/${goal.id}',
+    entityType: 'goal',
+    entityId: goal.id,
+    operationType: 'put',
+    payload: {
+      'operationId': _newOperationId(),
+      'version': goal.version,
+      'name': name,
+      'targetAmount': targetAmount,
+      'currency': goal.currency,
+      'targetDate': _civilDateUtc(targetDate)?.toIso8601String(),
+    },
+    request: (payload) => _auth.putAuthenticated(
+      '/api/v1/goals/${goal.id}',
+      payload,
+      tenantId: tenantId,
+    ),
+  );
 
   Future<FinanceWriteState> addGoalProgress({
     required String tenantId,

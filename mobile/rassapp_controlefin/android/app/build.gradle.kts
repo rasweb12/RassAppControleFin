@@ -57,6 +57,13 @@ android {
             applicationIdSuffix = ".homologation"
             versionNameSuffix = "-homologation"
         }
+        // Automation must never reuse FlutterSecureStorage, Drift or an
+        // authenticated session from the base or homologation application.
+        create("e2e") {
+            dimension = "environment"
+            applicationIdSuffix = ".e2e"
+            versionNameSuffix = "-e2e"
+        }
     }
 
     buildTypes {

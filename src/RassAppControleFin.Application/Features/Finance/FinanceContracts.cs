@@ -78,6 +78,16 @@ public sealed record TargetPortfolioAllocationView(Guid Id, Guid? InvestmentAsse
 public sealed record DashboardMetric(string Currency, decimal NetWorth, decimal Income, decimal Expense,
     decimal SavingsRate, decimal BudgetUsed, int ActiveGoals);
 public sealed record DashboardView(DateTimeOffset From, DateTimeOffset To, IReadOnlyList<DashboardMetric> Metrics);
+public sealed record FinanceAiContextQuery(DateOnly AnchorMonth, int HistoricalMonths, int ForecastMonths);
+public sealed record FinanceAiMonthlyMetric(DateOnly Month, string Currency, decimal Income, decimal Expense);
+public sealed record FinanceAiCategoryMetric(DateOnly Month, string Currency, string Category, decimal Expense);
+public sealed record FinanceAiAccountMetric(string Currency, string Account, decimal Balance);
+public sealed record FinanceAiForecastMetric(DateOnly Month, string Currency, string Flow, string Category,
+    string Account, decimal Amount);
+public sealed record FinanceAiSnapshot(IReadOnlyList<FinanceAiMonthlyMetric> RealizedMonths,
+    IReadOnlyList<FinanceAiCategoryMetric> RealizedCategories,
+    IReadOnlyList<FinanceAiAccountMetric> Accounts,
+    IReadOnlyList<FinanceAiForecastMetric> Forecasts);
 public sealed record Page<T>(IReadOnlyList<T> Items, int Total, int PageNumber, int PageSize);
 public sealed record TransactionSummary(string Currency, decimal Income, decimal Expense);
 public sealed record TransactionPage(Page<TransactionView> Page, IReadOnlyList<TransactionSummary> Summary);

@@ -145,11 +145,11 @@ Future<TransactionInput?> showTransactionForm(
   ),
 );
 
-Future<GoalInput?> showGoalForm(BuildContext context) =>
+Future<GoalInput?> showGoalForm(BuildContext context, {GoalInput? initial}) =>
     showModalBottomSheet<GoalInput>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const _GoalForm(),
+      builder: (_) => _GoalForm(initial: initial),
     );
 
 Future<TransferInput?> showTransferForm(
@@ -526,7 +526,8 @@ class _TransactionFormState extends State<_TransactionForm> {
 }
 
 class _GoalForm extends StatefulWidget {
-  const _GoalForm();
+  const _GoalForm({this.initial});
+  final GoalInput? initial;
 
   @override
   State<_GoalForm> createState() => _GoalFormState();
@@ -537,6 +538,9 @@ class _GoalFormState extends State<_GoalForm> {
   final _name = TextEditingController();
   final _targetAmount = TextEditingController();
   DateTime? _targetDate;
+
+  @override
+  void initState() { super.initState(); final initial = widget.initial; if (initial != null) { _name.text = initial.name; _targetAmount.text = initial.targetAmount.toString(); _targetDate = initial.targetDate; } }
 
   @override
   void dispose() {
@@ -558,7 +562,7 @@ class _GoalFormState extends State<_GoalForm> {
 
   @override
   Widget build(BuildContext context) => _Sheet(
-    title: 'Nova meta',
+    title: widget.initial == null ? 'Nova meta' : 'Editar meta',
     formKey: _formKey,
     fields: [
       TextFormField(
@@ -585,7 +589,7 @@ class _GoalFormState extends State<_GoalForm> {
         ),
       ),
     ],
-    submit: 'Salvar meta',
+    submit: widget.initial == null ? 'Salvar meta' : 'Salvar alterações',
     onSubmit: () {
       if (!_formKey.currentState!.validate()) return;
       Navigator.pop(

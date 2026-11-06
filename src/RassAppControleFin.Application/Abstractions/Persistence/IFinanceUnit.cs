@@ -57,6 +57,16 @@ public interface IFinanceReadStore
     Task<Result<DashboardView>> DashboardAsync(DashboardQuery query, CancellationToken ct);
 }
 
+/// <summary>
+/// Read-only analytical projection used by the financial assistant and dashboard insights.
+/// Its implementation must use the authenticated tenant/user scope already enforced by the
+/// finance read transaction; it is deliberately separate from mutations and from the public API.
+/// </summary>
+public interface IFinanceAiReadStore
+{
+    Task<Result<FinanceAiSnapshot>> AiSnapshotAsync(FinanceAiContextQuery query, CancellationToken ct);
+}
+
 public sealed record SyncChange(Guid OperationId, Guid ResourceId, string EventType,
     DateTimeOffset OccurredAt, Guid CursorId);
 public sealed record SyncChangePage(IReadOnlyList<SyncChange> Changes, bool HasMore);

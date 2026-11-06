@@ -15,6 +15,10 @@ public static class DependencyInjection
             config.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
             config.AddOpenBehavior(typeof(TelemetryBehavior<,>));
             config.AddOpenBehavior(typeof(ValidationBehavior<,>));
+            // A license is supplied only by trusted runtime configuration after a
+            // commercial entitlement has been confirmed. No key is stored in code.
+            var licenseKey = Environment.GetEnvironmentVariable("MediatR__LicenseKey");
+            if (!string.IsNullOrWhiteSpace(licenseKey)) config.LicenseKey = licenseKey;
         });
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
         services.AddScoped<IFinanceContextService, FinanceContextService>();

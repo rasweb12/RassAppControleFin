@@ -8,7 +8,7 @@ using RassAppControleFin.SharedKernel.Results;
 namespace RassAppControleFin.Infrastructure.Persistence;
 
 public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory,
-    ILogger<FinanceReadStore> logger) : IFinanceReadStore
+    ILogger<FinanceReadStore> logger) : IFinanceReadStore, IFinanceAiReadStore
 {
     private async Task<Result<T>> Read<T>(Func<Task<T>> query, CancellationToken ct)
     {
@@ -245,5 +245,60 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
                 budget == 0 ? 0 : expense / budget, goals);
         }).ToArray();
         return new DashboardView(q.From, q.To, metrics);
+    }, ct);
+
+    public Task<Result<FinanceAiSnapshot>> AiSnapshotAsync(FinanceAiContextQuery q, CancellationToken ct) => Read(async () =>
+    {
+        if (q.HistoricalMonths is < 1 or > 12 || q.ForecastMonths is < 0 or > 12)
+            throw new ArgumentOutOfRangeException(nameof(q), "AI context periods must be between zero and twelve months.");
+
+        var historicalFrom = new DateTimeOffset(q.AnchorMonth.AddMonths(1 - q.HistoricalMonths).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var historicalTo = new DateTimeOffset(q.AnchorMonth.AddMonths(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var forecastFrom = historicalTo;
+        var forecastTo = new DateTimeOffset(q.AnchorMonth.AddMonths(1 + q.ForecastMonths).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+
+        // These monthly totals deliberately use the same Posted transaction semantics as DashboardAsync.
+        // Transfers and pending rows are excluded from realized income/expense, preventing double counting.
+        var realizedRows = await db.Transactions.AsNoTracking()
+            .Where(x => x.Status == TransactionStatus.Posted && x.OccurredAt >= historicalFrom && x.OccurredAt < historicalTo)
+            .Select(x => new { x.OccurredAt, x.Currency, x.Flow, x.Amount })
+            .ToListAsync(ct);
+        var realizedMonths = realizedRows.GroupBy(x => new { Month = new DateOnly(x.OccurredAt.Year, x.OccurredAt.Month, 1), x.Currency })
+            .OrderBy(x => x.Key.Month).ThenBy(x => x.Key.Currency)
+            .Select(x => new FinanceAiMonthlyMetric(x.Key.Month, x.Key.Currency,
+                x.Where(row => row.Flow == FinancialFlow.Income).Sum(row => row.Amount),
+                x.Where(row => row.Flow == FinancialFlow.Expense).Sum(row => row.Amount)))
+            .ToArray();
+
+        var categoryRows = await (
+            from transaction in db.Transactions.AsNoTracking()
+            join category in db.Categories.AsNoTracking() on transaction.CategoryId equals category.Id
+            where transaction.Status == TransactionStatus.Posted
+                  && transaction.Flow == FinancialFlow.Expense
+                  && transaction.OccurredAt >= historicalFrom && transaction.OccurredAt < historicalTo
+            select new { transaction.OccurredAt, transaction.Currency, category.Name, transaction.Amount })
+            .ToListAsync(ct);
+        var realizedCategories = categoryRows.GroupBy(x => new { Month = new DateOnly(x.OccurredAt.Year, x.OccurredAt.Month, 1), x.Currency, x.Name })
+            .OrderBy(x => x.Key.Month).ThenBy(x => x.Key.Currency).ThenBy(x => x.Key.Name)
+            .Select(x => new FinanceAiCategoryMetric(x.Key.Month, x.Key.Currency, x.Key.Name, x.Sum(row => row.Amount)))
+            .ToArray();
+
+        // Do not include descriptions: analytical questions need amounts and classifications, not free text.
+        var accounts = await db.Accounts.AsNoTracking().Where(x => x.IncludeInNetWorth)
+            .OrderBy(x => x.Currency).ThenBy(x => x.Name)
+            .Select(x => new FinanceAiAccountMetric(x.Currency, x.Name, x.Balance)).ToArrayAsync(ct);
+
+        var forecasts = q.ForecastMonths == 0 ? Array.Empty<FinanceAiForecastMetric>() : await (
+            from transaction in db.Transactions.AsNoTracking()
+            join category in db.Categories.AsNoTracking() on transaction.CategoryId equals category.Id
+            join account in db.Accounts.AsNoTracking() on transaction.AccountId equals account.Id
+            where transaction.Status == TransactionStatus.Pending
+                  && transaction.OccurredAt >= forecastFrom && transaction.OccurredAt < forecastTo
+            orderby transaction.OccurredAt, transaction.Currency, category.Name
+            select new FinanceAiForecastMetric(new DateOnly(transaction.OccurredAt.Year, transaction.OccurredAt.Month, 1),
+                transaction.Currency, transaction.Flow.ToString(), category.Name, account.Name, transaction.Amount))
+            .ToArrayAsync(ct);
+
+        return new FinanceAiSnapshot(realizedMonths, realizedCategories, accounts, forecasts);
     }, ct);
 }

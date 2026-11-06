@@ -7,8 +7,15 @@ param(
     [ValidatePattern('^br-[a-z0-9-]+$')]
     [string]$ExpectedTestBranchId,
     [switch]$NeonTestBranchConfirmed,
-    # Android artifacts require an installed SDK and release signing material.
-    [switch]$BuildAndroid,
+    # Debug homologation needs an explicit non-Production API target.
+    [switch]$BuildAndroidDebug,
+    [ValidatePattern('^https?://')]
+    [string]$HomologationApiBaseUrl,
+    # Release AAB remains separately opt-in because it needs approved signing material.
+    [switch]$BuildAndroidRelease,
+    # Device E2E is opt-in. A concrete identifier prevents a test from
+    # silently choosing a desktop/browser or a profile with unrelated state.
+    [string]$AndroidDeviceId,
     # Optional read-only smoke target. It is never inferred from a connection string.
     [ValidatePattern('^https?://')]
     [string]$ApiBaseUrl
@@ -91,15 +98,40 @@ try {
         [void](Invoke-CheckedProcess 'Flutter analyze' $flutter @('analyze') $flutterProject)
         [void](Invoke-CheckedProcess 'Flutter testes unitários e widgets' $flutter @('test') $flutterProject)
         $integrationDirectory = Join-Path $flutterProject 'integration_test'
-        if (Test-Path $integrationDirectory) {
-            [void](Invoke-CheckedProcess 'Flutter integration_test' $flutter @('test', 'integration_test') $flutterProject)
+        if (-not (Test-Path $integrationDirectory)) {
+            Add-Result 'Flutter integration_test' 'BLOQUEADO' 'Não há diretório integration_test; não há evidência E2E de aplicativo/dispositivo.'
         }
-        else { Add-Result 'Flutter integration_test' 'BLOQUEADO' 'Não há diretório integration_test; não há evidência E2E de aplicativo/dispositivo.' }
-        if ($BuildAndroid) {
-            [void](Invoke-CheckedProcess 'Android APK debug' $flutter @('build', 'apk', '--debug') $flutterProject)
+        elseif ([string]::IsNullOrWhiteSpace($AndroidDeviceId)) {
+            Add-Result 'Flutter integration_test' 'BLOQUEADO' 'Exige -AndroidDeviceId explícito para não selecionar um perfil de dispositivo implícito.'
+        }
+        else {
+            # E2E uses its own application id, so the emulator cannot reuse
+            # FlutterSecureStorage, Drift, cache, or session state from a
+            # normal/homologation profile. The empty URL validates the
+            # configuration guard before a network-capable flow can start.
+            [void](Invoke-CheckedProcess 'Flutter integration_test' $flutter @(
+                'test', 'integration_test', '--flavor', 'e2e', '-d', $AndroidDeviceId,
+                '--dart-define=API_BASE_URL='
+            ) $flutterProject)
+        }
+        if ($BuildAndroidDebug) {
+            if ([string]::IsNullOrWhiteSpace($HomologationApiBaseUrl) -or
+                $HomologationApiBaseUrl -match 'rassappcontrolefin-1\.onrender\.com') {
+                Add-Result 'Android APK debug de homologação' 'BLOQUEADO' 'Exige URL explícita que não seja Production.'
+            }
+            else {
+                [void](Invoke-CheckedProcess 'Android APK debug de homologação' $flutter @(
+                    'build', 'apk', '--debug', '--flavor', 'homologation',
+                    "--dart-define=API_BASE_URL=$HomologationApiBaseUrl"
+                ) $flutterProject)
+            }
+        }
+        else { Add-Result 'Android APK debug de homologação' 'BLOQUEADO' 'Use -BuildAndroidDebug com -HomologationApiBaseUrl explícita e não-Production.' }
+
+        if ($BuildAndroidRelease) {
             [void](Invoke-CheckedProcess 'Android AAB release' $flutter @('build', 'appbundle', '--release') $flutterProject)
         }
-        else { Add-Result 'Android APK/AAB' 'BLOQUEADO' 'Use -BuildAndroid após configurar SDK e assinatura release.' }
+        else { Add-Result 'Android AAB release' 'BLOQUEADO' 'Requer -BuildAndroidRelease, assinatura aprovada e aceite manual.' }
     }
 
     if ($IncludeIntegration) {
@@ -125,7 +157,9 @@ finally {
     Pop-Location -ErrorAction SilentlyContinue
     $go = ($results.Count -gt 0) -and -not ($results.Status -contains 'REPROVADO') -and -not ($results.Status -contains 'BLOQUEADO')
     $verdict = if ($go) { 'GO' } else { 'NO-GO' }
-    $lines = @('# Checkpoint 15 — relatório automático', '', "Data: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')", "Commit: $((git rev-parse --short HEAD 2>$null))", "Veredito: **$verdict**", '', '| Etapa | Resultado | Evidência |', '|---|---|---|')
+    $commit = (& git -C $repositoryRoot rev-parse --short HEAD 2>$null | Select-Object -First 1).Trim()
+    if ([string]::IsNullOrWhiteSpace($commit)) { $commit = 'indisponível' }
+    $lines = @('# Checkpoint 15 — relatório automático', '', "Data: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')", "Commit: $commit", "Veredito: **$verdict**", '', '| Etapa | Resultado | Evidência |', '|---|---|---|')
     foreach ($result in $results) { $lines += "| $($result.Name) | $($result.Status) | $($result.Evidence.Replace('|','/')) |" }
     $lines += '', '> The command never executes migrations, deploys or Production writes. Testes integrados exigem banco isolado explicitamente confirmado.'
     Set-Content -LiteralPath $reportPath -Value ($lines -join [Environment]::NewLine) -Encoding UTF8

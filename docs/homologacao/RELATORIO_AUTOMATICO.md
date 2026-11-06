@@ -13,3 +13,7 @@ O comando padrão executa apenas build, testes locais, análise Flutter e higien
 ## Decisão
 
 O script só retorna `GO` se nenhuma etapa obrigatória estiver reprovada ou bloqueada. Ausência de emulador, `integration_test`, assinatura release ou banco isolado impede homologação integral e produz **NO-GO**.
+
+## Sprint 16 — escopo ainda não automatizado
+
+A fundação persistente de monetização foi adicionada localmente, porém a homologação automática não considera compras como aprovadas: não existe integração configurada com Google Play, verificação de recibo no backend, UI de assinatura ou dispositivo/emulador validado. O estado permanece **NO-GO** até essas etapas e a homologação visual manual.

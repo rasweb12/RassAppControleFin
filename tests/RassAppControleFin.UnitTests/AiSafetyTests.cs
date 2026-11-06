@@ -1,5 +1,9 @@
 using RassAppControleFin.AI;
 using RassAppControleFin.Application.AI;
+using RassAppControleFin.Application.Abstractions.Persistence;
+using RassAppControleFin.Application.Features.Finance;
+using RassAppControleFin.MultiTenancy;
+using RassAppControleFin.Security;
 using RassAppControleFin.SharedKernel.Results;
 using Xunit;
 
@@ -27,7 +31,7 @@ public sealed class AiSafetyTests
 
     private sealed class Context : IFinanceContextService
     {
-        public Task<Result<FinanceContext>> GetAsync(string period, CancellationToken cancellationToken)
+        public Task<Result<FinanceContext>> GetAsync(string question, string period, CancellationToken cancellationToken)
             => Task.FromResult(Result<FinanceContext>.Success(new FinanceContext(Guid.NewGuid(), "user", period,
                 new Dictionary<string, decimal> { ["BRL.expense"] = 100m })));
     }

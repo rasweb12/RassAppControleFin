@@ -11,6 +11,9 @@ import '../finance/finance_repository.dart';
 import '../finance/credit_cards_page.dart';
 import '../finance/financial_assistant_page.dart';
 import '../finance/financial_notifications_page.dart';
+import '../finance/goal_progress_dialog.dart';
+import '../finance/pay_yourself_first_page.dart';
+import '../monetization/entitlements_page.dart';
 import 'finance_forms.dart';
 import '../synchronization/finance_sync_service.dart';
 
@@ -26,6 +29,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   late final FinanceRepository _repository;
   int _tab = 0;
   bool _loading = true;
+  bool _mutating = false;
   bool _sessionExpired = false;
   String? _error;
   List<TenantSummary> _tenants = const [];
@@ -262,6 +266,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
             return _goals;
           },
           onAddProgress: _addGoalProgress,
+          onEdit: _editGoal,
           onArchive: _archiveGoal,
         ),
       ),
@@ -275,18 +280,29 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
       MaterialPageRoute(
         builder: (_) => _ExpenseReductionGoalsPage(
           goals: _expenseReductionGoals,
+          categories: _categories
+              .where(
+                (category) => !category.archived && category.flow == 'Expense',
+              )
+              .toList(growable: false),
           onRefresh: () async {
             await _load();
             return _expenseReductionGoals;
           },
-          onCreate: (reference, target) => _mutate(
+          onOpportunities: (months) => _repository
+              .expenseReductionOpportunities(tenant.id, months: months),
+          onCreate: (categoryId, reference, target) => _mutate(
             () => _repository.createExpenseReductionGoal(
               tenantId: tenant.id,
+              categoryId: categoryId,
               referenceAmount: reference,
               targetAmount: target,
               currency: 'BRL',
-              periodStart: DateTime(DateTime.now().year, DateTime.now().month),
-              periodEnd: DateTime(
+              periodStart: DateTime.utc(
+                DateTime.now().year,
+                DateTime.now().month,
+              ),
+              periodEnd: DateTime.utc(
                 DateTime.now().year,
                 DateTime.now().month + 1,
               ),
@@ -312,6 +328,17 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     );
   }
 
+  Future<void> _openPayYourselfFirst() async {
+    final tenant = _tenant;
+    if (tenant == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            PayYourselfFirstPage(repository: _repository, tenantId: tenant.id),
+      ),
+    );
+  }
+
   Future<void> _openNotifications() async {
     final tenant = _tenant;
     if (tenant == null) return;
@@ -324,6 +351,12 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
       ),
     );
   }
+
+  Future<void> _openPlanAndFeatures() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => EntitlementsPage(authController: widget.authController),
+    ),
+  );
 
   Future<void> _openAccountSecurity() async {
     final session = widget.authController.session;
@@ -384,42 +417,40 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   Future<void> _addGoalProgress(GoalSummary goal) async {
     final tenant = _tenant;
     if (tenant == null || goal.id.startsWith('local-')) return;
-    final controller = TextEditingController();
     final amount = await showDialog<num>(
       context: context,
       useRootNavigator: true,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Adicionar à meta ${goal.name}'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Valor (R\$)'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext, rootNavigator: true).pop(),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final value = _parseAmount(controller.text);
-              if (value == null || value <= 0) return;
-              Navigator.of(dialogContext, rootNavigator: true).pop(value);
-            },
-            child: const Text('Adicionar'),
-          ),
-        ],
-      ),
+      builder: (_) => GoalProgressDialog(goalName: goal.name),
     );
-    controller.dispose();
     if (amount == null || !mounted) return;
     await _mutate(
       () => _repository.addGoalProgress(
         tenantId: tenant.id,
         goal: goal,
         amount: amount,
+      ),
+    );
+  }
+
+  Future<void> _editGoal(GoalSummary goal) async {
+    final tenant = _tenant;
+    if (tenant == null || goal.id.startsWith('local-')) return;
+    final input = await showGoalForm(
+      context,
+      initial: GoalInput(
+        name: goal.name,
+        targetAmount: goal.targetAmount,
+        targetDate: goal.targetDate,
+      ),
+    );
+    if (input == null || !mounted) return;
+    await _mutate(
+      () => _repository.updateGoal(
+        tenantId: tenant.id,
+        goal: goal,
+        name: input.name,
+        targetAmount: input.targetAmount,
+        targetDate: input.targetDate,
       ),
     );
   }
@@ -719,6 +750,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   }
 
   Future<void> _mutate(Future<FinanceWriteState> Function() operation) async {
+    if (_mutating) return;
+    setState(() => _mutating = true);
     try {
       final result = await operation();
       if (!mounted) return;
@@ -732,6 +765,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
       if (!mounted) return;
       _notice(_messageFor(error));
       await _load();
+    } finally {
+      if (mounted) setState(() => _mutating = false);
     }
   }
 
@@ -926,6 +961,8 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
               onExpenseReductionGoals: _openExpenseReductionGoals,
               onNotifications: _openNotifications,
               onFinancialAssistant: _openFinancialAssistant,
+              onPayYourselfFirst: _openPayYourselfFirst,
+              onPlanAndFeatures: _openPlanAndFeatures,
               onSecurity: _openAccountSecurity,
             ),
           };
@@ -971,7 +1008,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
         ],
       ),
       floatingActionButton:
-          _loading || _tenant == null || (_tab != 1 && _tab != 2)
+          _loading || _mutating || _tenant == null || (_tab != 1 && _tab != 2)
           ? null
           : FloatingActionButton(
               onPressed: _openAction,
@@ -1750,7 +1787,7 @@ Future<_TransactionDetailAction?> _showTransactionDetails(
                     context: context,
                     useRootNavigator: true,
                     builder: (dialog) => AlertDialog(
-                      title: const Text('Cancelar lançamento?'),
+                      title: const Text('Estornar lançamento?'),
                       content: const Text(
                         'O valor será estornado e o histórico será preservado.',
                       ),
@@ -1767,7 +1804,7 @@ Future<_TransactionDetailAction?> _showTransactionDetails(
                             dialog,
                             rootNavigator: true,
                           ).pop(true),
-                          child: const Text('Cancelar'),
+                          child: const Text('Voltar'),
                         ),
                       ],
                     ),
@@ -1782,7 +1819,7 @@ Future<_TransactionDetailAction?> _showTransactionDetails(
                   }
                 },
                 icon: const Icon(Icons.cancel_outlined),
-                label: const Text('Cancelar lançamento'),
+                label: const Text('Estornar lançamento'),
               ),
             ],
           ],
@@ -1911,13 +1948,19 @@ String _accountLabel(AccountSummary account) {
 class _ExpenseReductionGoalsPage extends StatefulWidget {
   const _ExpenseReductionGoalsPage({
     required this.goals,
+    required this.categories,
     required this.onRefresh,
+    required this.onOpportunities,
     required this.onCreate,
     required this.onArchive,
   });
   final List<ExpenseReductionGoalSummary> goals;
+  final List<CategorySummary> categories;
   final Future<List<ExpenseReductionGoalSummary>> Function() onRefresh;
-  final Future<void> Function(num reference, num target) onCreate;
+  final Future<List<ExpenseReductionOpportunitySummary>> Function(int months)
+  onOpportunities;
+  final Future<void> Function(String? categoryId, num reference, num target)
+  onCreate;
   final Future<void> Function(ExpenseReductionGoalSummary goal) onArchive;
 
   @override
@@ -1928,17 +1971,60 @@ class _ExpenseReductionGoalsPage extends StatefulWidget {
 class _ExpenseReductionGoalsPageState
     extends State<_ExpenseReductionGoalsPage> {
   late List<ExpenseReductionGoalSummary> _goals = widget.goals;
+  List<ExpenseReductionOpportunitySummary> _opportunities = const [];
+  bool _loadingOpportunities = false;
+  String? _opportunitiesError;
+  int _historicalMonths = 3;
   bool _showArchived = false;
 
   Future<void> _refresh() async {
-    final goals = await widget.onRefresh();
-    if (mounted) setState(() => _goals = goals);
+    try {
+      final goals = await widget.onRefresh();
+      if (mounted) setState(() => _goals = goals);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível atualizar as metas.')),
+        );
+      }
+    }
+    if (mounted) await _loadOpportunities();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOpportunities();
+  }
+
+  Future<void> _loadOpportunities() async {
+    final months = _historicalMonths;
+    setState(() => _loadingOpportunities = true);
+    try {
+      final opportunities = await widget.onOpportunities(months);
+      if (mounted) {
+        setState(() {
+          _opportunities = opportunities;
+          _opportunitiesError = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _opportunitiesError =
+              'Não foi possível atualizar as oportunidades agora.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingOpportunities = false);
+    }
   }
 
   Future<void> _create() async {
     final reference = TextEditingController();
     final target = TextEditingController();
-    final values = await showDialog<(num, num)>(
+    String? categoryId;
+    final values = await showDialog<(String?, num, num)>(
       context: context,
       useRootNavigator: true,
       builder: (context) => AlertDialog(
@@ -1946,6 +2032,26 @@ class _ExpenseReductionGoalsPageState
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            DropdownButtonFormField<String?>(
+              initialValue: categoryId,
+              decoration: const InputDecoration(
+                labelText: 'Categoria (opcional)',
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('Todas as despesas'),
+                ),
+                ...widget.categories.map(
+                  (category) => DropdownMenuItem<String?>(
+                    value: category.id,
+                    child: Text(category.name),
+                  ),
+                ),
+              ],
+              onChanged: (value) => categoryId = value,
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: reference,
               keyboardType: const TextInputType.numberWithOptions(
@@ -1982,7 +2088,10 @@ class _ExpenseReductionGoalsPageState
                   to >= from) {
                 return;
               }
-              Navigator.of(context, rootNavigator: true).pop((from, to));
+              Navigator.of(
+                context,
+                rootNavigator: true,
+              ).pop((categoryId, from, to));
             },
             child: const Text('Criar'),
           ),
@@ -1992,7 +2101,7 @@ class _ExpenseReductionGoalsPageState
     reference.dispose();
     target.dispose();
     if (values == null) return;
-    await widget.onCreate(values.$1, values.$2);
+    await widget.onCreate(values.$1, values.$2, values.$3);
     await _refresh();
   }
 
@@ -2034,9 +2143,40 @@ class _ExpenseReductionGoalsPageState
     final visible = _goals
         .where((goal) => _showArchived || !goal.archived)
         .toList(growable: false);
+    final hasOpportunityError = _opportunitiesError != null;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Redução de despesas'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(84),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: DropdownButtonFormField<int>(
+              initialValue: _historicalMonths,
+              decoration: const InputDecoration(
+                labelText: 'Meses por período comparado',
+                helperText: 'Somente despesas realizadas; previsões excluídas.',
+              ),
+              items: List.generate(
+                12,
+                (index) => DropdownMenuItem(
+                  value: index + 1,
+                  child: Text('${index + 1} mês(es)'),
+                ),
+              ),
+              onChanged: _loadingOpportunities
+                  ? null
+                  : (months) {
+                      if (months == null) return;
+                      setState(() {
+                        _historicalMonths = months;
+                        _opportunities = const [];
+                      });
+                      _loadOpportunities();
+                    },
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: _showArchived ? 'Ocultar arquivadas' : 'Exibir arquivadas',
@@ -2057,7 +2197,11 @@ class _ExpenseReductionGoalsPageState
         tooltip: 'Criar meta de redução',
         child: const Icon(Icons.add),
       ),
-      body: visible.isEmpty
+      body:
+          visible.isEmpty &&
+              _opportunities.isEmpty &&
+              !_loadingOpportunities &&
+              _opportunitiesError == null
           ? _MessageState(
               icon: Icons.trending_down_outlined,
               title: 'Nenhuma meta de redução criada',
@@ -2067,7 +2211,11 @@ class _ExpenseReductionGoalsPageState
             )
           : ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: visible.length + 1,
+              itemCount:
+                  visible.length +
+                  _opportunities.length +
+                  1 +
+                  (hasOpportunityError ? 1 : 0),
               separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (_, index) {
                 if (index == 0) {
@@ -2088,7 +2236,46 @@ class _ExpenseReductionGoalsPageState
                     icon: Icons.trending_down_outlined,
                   );
                 }
-                final goal = visible[index - 1];
+                if (hasOpportunityError && index == 1) {
+                  return Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.cloud_off_outlined),
+                      title: Text(_opportunitiesError!),
+                      subtitle: const Text(
+                        'As metas manuais continuam disponíveis e nenhum dado foi alterado.',
+                      ),
+                    ),
+                  );
+                }
+                final opportunityIndex =
+                    index - 1 - (hasOpportunityError ? 1 : 0);
+                if (opportunityIndex < _opportunities.length) {
+                  final opportunity = _opportunities[opportunityIndex];
+                  return Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.insights_outlined),
+                      title: Text(opportunity.category),
+                      subtitle: Text(
+                        'Gasto recente: ${_money(opportunity.recentExpense, opportunity.currency)} · período anterior: ${_money(opportunity.previousExpense, opportunity.currency)}',
+                      ),
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('Oportunidade'),
+                          Text(
+                            _money(
+                              opportunity.suggestedReduction,
+                              opportunity.currency,
+                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                final goal = visible[opportunityIndex - _opportunities.length];
                 final remaining = (goal.targetAmount - goal.actualExpense)
                     .clamp(0, goal.targetAmount);
                 return Card(
@@ -2168,6 +2355,8 @@ class _Menu extends StatelessWidget {
     required this.onExpenseReductionGoals,
     required this.onNotifications,
     required this.onFinancialAssistant,
+    required this.onPayYourselfFirst,
+    required this.onPlanAndFeatures,
     required this.onSecurity,
   });
   final TenantSummary tenant;
@@ -2183,6 +2372,8 @@ class _Menu extends StatelessWidget {
   final Future<void> Function() onExpenseReductionGoals;
   final Future<void> Function() onNotifications;
   final Future<void> Function() onFinancialAssistant;
+  final Future<void> Function() onPayYourselfFirst;
+  final Future<void> Function() onPlanAndFeatures;
   final Future<void> Function() onSecurity;
 
   @override
@@ -2245,11 +2436,25 @@ class _Menu extends StatelessWidget {
         onTap: onFinancialAssistant,
       ),
       _MenuItem(
+        leading: const Icon(Icons.savings_outlined),
+        title: const Text('Primeiro Me Pago'),
+        subtitle: const Text('Planeje a reserva antes dos demais gastos.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onPayYourselfFirst,
+      ),
+      _MenuItem(
         leading: const Icon(Icons.notifications_outlined),
         title: const Text('Notificações'),
         subtitle: const Text('Alertas e avisos financeiros.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: onNotifications,
+      ),
+      _MenuItem(
+        leading: const Icon(Icons.workspace_premium_outlined),
+        title: const Text('Plano e recursos'),
+        subtitle: const Text('Consulte os recursos liberados para sua conta.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onPlanAndFeatures,
       ),
       _MenuItem(
         leading: const Icon(Icons.sync_outlined),
@@ -2434,6 +2639,7 @@ class _GoalsPage extends StatefulWidget {
     required this.onCreate,
     required this.onRefresh,
     required this.onAddProgress,
+    required this.onEdit,
     required this.onArchive,
   });
 
@@ -2441,6 +2647,7 @@ class _GoalsPage extends StatefulWidget {
   final Future<void> Function() onCreate;
   final Future<List<GoalSummary>> Function() onRefresh;
   final Future<void> Function(GoalSummary goal) onAddProgress;
+  final Future<void> Function(GoalSummary goal) onEdit;
   final Future<void> Function(GoalSummary goal) onArchive;
 
   @override
@@ -2583,6 +2790,15 @@ class _GoalsPageState extends State<_GoalsPage> {
                                   semanticLabel: 'Aguardando sincronização',
                                 )
                               else
+                                IconButton(
+                                  tooltip: 'Editar meta',
+                                  onPressed: () async {
+                                    await widget.onEdit(goal);
+                                    if (mounted) await _refresh();
+                                  },
+                                  icon: const Icon(Icons.edit_outlined),
+                                ),
+                              if (!localOnly)
                                 IconButton(
                                   tooltip: goal.status == 'Archived'
                                       ? 'Reativar meta'
