@@ -36,6 +36,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
   TenantSummary? _tenant;
   ProfileSummary? _profile;
   List<DashboardMetric> _metrics = const [];
+  DateTime? _dashboardMonth;
   List<AccountSummary> _accounts = const [];
   List<CategorySummary> _categories = const [];
   List<GoalSummary> _goals = const [];
@@ -97,7 +98,7 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
           ? tenants.firstWhere((item) => item.id == _tenant!.id)
           : tenants.first;
       final values = await Future.wait([
-        _repository.dashboard(tenant.id, DateTime.now()),
+        _repository.dashboard(tenant.id, _dashboardMonth ?? DateTime.now()),
         _repository.profile(tenant.id),
         _repository.accounts(tenant.id),
         _repository.categories(tenant.id),
@@ -289,8 +290,13 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
             await _load();
             return _expenseReductionGoals;
           },
-          onOpportunities: (months) => _repository
-              .expenseReductionOpportunities(tenant.id, months: months),
+          onOpportunities: (months, from, to) =>
+              _repository.expenseReductionOpportunities(
+                tenant.id,
+                months: months,
+                from: from,
+                to: to,
+              ),
           onCreate: (categoryId, reference, target) => _mutate(
             () => _repository.createExpenseReductionGoal(
               tenantId: tenant.id,
@@ -903,6 +909,31 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
     context,
   ).showSnackBar(SnackBar(content: Text(message)));
 
+  Future<void> _selectDashboardMonth() async {
+    final now = DateTime.now();
+    final month = await showDialog<DateTime>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Mês e ano do Dashboard'),
+        children: [
+          for (var index = 0; index < 24; index++)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                DateTime(now.year, now.month - index),
+              ),
+              child: Text(
+                _dateFull(DateTime(now.year, now.month - index)).substring(3),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (!mounted || month == null) return;
+    _dashboardMonth = month;
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     const titles = ['Dashboard', 'Transações', 'Contas', 'Menu'];
@@ -972,6 +1003,14 @@ class _FinanceHomeShellState extends State<FinanceHomeShell> {
             ? Text('Olá, ${_profile!.displayName}')
             : Text(titles[_tab]),
         actions: [
+          if (_tab == 0 && !_loading && _tenant != null)
+            TextButton.icon(
+              onPressed: _selectDashboardMonth,
+              icon: const Icon(Icons.calendar_month_outlined),
+              label: Text(
+                _dateFull(_dashboardMonth ?? DateTime.now()).substring(3),
+              ),
+            ),
           if (!_loading && _tenant != null)
             IconButton(
               onPressed: _synchronizeAndLoad,
@@ -1149,7 +1188,7 @@ class _DashboardHero extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'PATRIMÔNIO LÍQUIDO',
+          'PATRIMÔNIO LÍQUIDO ATUAL',
           style: TextStyle(
             color: Color(0xFFCBD5E1),
             fontWeight: FontWeight.w700,
@@ -1957,7 +1996,11 @@ class _ExpenseReductionGoalsPage extends StatefulWidget {
   final List<ExpenseReductionGoalSummary> goals;
   final List<CategorySummary> categories;
   final Future<List<ExpenseReductionGoalSummary>> Function() onRefresh;
-  final Future<List<ExpenseReductionOpportunitySummary>> Function(int months)
+  final Future<List<ExpenseReductionOpportunitySummary>> Function(
+    int months,
+    String? from,
+    String? to,
+  )
   onOpportunities;
   final Future<void> Function(String? categoryId, num reference, num target)
   onCreate;
@@ -1975,6 +2018,7 @@ class _ExpenseReductionGoalsPageState
   bool _loadingOpportunities = false;
   String? _opportunitiesError;
   int _historicalMonths = 3;
+  DateTimeRange? _customRange;
   bool _showArchived = false;
 
   Future<void> _refresh() async {
@@ -1998,10 +2042,16 @@ class _ExpenseReductionGoalsPageState
   }
 
   Future<void> _loadOpportunities() async {
+    if (_loadingOpportunities) return;
     final months = _historicalMonths;
+    final range = _customRange;
     setState(() => _loadingOpportunities = true);
     try {
-      final opportunities = await widget.onOpportunities(months);
+      final opportunities = await widget.onOpportunities(
+        months,
+        range?.start.toIso8601String().split('T').first,
+        range?.end.toIso8601String().split('T').first,
+      );
       if (mounted) {
         setState(() {
           _opportunities = opportunities;
@@ -2018,6 +2068,52 @@ class _ExpenseReductionGoalsPageState
     } finally {
       if (mounted) setState(() => _loadingOpportunities = false);
     }
+  }
+
+  Future<void> _selectCustomRange() async {
+    final now = DateTime.now();
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange: _customRange,
+      helpText: 'Selecione o início e o fim',
+    );
+    if (!mounted || range == null) return;
+    final start = DateTime.utc(
+      range.start.year,
+      range.start.month,
+      range.start.day,
+    );
+    final end = DateTime.utc(range.end.year, range.end.month, range.end.day);
+    if (end.difference(start).inDays >= 366) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecione até 366 dias, incluindo as duas datas.'),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _customRange = DateTimeRange(start: start, end: end);
+      _opportunities = const [];
+    });
+    await _loadOpportunities();
+  }
+
+  String get _comparisonLabel {
+    final now = DateTime.now().toUtc();
+    final range = _customRange;
+    final end = range?.end ?? DateTime.utc(now.year, now.month + 1, 0);
+    final start =
+        range?.start ??
+        DateTime.utc(now.year, now.month + 1 - _historicalMonths);
+    final previousEnd = start.subtract(const Duration(days: 1));
+    final previousStart = range == null
+        ? DateTime.utc(start.year, start.month - _historicalMonths)
+        : previousEnd.subtract(end.difference(start));
+    return '${_dateFull(start)} a ${_dateFull(end)} · Anterior: '
+        '${_dateFull(previousStart)} a ${_dateFull(previousEnd)}';
   }
 
   Future<void> _create() async {
@@ -2170,6 +2266,7 @@ class _ExpenseReductionGoalsPageState
                       if (months == null) return;
                       setState(() {
                         _historicalMonths = months;
+                        _customRange = null;
                         _opportunities = const [];
                       });
                       _loadOpportunities();
@@ -2178,6 +2275,11 @@ class _ExpenseReductionGoalsPageState
           ),
         ),
         actions: [
+          IconButton(
+            onPressed: _loadingOpportunities ? null : _selectCustomRange,
+            tooltip: 'Período personalizado',
+            icon: const Icon(Icons.date_range_outlined),
+          ),
           IconButton(
             tooltip: _showArchived ? 'Ocultar arquivadas' : 'Exibir arquivadas',
             onPressed: () => setState(() => _showArchived = !_showArchived),
@@ -2197,145 +2299,153 @@ class _ExpenseReductionGoalsPageState
         tooltip: 'Criar meta de redução',
         child: const Icon(Icons.add),
       ),
-      body:
-          visible.isEmpty &&
-              _opportunities.isEmpty &&
-              !_loadingOpportunities &&
-              _opportunitiesError == null
-          ? _MessageState(
-              icon: Icons.trending_down_outlined,
-              title: 'Nenhuma meta de redução criada',
-              message: 'Crie uma meta para acompanhar sua economia mensal.',
-              action: 'Atualizar',
-              onAction: _refresh,
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount:
-                  visible.length +
-                  _opportunities.length +
-                  1 +
-                  (hasOpportunityError ? 1 : 0),
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (_, index) {
-                if (index == 0) {
-                  final planned = visible.fold<num>(
-                    0,
-                    (sum, item) => sum + item.targetAmount,
-                  );
-                  final actual = visible.fold<num>(
-                    0,
-                    (sum, item) => sum + item.actualExpense,
-                  );
-                  return _DarkSummaryCard(
-                    eyebrow: 'REDUÇÃO DE DESPESAS',
-                    value: _money(planned, 'BRL'),
-                    detail: actual <= planned
-                        ? 'Dentro da meta planejada'
-                        : 'Acima da meta planejada',
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(_comparisonLabel),
+          ),
+          Expanded(
+            child:
+                visible.isEmpty &&
+                    _opportunities.isEmpty &&
+                    !_loadingOpportunities &&
+                    _opportunitiesError == null
+                ? _MessageState(
                     icon: Icons.trending_down_outlined,
-                  );
-                }
-                if (hasOpportunityError && index == 1) {
-                  return Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.cloud_off_outlined),
-                      title: Text(_opportunitiesError!),
-                      subtitle: const Text(
-                        'As metas manuais continuam disponíveis e nenhum dado foi alterado.',
-                      ),
-                    ),
-                  );
-                }
-                final opportunityIndex =
-                    index - 1 - (hasOpportunityError ? 1 : 0);
-                if (opportunityIndex < _opportunities.length) {
-                  final opportunity = _opportunities[opportunityIndex];
-                  return Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.insights_outlined),
-                      title: Text(opportunity.category),
-                      subtitle: Text(
-                        'Gasto recente: ${_money(opportunity.recentExpense, opportunity.currency)} · período anterior: ${_money(opportunity.previousExpense, opportunity.currency)}',
-                      ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          const Text('Oportunidade'),
-                          Text(
-                            _money(
-                              opportunity.suggestedReduction,
-                              opportunity.currency,
-                            ),
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                final goal = visible[opportunityIndex - _opportunities.length];
-                final remaining = (goal.targetAmount - goal.actualExpense)
-                    .clamp(0, goal.targetAmount);
-                return Card(
-                  child: Padding(
+                    title: 'Nenhuma meta de redução criada',
+                    message:
+                        'Crie uma meta para acompanhar sua economia mensal.',
+                    action: 'Atualizar',
+                    onAction: _refresh,
+                  )
+                : ListView.separated(
                     padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const CircleAvatar(
-                              child: Icon(Icons.savings_outlined),
+                    itemCount:
+                        visible.length +
+                        _opportunities.length +
+                        1 +
+                        (hasOpportunityError ? 1 : 0),
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (_, index) {
+                      if (index == 0) {
+                        final planned = visible.fold<num>(
+                          0,
+                          (sum, item) => sum + item.targetAmount,
+                        );
+                        final actual = visible.fold<num>(
+                          0,
+                          (sum, item) => sum + item.actualExpense,
+                        );
+                        return _DarkSummaryCard(
+                          eyebrow: 'REDUÇÃO DE DESPESAS',
+                          value: _money(planned, 'BRL'),
+                          detail: actual <= planned
+                              ? 'Dentro da meta planejada'
+                              : 'Acima da meta planejada',
+                          icon: Icons.trending_down_outlined,
+                        );
+                      }
+                      if (hasOpportunityError && index == 1) {
+                        return Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.cloud_off_outlined),
+                            title: Text(_opportunitiesError!),
+                            subtitle: const Text(
+                              'As metas manuais continuam disponíveis e nenhum dado foi alterado.',
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Meta mensal de redução',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                        );
+                      }
+                      final opportunityIndex =
+                          index - 1 - (hasOpportunityError ? 1 : 0);
+                      if (opportunityIndex < _opportunities.length) {
+                        final opportunity = _opportunities[opportunityIndex];
+                        return Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.insights_outlined),
+                            title: Text(opportunity.category),
+                            subtitle: Text(
+                              'Realizado: ${_money(opportunity.recentExpense, opportunity.currency)}'
+                              ' · Anterior: ${_money(opportunity.previousExpense, opportunity.currency)}\n'
+                              'Variação: ${_money(opportunity.recentExpense - opportunity.previousExpense, opportunity.currency)}\n'
+                              '${opportunity.previousExpense == 0 ? 'Sem gasto registrado no período anterior. ' : ''}'
+                              'Economia não estimada. Os dados não identificam quais gastos são ajustáveis.',
+                            ),
+                          ),
+                        );
+                      }
+                      final goal =
+                          visible[opportunityIndex - _opportunities.length];
+                      final remaining = (goal.targetAmount - goal.actualExpense)
+                          .clamp(0, goal.targetAmount);
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const CircleAvatar(
+                                    child: Icon(Icons.savings_outlined),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Meta mensal de redução',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: goal.archived
+                                        ? 'Reativar meta de redução'
+                                        : 'Cancelar meta de redução',
+                                    onPressed: goal.id.startsWith('local-')
+                                        ? null
+                                        : () => _archive(goal),
+                                    icon: Icon(
+                                      goal.archived
+                                          ? Icons.unarchive_outlined
+                                          : Icons.archive_outlined,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${(goal.progress * 100).round()}%',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF2563EB),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                            IconButton(
-                              tooltip: goal.archived
-                                  ? 'Reativar meta de redução'
-                                  : 'Cancelar meta de redução',
-                              onPressed: goal.id.startsWith('local-')
-                                  ? null
-                                  : () => _archive(goal),
-                              icon: Icon(
-                                goal.archived
-                                    ? Icons.unarchive_outlined
-                                    : Icons.archive_outlined,
+                              const SizedBox(height: 14),
+                              Text(
+                                'Gasto atual ${_money(goal.actualExpense, goal.currency)} de ${_money(goal.targetAmount, goal.currency)}',
                               ),
-                            ),
-                            Text(
-                              '${(goal.progress * 100).round()}%',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF2563EB),
+                              const SizedBox(height: 8),
+                              LinearProgressIndicator(value: goal.progress),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Ainda disponível no limite: ${_money(remaining, goal.currency)}',
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'Gasto atual ${_money(goal.actualExpense, goal.currency)} de ${_money(goal.targetAmount, goal.currency)}',
-                        ),
-                        const SizedBox(height: 8),
-                        LinearProgressIndicator(value: goal.progress),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Ainda disponível no limite: ${_money(remaining, goal.currency)}',
-                          style: const TextStyle(color: Color(0xFF64748B)),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -147,8 +147,8 @@ public static class FinanceEndpoints
             => Send(s, new ArchiveExpenseReductionGoalCommand(r.OperationId, id, r.Version, r.Archive), h, ct)).RequireAuthorization(Permissions.TransactionsWrite);
         finance.MapGet("/expense-reduction-goals", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => ExpenseReductionGoals(s, new ListExpenseReductionGoalsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
-        finance.MapGet("/expense-reduction-opportunities", (int? months, ISender s, HttpContext h, CancellationToken ct)
-            => ExpenseReductionOpportunities(s, new ListExpenseReductionOpportunitiesQuery(months ?? 3), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
+        finance.MapGet("/expense-reduction-opportunities", (int? months, DateOnly? from, DateOnly? to, ISender s, HttpContext h, CancellationToken ct)
+            => ExpenseReductionOpportunities(s, new ListExpenseReductionOpportunitiesQuery(months ?? 3, from, to), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
         finance.MapGet("/notifications", (int page, int pageSize, ISender s, HttpContext h, CancellationToken ct)
             => Notifications(s, new ListNotificationsQuery(page, pageSize), h, ct)).RequireAuthorization(Permissions.TransactionsRead);
         finance.MapPost("/notifications/{id:guid}/read", (Guid id, VersionedOperationRequest r, ISender s, HttpContext h, CancellationToken ct)

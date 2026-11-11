@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using RassAppControleFin.Api.Http;
 using RassAppControleFin.Api.Identity;
 using RassAppControleFin.Domain.Entities;
 using RassAppControleFin.Infrastructure.Persistence;
+using RassAppControleFin.SharedKernel.Results;
 
 namespace RassAppControleFin.Api.Monetization;
 
@@ -14,7 +16,7 @@ public static class MonetizationEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetEntitlementsAsync(AppDbContext db, RequestIdentity identity,
+    private static async Task<IResult> GetEntitlementsAsync(AppDbContext db, RequestIdentity identity, HttpContext context,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(identity.Subject)) return Results.Unauthorized();
@@ -35,7 +37,7 @@ public static class MonetizationEndpoints
             .ToListAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
-        return Results.Ok(new EntitlementsResponse(plan.ToString(), entitlements));
+        return Result<EntitlementsResponse>.Success(new(plan.ToString(), entitlements)).ToHttp(context);
     }
 
     private sealed record EntitlementsResponse(string Plan, IReadOnlyList<EntitlementResponse> Entitlements);

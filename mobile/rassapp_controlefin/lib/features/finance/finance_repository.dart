@@ -545,6 +545,10 @@ class FinanceRepository {
   Future<List<DashboardMetric>> dashboard(String tenantId, DateTime now) async {
     final from = DateTime(now.year, now.month);
     final to = DateTime(now.year, now.month + 1);
+    final today = DateTime.now();
+    final cacheKey = now.year == today.year && now.month == today.month
+        ? 'dashboard'
+        : 'dashboard-${now.year}-${now.month}';
     try {
       final data = await _auth.getAuthenticated(
         '/api/v1/dashboard',
@@ -559,13 +563,13 @@ class FinanceRepository {
           .cast<Map<String, dynamic>>()
           .map((item) => {...item, 'id': item['currency']})
           .toList(growable: false);
-      await (await _store).cacheAll(tenantId, 'dashboard', resources);
+      await (await _store).cacheAll(tenantId, cacheKey, resources);
       return resources.map(DashboardMetric.fromJson).toList(growable: false);
     } on ApiException catch (error) {
       if (!_canReadOffline(error)) rethrow;
       return (await (await _store).cached(
         tenantId,
-        'dashboard',
+        cacheKey,
       )).map(DashboardMetric.fromJson).toList(growable: false);
     }
   }
@@ -896,11 +900,20 @@ class FinanceRepository {
     pageSize: '100',
   );
   Future<List<ExpenseReductionOpportunitySummary>>
-  expenseReductionOpportunities(String tenantId, {int months = 3}) => _auth
+  expenseReductionOpportunities(
+    String tenantId, {
+    int months = 3,
+    String? from,
+    String? to,
+  }) => _auth
       .getAuthenticated(
         '/api/v1/expense-reduction-opportunities',
         tenantId: tenantId,
-        queryParameters: {'months': '$months'},
+        queryParameters: {
+          if (from == null && to == null) 'months': '$months',
+          'from': ?from,
+          'to': ?to,
+        },
       )
       .then(
         (data) => (data as List)
@@ -915,6 +928,7 @@ class FinanceRepository {
         entityType: 'notification',
         parser: FinancialNotificationSummary.fromJson,
         pageSize: '100',
+        requireCachedDataOnFailure: true,
       );
   Future<void> markNotificationRead({
     required String tenantId,
@@ -1590,6 +1604,7 @@ class FinanceRepository {
     required String entityType,
     required T Function(Map<String, dynamic>) parser,
     String pageSize = '50',
+    bool requireCachedDataOnFailure = false,
   }) async {
     try {
       final data = await _auth.getAuthenticated(
@@ -1615,6 +1630,7 @@ class FinanceRepository {
     } on ApiException catch (error) {
       if (!_canReadOffline(error)) rethrow;
       final cachedResources = await (await _store).cached(tenantId, entityType);
+      if (requireCachedDataOnFailure && cachedResources.isEmpty) rethrow;
       if (kDebugMode && entityType == 'card') {
         for (final resource in cachedResources) {
           debugPrint(

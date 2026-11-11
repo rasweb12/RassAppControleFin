@@ -149,7 +149,8 @@ public sealed record SetTargetPortfolioCommand(Guid OperationId, IReadOnlyList<T
 public sealed record ListBudgetsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<BudgetView>>>, IPageQuery;
 public sealed record ListGoalsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<GoalView>>>, IPageQuery;
 public sealed record ListExpenseReductionGoalsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<ExpenseReductionGoalView>>>, IPageQuery;
-public sealed record ListExpenseReductionOpportunitiesQuery(int Months = 3) : IRequest<Result<IReadOnlyList<ExpenseReductionOpportunityView>>>;
+public sealed record ListExpenseReductionOpportunitiesQuery(int Months = 3, DateOnly? From = null, DateOnly? To = null)
+    : IRequest<Result<IReadOnlyList<ExpenseReductionOpportunityView>>>;
 public sealed record ListNotificationsQuery(int Page = 1, int PageSize = 50) : IRequest<Result<Page<FinancialNotificationView>>>, IPageQuery;
 public sealed record GetPayYourselfFirstPlanQuery : IRequest<Result<PayYourselfFirstPlanView?>>;
 public sealed record GetEmergencyFundPlanQuery : IRequest<Result<EmergencyFundPlanView?>>;

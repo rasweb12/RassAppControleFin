@@ -31,6 +31,53 @@ void main() {
     return FinanceRepository(auth, store: Future.value(store));
   }
 
+  test('sends both civil dates for an inclusive custom period', () async {
+    final repo = await repository(
+      MockClient((request) async {
+        expect(request.url.path, '/api/v1/expense-reduction-opportunities');
+        expect(request.url.queryParameters, {
+          'from': '2026-09-01',
+          'to': '2026-10-31',
+        });
+        return http.Response('{"success":true,"data":[]}', 200);
+      }),
+    );
+    expect(
+      await repo.expenseReductionOpportunities(
+        'tenant-a',
+        from: '2026-09-01',
+        to: '2026-10-31',
+      ),
+      isEmpty,
+    );
+  });
+
+  test(
+    'notifications distinguish an empty response from missing offline data',
+    () async {
+      var offline = false;
+      final repo = await repository(
+        MockClient((request) async {
+          expect(request.url.path, '/api/v1/notifications');
+          if (offline) throw const SocketException('synthetic offline');
+          return http.Response('{"success":true,"data":{"items":[]}}', 200);
+        }),
+      );
+      expect(await repo.notifications('tenant-a'), isEmpty);
+      offline = true;
+      await expectLater(
+        repo.notifications('tenant-a'),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.failure,
+            'failure',
+            ApiFailure.offline,
+          ),
+        ),
+      );
+    },
+  );
+
   test(
     'offline goal edit preserves its version and conflict is not resent',
     () async {

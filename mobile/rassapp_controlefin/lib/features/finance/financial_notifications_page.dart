@@ -41,7 +41,18 @@ class _FinancialNotificationsPageState
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Não foi possível carregar notificações.'));
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Não foi possível carregar notificações.'),
+                OutlinedButton(
+                  onPressed: _refresh,
+                  child: const Text('Tentar novamente'),
+                ),
+              ],
+            ),
+          );
         }
         final items = snapshot.data ?? const [];
         if (items.isEmpty) {

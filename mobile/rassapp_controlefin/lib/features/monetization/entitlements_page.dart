@@ -96,9 +96,17 @@ class _EntitlementsPageState extends State<EntitlementsPage> {
         }
         if (snapshot.hasError) {
           return Center(
-            child: OutlinedButton(
-              onPressed: _reload,
-              child: const Text('Tentar novamente'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Não foi possível carregar o plano e seus recursos.',
+                ),
+                OutlinedButton(
+                  onPressed: _reload,
+                  child: const Text('Tentar novamente'),
+                ),
+              ],
             ),
           );
         }
@@ -113,6 +121,10 @@ class _EntitlementsPageState extends State<EntitlementsPage> {
                 subtitle: const Text('Acesso calculado pelo servidor.'),
               ),
             ),
+            if (data.entitlements.isEmpty)
+              const ListTile(
+                title: Text('Nenhum recurso listado para este plano.'),
+              ),
             for (final item in data.entitlements)
               Card(
                 child: ListTile(

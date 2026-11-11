@@ -87,7 +87,12 @@ public sealed class ListGoalsValidator : PageValidator<ListGoalsQuery>;
 public sealed class ListExpenseReductionGoalsValidator : PageValidator<ListExpenseReductionGoalsQuery>;
 public sealed class ListExpenseReductionOpportunitiesValidator : AbstractValidator<ListExpenseReductionOpportunitiesQuery>
 {
-    public ListExpenseReductionOpportunitiesValidator() => RuleFor(x => x.Months).InclusiveBetween(1, 12);
+    public ListExpenseReductionOpportunitiesValidator()
+    {
+        RuleFor(x => x.Months).InclusiveBetween(1, 12);
+        RuleFor(x => x).Must(x => ExpenseReductionAnalysis.IsValidRange(x.From, x.To))
+            .WithMessage("Informe inicio e fim de um periodo inclusivo de ate 366 dias.");
+    }
 }
 public sealed class ListNotificationsValidator : PageValidator<ListNotificationsQuery>;
 public sealed class DashboardValidator : AbstractValidator<DashboardQuery>

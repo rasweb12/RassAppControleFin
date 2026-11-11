@@ -156,9 +156,7 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
     }, ct);
     public Task<Result<IReadOnlyList<ExpenseReductionOpportunityView>>> ExpenseReductionOpportunitiesAsync(ListExpenseReductionOpportunitiesQuery q, CancellationToken ct) => Read(async () =>
     {
-        var recentEnd = new DateTimeOffset(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(1);
-        var recentStart = recentEnd.AddMonths(-q.Months);
-        var previousStart = recentStart.AddMonths(-q.Months);
+        var (previousStart, recentStart, recentEnd) = ExpenseReductionAnalysis.Periods(q, DateTimeOffset.UtcNow);
         var rows = await (
             from transaction in db.Transactions.AsNoTracking()
             join category in db.Categories.AsNoTracking() on transaction.CategoryId equals category.Id
@@ -176,9 +174,7 @@ public sealed class FinanceReadStore(AppDbContext db, FinanceUnitFactory factory
                 Previous = grouped.Where(x => x.OccurredAt < recentStart).Sum(x => x.Amount)
             }).ToListAsync(ct);
         return (IReadOnlyList<ExpenseReductionOpportunityView>)rows
-            .Select(x => new ExpenseReductionOpportunityView(x.Id, x.Name, x.Currency, x.Recent, x.Previous,
-                Math.Max(0m, x.Recent - x.Previous), Math.Max(0m, x.Recent - x.Previous)))
-            .Where(x => x.Increase > 0m)
+            .Select(x => ExpenseReductionAnalysis.Compare(x.Id, x.Name, x.Currency, x.Recent, x.Previous))
             .OrderByDescending(x => x.Increase)
             .ThenBy(x => x.Category, StringComparer.Ordinal)
             .ToList();

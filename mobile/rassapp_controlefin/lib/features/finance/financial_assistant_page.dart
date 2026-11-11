@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/network/api_client.dart';
+import 'assistant_markdown.dart';
 import 'finance_repository.dart';
 
 class FinancialAssistantPage extends StatefulWidget {
@@ -332,7 +333,11 @@ class _ChatBubble extends StatelessWidget {
             ),
             const SizedBox(width: 8),
           ],
-          Flexible(child: Text(text)),
+          Flexible(
+            child: assistant && !system && !loading
+                ? AssistantMarkdown(text)
+                : Text(text),
+          ),
         ],
       ),
     ),
