@@ -915,12 +915,25 @@ class FinanceRepository {
           'to': ?to,
         },
       )
-      .then(
-        (data) => (data as List)
-            .cast<Map<String, dynamic>>()
-            .map(ExpenseReductionOpportunitySummary.fromJson)
-            .toList(growable: false),
-      );
+      .then((data) {
+        if (data is! List) {
+          throw const ApiException(
+            ApiFailure.unexpected,
+            'Resposta de oportunidades em formato inesperado.',
+          );
+        }
+        try {
+          return data
+              .cast<Map<String, dynamic>>()
+              .map(ExpenseReductionOpportunitySummary.fromJson)
+              .toList(growable: false);
+        } on TypeError {
+          throw const ApiException(
+            ApiFailure.unexpected,
+            'Resposta de oportunidades em formato inesperado.',
+          );
+        }
+      });
   Future<List<FinancialNotificationSummary>> notifications(String tenantId) =>
       _loadPage(
         tenantId: tenantId,

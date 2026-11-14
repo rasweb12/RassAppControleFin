@@ -11,6 +11,7 @@ import '../finance/finance_repository.dart';
 import '../finance/credit_cards_page.dart';
 import '../finance/financial_assistant_page.dart';
 import '../finance/financial_notifications_page.dart';
+import '../finance/expense_reduction_goal_dialog.dart';
 import '../finance/goal_progress_dialog.dart';
 import '../finance/pay_yourself_first_page.dart';
 import '../monetization/entitlements_page.dart';
@@ -1442,7 +1443,8 @@ class _TransactionsState extends State<_Transactions> {
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        // Keep the last card clear of the Scaffold's floating action button.
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
         itemCount: visible.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
@@ -2058,6 +2060,25 @@ class _ExpenseReductionGoalsPageState
           _opportunitiesError = null;
         });
       }
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      final message = switch (error.failure) {
+        ApiFailure.unauthorized => 'Sessão indisponível. Entre novamente.',
+        ApiFailure.forbidden => 'Sem permissão para consultar oportunidades.',
+        ApiFailure.offline => 'Sem conexão para consultar oportunidades.',
+        ApiFailure.timeout =>
+          'A consulta de oportunidades excedeu o tempo limite.',
+        ApiFailure.validation =>
+          'O período selecionado foi rejeitado pela API.',
+        ApiFailure.unexpected when error.statusCode == null =>
+          'A resposta da consulta tem formato inesperado.',
+        _ => 'Não foi possível atualizar as oportunidades agora.',
+      };
+      setState(
+        () => _opportunitiesError = error.correlationId == null
+            ? message
+            : '$message Referência: ${error.correlationId}',
+      );
     } catch (_) {
       if (mounted) {
         setState(
@@ -2117,86 +2138,12 @@ class _ExpenseReductionGoalsPageState
   }
 
   Future<void> _create() async {
-    final reference = TextEditingController();
-    final target = TextEditingController();
-    String? categoryId;
     final values = await showDialog<(String?, num, num)>(
       context: context,
       useRootNavigator: true,
-      builder: (context) => AlertDialog(
-        title: const Text('Meta de redução mensal'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<String?>(
-              initialValue: categoryId,
-              decoration: const InputDecoration(
-                labelText: 'Categoria (opcional)',
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('Todas as despesas'),
-                ),
-                ...widget.categories.map(
-                  (category) => DropdownMenuItem<String?>(
-                    value: category.id,
-                    child: Text(category.name),
-                  ),
-                ),
-              ],
-              onChanged: (value) => categoryId = value,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reference,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Gasto de referência (R\$)',
-              ),
-            ),
-            TextField(
-              controller: target,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Limite desejado (R\$)',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final from = num.tryParse(reference.text.replaceAll(',', '.'));
-              final to = num.tryParse(target.text.replaceAll(',', '.'));
-              if (from == null ||
-                  to == null ||
-                  from <= 0 ||
-                  to < 0 ||
-                  to >= from) {
-                return;
-              }
-              Navigator.of(
-                context,
-                rootNavigator: true,
-              ).pop((categoryId, from, to));
-            },
-            child: const Text('Criar'),
-          ),
-        ],
-      ),
+      builder: (_) => ExpenseReductionGoalDialog(categories: widget.categories),
     );
-    reference.dispose();
-    target.dispose();
-    if (values == null) return;
+    if (!mounted || values == null) return;
     await widget.onCreate(values.$1, values.$2, values.$3);
     await _refresh();
   }
@@ -2305,6 +2252,13 @@ class _ExpenseReductionGoalsPageState
             padding: const EdgeInsets.all(16),
             child: Text(_comparisonLabel),
           ),
+          if (_loadingOpportunities)
+            const LinearProgressIndicator()
+          else if (!hasOpportunityError && _opportunities.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text('Nenhuma oportunidade encontrada neste período.'),
+            ),
           Expanded(
             child:
                 visible.isEmpty &&
