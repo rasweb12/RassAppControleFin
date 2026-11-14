@@ -52,6 +52,9 @@ android {
     // outbox separate from the public application installed on the emulator.
     flavorDimensions += "environment"
     productFlavors {
+        create("production") {
+            dimension = "environment"
+        }
         create("homologation") {
             dimension = "environment"
             applicationIdSuffix = ".homologation"
