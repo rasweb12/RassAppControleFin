@@ -1,6 +1,9 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RassAppControleFin.Application.Abstractions.Identity;
 using RassAppControleFin.Infrastructure.Configuration;
@@ -9,7 +12,7 @@ using RassAppControleFin.SharedKernel.Results;
 namespace RassAppControleFin.Infrastructure.Identity;
 
 public sealed class NeonAuthService(IHttpClientFactory clients, IOptions<NeonOptions> options,
-    NeonTokenValidator tokens) : INeonAuthService
+    NeonTokenValidator tokens, ILogger<NeonAuthService> logger, IHttpContextAccessor httpContext) : INeonAuthService
 {
     private readonly NeonOptions _options = options.Value;
     private static Error Denied => new("AUTH_REJECTED", "Autenticacao recusada.", ErrorType.Unauthorized);
@@ -23,48 +26,91 @@ public sealed class NeonAuthService(IHttpClientFactory clients, IOptions<NeonOpt
 
     private async Task<Result<ProviderSession>> AuthenticateAsync(string path, object payload, CancellationToken ct)
     {
+        var stage = "request-configuration";
+        int? providerStatus = null;
         try
         {
             using var request = Request(HttpMethod.Post, path);
             request.Content = JsonContent.Create(payload);
+            stage = "authenticate-send";
             using var response = await clients.CreateClient("neon-auth").SendAsync(request, ct);
+            providerStatus = (int)response.StatusCode;
             if (path == "sign-up/email" && response.StatusCode == HttpStatusCode.UnprocessableEntity
                 && await HasProviderErrorAsync(response, "USER_ALREADY_EXISTS", ct))
                 return Result<ProviderSession>.Failure(AccountAlreadyExists);
-            if (!response.IsSuccessStatusCode) return Result<ProviderSession>.Failure(
-                (int)response.StatusCode >= 500 ? Unavailable : Denied);
+            if (!response.IsSuccessStatusCode)
+            {
+                LogAuthFailure(path, stage, providerStatus);
+                return Result<ProviderSession>.Failure(
+                    (int)response.StatusCode >= 500 ? Unavailable : Denied);
+            }
+            stage = "authenticate-cookie";
             var cookies = new CookieContainer();
             if (response.Headers.TryGetValues("Set-Cookie", out var headers))
                 foreach (var header in headers) cookies.SetCookies(request.RequestUri!, header);
             var cookie = cookies.GetCookies(request.RequestUri!)[_options.SessionCookieName]?.Value;
-            return cookie is null ? Result<ProviderSession>.Failure(Denied) : await RenewAsync(cookie, ct);
+            if (cookie is null)
+            {
+                LogAuthFailure(path, stage, providerStatus);
+                return Result<ProviderSession>.Failure(Denied);
+            }
+            return await RenewAsync(cookie, ct);
         }
         catch (Exception e) when (e is HttpRequestException or JsonException or CookieException or InvalidOperationException
             or Polly.Timeout.TimeoutRejectedException or Polly.CircuitBreaker.BrokenCircuitException)
-        { return Result<ProviderSession>.Failure(Unavailable); }
+        {
+            LogAuthFailure(path, stage, providerStatus, e);
+            return Result<ProviderSession>.Failure(Unavailable);
+        }
+        catch (OperationCanceledException e)
+        {
+            LogAuthFailure(path, stage, providerStatus, e, ct.IsCancellationRequested);
+            throw;
+        }
     }
 
     public async Task<Result<ProviderSession>> RenewAsync(string sessionToken, CancellationToken ct)
     {
         if (!ValidCookie(sessionToken)) return Result<ProviderSession>.Failure(Denied);
+        var stage = "session-request-configuration";
+        int? providerStatus = null;
         try
         {
             using var sessionRequest = Request(HttpMethod.Get, "get-session", sessionToken);
+            stage = "session-send";
             using var sessionResponse = await clients.CreateClient("neon-auth").SendAsync(sessionRequest, ct);
-            if (!sessionResponse.IsSuccessStatusCode) return Result<ProviderSession>.Failure(Denied);
+            providerStatus = (int)sessionResponse.StatusCode;
+            if (!sessionResponse.IsSuccessStatusCode)
+            {
+                LogAuthFailure("renew", stage, providerStatus);
+                return Result<ProviderSession>.Failure(Denied);
+            }
+            stage = "session-parse";
             using var sessionJson = await JsonDocument.ParseAsync(await sessionResponse.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
             if (sessionJson.RootElement.ValueKind != JsonValueKind.Object
                 || !sessionJson.RootElement.TryGetProperty("session", out var session)) return Result<ProviderSession>.Failure(Denied);
             var subject = session.GetProperty("userId").GetString()!;
             var expires = session.GetProperty("expiresAt").GetDateTimeOffset();
+            stage = "token-request-configuration";
+            providerStatus = null;
             using var tokenRequest = Request(HttpMethod.Get, "token", sessionToken);
+            stage = "token-send";
             using var tokenResponse = await clients.CreateClient("neon-auth").SendAsync(tokenRequest, ct);
-            if (!tokenResponse.IsSuccessStatusCode) return Result<ProviderSession>.Failure(Denied);
+            providerStatus = (int)tokenResponse.StatusCode;
+            if (!tokenResponse.IsSuccessStatusCode)
+            {
+                LogAuthFailure("renew", stage, providerStatus);
+                return Result<ProviderSession>.Failure(Denied);
+            }
+            stage = "token-parse";
             using var tokenJson = await JsonDocument.ParseAsync(await tokenResponse.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
             var token = tokenJson.RootElement.GetProperty("token").GetString()!;
+            stage = "token-validation";
+            providerStatus = null;
             var validated = await tokens.ValidateAsync(token, ct);
             if (validated is null || validated.Value.Identity.FindFirst("sub")?.Value != subject || expires <= DateTimeOffset.UtcNow)
                 return Result<ProviderSession>.Failure(Denied);
+            stage = "session-cookie";
             // Provider rolling renewal can rotate the signed cookie.
             var cookie = sessionToken;
             if (sessionResponse.Headers.TryGetValues("Set-Cookie", out var headers))
@@ -77,7 +123,38 @@ public sealed class NeonAuthService(IHttpClientFactory clients, IOptions<NeonOpt
         }
         catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException or KeyNotFoundException or CookieException
             or Polly.Timeout.TimeoutRejectedException or Polly.CircuitBreaker.BrokenCircuitException)
-        { return Result<ProviderSession>.Failure(Unavailable); }
+        {
+            LogAuthFailure("renew", stage, providerStatus, e);
+            return Result<ProviderSession>.Failure(Unavailable);
+        }
+        catch (OperationCanceledException e)
+        {
+            LogAuthFailure("renew", stage, providerStatus, e, ct.IsCancellationRequested);
+            throw;
+        }
+    }
+
+    // Temporary E17 diagnostics. Never log provider payloads, URLs or exception details.
+    // Remove this helper, its call sites and diagnostic-only dependencies after E17 is diagnosed and the fix is verified.
+    private void LogAuthFailure(string operation, string stage, int? providerStatus,
+        Exception? exception = null, bool callerCancelled = false)
+    {
+        var failure = exception switch
+        {
+            OperationCanceledException when callerCancelled => "caller-cancelled",
+            OperationCanceledException or Polly.Timeout.TimeoutRejectedException => "timeout",
+            HttpRequestException => "connection",
+            Polly.CircuitBreaker.BrokenCircuitException => "circuit-open",
+            null => "provider-response",
+            _ => "processing"
+        };
+        logger.LogWarning(new EventId(1701, "E17NeonAuth"),
+            "E17_NEON_AUTH Operation={Operation} Stage={Stage} ProviderStatus={ProviderStatus} " +
+            "ExceptionType={ExceptionType} Failure={Failure} TransportError={TransportError} CorrelationId={CorrelationId}",
+            operation, stage, exception is HttpRequestException { StatusCode: { } status }
+                ? (int)status : providerStatus, exception?.GetType().Name ?? "none", failure,
+            exception is HttpRequestException requestError ? requestError.HttpRequestError.ToString() : "none",
+            httpContext.HttpContext?.TraceIdentifier ?? Activity.Current?.TraceId.ToString() ?? "unavailable");
     }
 
     public async Task<Result> SignOutAsync(string sessionToken, CancellationToken ct)
